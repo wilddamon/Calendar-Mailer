@@ -1,0 +1,13 @@
+<html>
+<head>
+  <title>{{ app_name }}</title>
+</head>
+<body>
+<center><h2>{{ app_name }}</h2></center>
+{% if login_url %}
+<div id="main">
+  <a href="{{ login_url}}">Sign in</a>
+</div>
+{% endif %}
+</body>
+</html>

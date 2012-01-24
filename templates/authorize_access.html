@@ -1,0 +1,14 @@
+<html>
+<head>
+  <title>{{ app_name }}</title>
+  {{ css_link }}
+</head>
+<body>
+{% if authsub_url %}
+<center><h2>{{ app_name }}</h2></center>
+<div id="main">
+<a href="{{ authsub_url }}">Authorize access</a>
+</div>
+{% endif %}
+</body>
+</html>

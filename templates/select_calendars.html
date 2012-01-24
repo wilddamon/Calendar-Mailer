@@ -1,0 +1,46 @@
+<html>
+<head>
+  <title>{{ app_name }}</title>
+  <!--link type="text/css" rel="stylesheet" href="/stylesheets/common.css" />
+  <link type="text/css" rel="stylesheet" href="/stylesheets/select_calendars.css" /--!>
+  <script type="text/javascript" src="/javascript/select_calendars.js"></script>
+
+</head>
+<body>
+
+<center><h2>Select calendars and time range to get events recurring events from</h2></center>
+
+<form id="calendar_form" action="/events" method="POST">
+  <label for="start_date" class="form_label">Start date:</label>
+  <input type="text" name="start_date" id="start_date" value="{{ todays_date }}"/>
+  <br>
+  <label for="end_date" class="form_label">End date:</label>
+  <input type="text" name="end_date" value="{{ end_date }}" />
+  <br>
+  <label for="calendars" class="form_label">Calendars:</label>
+  <select name="calendars" id="calendars" multiple="true">
+  <br>
+  {% for calendar in calendars.items %}
+    <option value="{{ calendar.0 }}">{{ calendar.1 }}</option>
+  {% endfor %}
+
+  </select>
+
+  <br />
+  <small>Use the 'Control' or 'Apple' Key to select multiple.</small>
+  <br/>
+  <button type="button" id="select_all_button">Select all</button>
+  <button type="button" id="select_none_button">Select none</button>
+
+  <br>
+  <input type="submit" value="Go!" />
+</form>
+
+{% if logout_url %}
+<div style="main">
+<a href="{{ logout_url }}">Sign out</a>
+</div>
+{% endif %}
+
+</body>
+</html>
