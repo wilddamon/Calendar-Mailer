@@ -14,31 +14,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+from google.appengine.api import users as Users
 
 from google.appengine.ext import webapp
+from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp import util
 
-from scripts.selectcalendarhandler import SelectCalendarHandler
-from scripts.selecteventshandler import SelectEventsHandler
 
-APP_NAME = 'Calendar event emailer'
-HOST_NAME = 'calendarmailer.appspot.com'
-#HOST_NAME = 'localhost:8084'
+LOCAL = True
 
-class MainHandler(SelectCalendarHandler):
-  def __init__(self):
-    SelectCalendarHandler.__init__(self, APP_NAME, HOST_NAME)
 
-class MainSelectEventsHandler(SelectEventsHandler):
-  def __init__(self):
-    SelectEventsHandler.__init__(self, APP_NAME, HOST_NAME)
+class MainHandler(webapp.RequestHandler):
+  def get(self):
+    user = Users.GetCurrentUser()
+    if not user:
+      url = Users.create_login_url(self.request.uri)
+      self.redirect(url)
+      return
+
+    template_values = {
+      'local': LOCAL
+    }
+    html = template.render('templates/main.html', template_values)
+    self.response.out.write(html)
 
 def main():
-    application = webapp.WSGIApplication([
-        ('/', MainHandler),
-        ('/events', MainSelectEventsHandler)],
-       debug=True)
-    util.run_wsgi_app(application)
+  application = webapp.WSGIApplication([('/', MainHandler)], debug=True)
+  util.run_wsgi_app(application)
 
 
 if __name__ == '__main__':

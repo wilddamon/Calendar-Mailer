@@ -1,15 +1,15 @@
 application: calendarmailer
 version: 1
-runtime: python
+runtime: python27
+threadsafe: false
 api_version: 1
 
 handlers:
-- url: /favicon\.ico
-  static_files: favicon.ico
-  upload: favicon\.ico
-
-- url: /javascript
-  static_dir: javascript
+- url: /stylesheets
+  static_dir: stylesheets
+  
+- url: /scripts
+  static_dir: closure-gen
 
 - url: .*
   script: main.py
