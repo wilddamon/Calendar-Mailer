@@ -1,0 +1,15 @@
+A calendar utility to fetch and find the owners of calendar events.
+
+Runs in Google AppEngine
+
+You will need to also download the closure library, closure template, closure compiler, closure css compiler and gjsling to make this work.
+build.sh assumes that you have each utility in a sibling folder to your source folder, with the following structure:
+
+>closure-library
+>soy-latest
+  SoyToJsSrcCompiler.jar
+>compiler-latest
+  compiler.jar
+>css-compiler
+  closure-stylesheets-20111230.jar
+>[Calendar-Mailer directory]
