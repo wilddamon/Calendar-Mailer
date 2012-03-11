@@ -21,9 +21,6 @@ from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp import util
 
 
-LOCAL = True
-
-
 class MainHandler(webapp.RequestHandler):
   def get(self):
     user = Users.GetCurrentUser()
@@ -32,9 +29,7 @@ class MainHandler(webapp.RequestHandler):
       self.redirect(url)
       return
 
-    template_values = {
-      'local': LOCAL
-    }
+    template_values = {}
     html = template.render('templates/main.html', template_values)
     self.response.out.write(html)
 
