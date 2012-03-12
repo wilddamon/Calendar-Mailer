@@ -1,0 +1,9 @@
+
+#calendars, #eventpickers, #namelist, #email-preview {
+  clear: both;
+}
+
+.checkbox-label {
+  position: relative;
+  top: 3px;
+}

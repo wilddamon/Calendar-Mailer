@@ -1,0 +1,25 @@
+
+
+.picker-base {
+  background: #F8F8F8;
+  border: 1px solid grey;
+  float: left;
+  margin: 2px;
+  padding: 5px;
+}
+
+.picker-base.picker-selected {
+  background: #E8FABB;
+}
+
+.picker-base.goog-control-disabled {
+  opacity: 0.4;
+}
+
+.picker-label-disabled {
+  display: none;
+}
+
+.picker-boxes {
+  margin-bottom: 8px;
+}

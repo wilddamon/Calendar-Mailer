@@ -1,0 +1,48 @@
+// Picker template.
+
+{namespace calendarmailer.soy.picker}
+
+
+/**
+ * The picker template.
+ * @param? title The title of the widget.
+ * @param idprefix A string to prefix ids with so they are unique to the page.
+ * @param items The item objects. [{id: id, summary: title}]
+ */
+{template .all}
+<div class="picker-base">
+  {if $title}<div class="picker-title">{$title}</div>{/if}
+  <button class="picker-select picker-select-all">
+    Select all
+  </button>
+  <button class="picker-select picker-select-none">
+    Select none
+  </button>
+  <div class="picker-boxes">
+    {foreach $item in $items}
+      {call .row}
+        {param idprefix: $idprefix /}
+        {param item: $item /}
+      {/call}
+    {/foreach}
+  </div>
+  <button class="picker-submit">Go!</button>
+</div>
+{/template}
+
+
+/**
+ * @param idprefix A string to prefix ids with so they are unique to the page.
+ * @param item The item object.
+ */
+{template .row}
+<div class="picker-row">
+  <div id="{$idprefix}-{$item.id}" value="{$item.id}"{sp}
+      name="{$idprefix}-{$item.id}"{sp}
+      class="goog-checkbox goog-checkbox-unchecked"></div>
+  <label id="{$idprefix}-{$item.id}-label" for="{$idprefix}-{$item.id}"{sp}
+      class="picker-label checkbox-label">
+    {$item.summary}
+  </label>
+</div>
+{/template}

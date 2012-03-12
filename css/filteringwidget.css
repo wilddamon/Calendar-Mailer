@@ -1,0 +1,25 @@
+
+.filter-base {
+  margin: 20px 0;
+  padding: 5px;
+  width: 600px;
+}
+
+.filter-textbox {
+  color: grey;
+  width: 500px;
+}
+
+.filter-textbox.filter-textbox-active {
+  color: black;
+}
+
+.filter-section {
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+
+.filter-title {
+  font-size: 1.2em;
+  padding-bottom: 4px;
+}
