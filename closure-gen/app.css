@@ -48,3 +48,53 @@
 * html .goog-inline-block, *:first-child+html .goog-inline-block {
   display: inline;
 }
+#calendars, #eventpickers, #namelist, #email-preview {
+  clear: both;
+}
+.checkbox-label {
+  position: relative;
+  top: 3px;
+}
+.email-preview-outer {
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+.filter-base {
+  margin: 20px 0;
+  padding: 5px;
+  width: 600px;
+}
+.filter-textbox {
+  color: grey;
+  width: 500px;
+}
+.filter-textbox.filter-textbox-active {
+  color: black;
+}
+.filter-section {
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+.filter-title {
+  font-size: 1.2em;
+  padding-bottom: 4px;
+}
+.picker-base {
+  background: #f8f8f8;
+  border: 1px solid grey;
+  float: left;
+  margin: 2px;
+  padding: 5px;
+}
+.picker-base.picker-selected {
+  background: #e8fabb;
+}
+.picker-base.goog-control-disabled {
+  opacity: .4;
+}
+.picker-label-disabled {
+  display: none;
+}
+.picker-boxes {
+  margin-bottom: 8px;
+}

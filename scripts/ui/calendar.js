@@ -1,4 +1,3 @@
-// Copyright 2012 Edwina Mead. All rights reserved.
 
 /**
  * @fileoverview A renderer for a calendar object.
@@ -6,8 +5,7 @@
 
 goog.provide('calendarmailer.ui.Calendar');
 
-goog.require('calendarmailer.soy.calendar');
-goog.require('goog.ui.Component');
+goog.require('calendarmailer.ui.Picker');
 
 
 
@@ -15,7 +13,7 @@ goog.require('goog.ui.Component');
  * A ui object for a calendar object.
  * @param {string} id The id of the calendar this represents.
  * @constructor
- * @extends {goog.ui.Component}
+ * @extends {calendarmailer.ui.Picker}
  */
 calendarmailer.ui.Calendar = function(id) {
   goog.base(this);
@@ -23,51 +21,13 @@ calendarmailer.ui.Calendar = function(id) {
   this.setId(id);
 
   /**
-   * The events this calendar contains.
-   * @type {!Object}
+   * The events in the calendar.
+   * @type {!Array.<!Object>}
    * @private
    */
   this.events_ = [];
-
-    /**
-   * Checkboxes for each event in the list.
-   * @type {!Array.<!goog.ui.Checkbox>}
-   * @private
-   */
-  this.checkboxes_ = [];
-
-  /**
-   * An array of the ids of the selected events.
-   * @type {!Array.<string>}
-   * @private
-   */
-  this.selectedEvents_ = [];
-
-  /**
-   * The select all button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
-  this.selectAllButton_ = new goog.ui.Button(null /* content */);
-  this.addChild(this.selectAllButton_);
-
-  /**
-   * The select all button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
-  this.selectNoneButton_ = new goog.ui.Button(null /* content */);
-  this.addChild(this.selectNoneButton_);
-
-  /**
-   * The submit button
-   * @type {!goog.ui.Button}
-   * @private
-   */
-  this.submitButton_ = new goog.ui.Button(null /* content */);
-  this.addChild(this.submitButton_);
 };
-goog.inherits(calendarmailer.ui.Calendar, goog.ui.Component);
+goog.inherits(calendarmailer.ui.Calendar, calendarmailer.ui.Picker);
 
 
 /**
@@ -80,41 +40,71 @@ calendarmailer.ui.Calendar.prototype.setListObject = function(obj) {
 
 
 /** @override */
-calendarmailer.ui.Calendar.prototype.createDom = function() {
-  this.setElementInternal(soy.renderAsElement(
-      calendarmailer.soy.calendar.all, {
-        calendarId: this.getId(),
-        events: this.events_
-      }));
+calendarmailer.ui.Calendar.prototype.getItems = function() {
+  return this.events_;
 };
 
 
-/** @override */
-calendarmailer.ui.Calendar.prototype.enterDocument = function() {
-  var dom = this.getDomHelper();
-  var handler = this.getHandler();
-
-  for (var i = 0; i < this.events_.length; ++i) {
-    var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
-    checkbox.setId(this.events_[i].id);
-    checkbox.setLabel(dom.getElement(this.events_[i].id + '-label'));
-    this.addChild(checkbox);
-    this.checkboxes_.push(checkbox);
-    checkbox.decorate(dom.getElement(this.events_[i].id));
+/**
+ * Gets an array of actual event objects for all the selected events.
+ * @return {!Array.<!Object.<string, string>>} The names and emails.
+ */
+calendarmailer.ui.Calendar.prototype.getSelectedEvents = function() {
+  var result = [];
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    if (this.checkboxes[i].isChecked()) {
+      result.push(this.events_[i]);
+    }
   }
+  return result;
+};
 
-  this.selectAllButton_.decorate(
-      dom.getElement('event-picker-select-all-' + this.getId()));
-  handler.listen(this.selectAllButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSelectAll_);
 
-  this.selectNoneButton_.decorate(
-      dom.getElement('event-picker-select-none-' + this.getId()));
-  handler.listen(this.selectNoneButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSelectNone_);
+/**
+ * Programatically sets all checkboxes to the given state.
+ * @param {boolean} select The new state for all the checkboxes.
+ */
+calendarmailer.ui.Calendar.prototype.selectAll = function(select) {
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    this.checkboxes[i].setChecked(select);
+  }
+  goog.dom.classes.enable(this.getElement(), 'picker-selected',
+      select ? this.checkboxes.length > 0 : false);
+};
 
-  this.submitButton_.decorate(
-      dom.getElement('event-picker-submit-' + this.getId()));
-  handler.listen(this.submitButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSubmit_);
+
+/**
+ * Sets whether to filter by repeating events.
+ * @param {boolean} filter Whether to filter.
+ */
+calendarmailer.ui.Calendar.prototype.setFilterByRepeating = function(filter) {
+  var checkboxes = this.checkboxes;
+  var showAll = !filter;
+  for (var i = 0; i < checkboxes.length; ++i) {
+    var box = checkboxes[i];
+    var show = showAll ||
+        this.getUnendingRecurrence_(this.events_[i].recurrence);
+    this.showBox(box, show);
+  }
+};
+
+
+/**
+ * Checks to see if the given recurrence rule is unending.
+ * @param {Array.<string>=} recurrence The recurrence rule.
+ * @return {boolean} Whether the rule is unending. False if null or undefined.
+ * @private
+ */
+calendarmailer.ui.Calendar.prototype.getUnendingRecurrence_ =
+    function(recurrence) {
+  if (!recurrence) {
+    return false;
+  }
+  for (var i = 0; i < recurrence.length; ++i) {
+    if (!goog.string.contains(recurrence[i], 'COUNT') &&
+        !goog.string.contains(recurrence[i], 'UTNTIL')) {
+        return true;
+    }
+  }
+  return false;
 };

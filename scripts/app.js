@@ -1,4 +1,3 @@
-// Copyright 2012 Edwina Mead. All rights reserved.
 
 /**
  * @fileoverview The calendar api management for the mailer app.
@@ -9,9 +8,16 @@ goog.provide('calendarmailer.App');
 goog.require('calendarmailer.CalendarApi');
 goog.require('calendarmailer.CalendarApi.EventType');
 goog.require('calendarmailer.Config');
+goog.require('calendarmailer.soy.email');
 goog.require('calendarmailer.ui.Calendar');
 goog.require('calendarmailer.ui.CalendarList');
+goog.require('calendarmailer.ui.FilteringWidget');
+goog.require('calendarmailer.ui.NameList');
+goog.require('calendarmailer.ui.Picker.EventType');
+goog.require('goog.array');
 goog.require('goog.events.EventHandler');
+goog.require('goog.object');
+goog.require('soy');
 
 
 
@@ -20,6 +26,12 @@ goog.require('goog.events.EventHandler');
  * @constructor
  */
 calendarmailer.App = function() {
+  /**
+   * The selected and added events.
+   * @type {!Array.<!Object.<string, string>>}
+   * @private
+   */
+  this.selectedEvents_ = [];
 
   /**
    * The config object.
@@ -44,6 +56,14 @@ calendarmailer.App = function() {
   this.calendar_.startLoad();
 
   /**
+   * The filter widget.
+   * @type {!calendarmailer.ui.FilteringWidget}
+   * @private
+   */
+  this.filter_ = new calendarmailer.ui.FilteringWidget();
+  this.filter_.render(document.getElementById('filter'));
+
+  /**
    * The calendar list ui.
    * @type {!calendarmailer.ui.CalendarList}
    * @private
@@ -51,7 +71,14 @@ calendarmailer.App = function() {
   this.calendarListUi_ = new calendarmailer.ui.CalendarList(this.calendar_);
 
   /**
-   * The array of calendar event uis (containers of calendar events).
+   * A name list.
+   * @type {!calendarmailer.ui.NameList}
+   * @private
+   */
+  this.nameList_ = new calendarmailer.ui.NameList();
+
+  /**
+   * The map of calendar event uis (containers of calendar events).
    * @type {!Object.<string, !calendarmailer.ui.Calendar>}
    * @private
    */
@@ -65,16 +92,21 @@ calendarmailer.App = function() {
       listen(this.calendar_,
           calendarmailer.CalendarApi.EventType.GET_EVENTS_RESULT,
           this.handleGetEventsResult_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.FILTER_CHANGE,
+          this.handleFilterChange_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.SELECT_ALL,
+          this.handleGlobalSelectAll_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.SELECT_NONE,
+          this.handleGlobalSelectNone_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.SUBMIT,
+          this.handleGlobalAddNames_).
       listen(this.calendarListUi_,
-          calendarmailer.ui.CalendarList.EventType.SUBMIT,
+          calendarmailer.ui.Picker.EventType.SUBMIT,
           this.handleCalendarListSubmit_);
-
-  /*
-   * This element will have the contents of the app placed inside it.
-   * @type {!Element}
-   * @private
-   */
-  this.contentEl_ = document.getElementById('content');
 };
 
 
@@ -95,7 +127,8 @@ calendarmailer.App.prototype.handleCalendarApiReady_ = function() {
  */
 calendarmailer.App.prototype.handleGetCalendarsResult_ = function(e) {
   this.calendarListUi_.setListObject(e.result);
-  this.calendarListUi_.render(this.contentEl_);
+  this.calendarListUi_.render(document.getElementById('calendars'));
+  this.calendarListUi_.setSubmitCaption('Get events for these calendars!');
 };
 
 
@@ -105,9 +138,9 @@ calendarmailer.App.prototype.handleGetCalendarsResult_ = function(e) {
  * @private
  */
 calendarmailer.App.prototype.handleCalendarListSubmit_ = function(e) {
-this.calendarListUi_.setVisible(false);
+this.calendarListUi_.setEnabled(false);
   // Start loading the first calendar which is not loaded yet.
-  this.getNextEvents_(e.calendars);
+  this.getNextEvents_(e.items);
 };
 
 
@@ -120,8 +153,9 @@ calendarmailer.App.prototype.handleGetEventsResult_ = function(e) {
   var calendarUi = new calendarmailer.ui.Calendar(e.id);
   calendarUi.setListObject(e.result);
   this.calendarEventUis_[e.id] = calendarUi;
-  calendarUi.render();
-  this.getNextEvents_(this.calendarListUi_.getSelectedCalendars());
+  calendarUi.render(document.getElementById('eventpickers'));
+  calendarUi.setSubmitCaption('Mail the owners of these events!');
+  this.getNextEvents_(this.calendarListUi_.getSelectedItems());
 };
 
 
@@ -138,6 +172,76 @@ calendarmailer.App.prototype.getNextEvents_ = function(calendars) {
       break;
     }
   }
+};
+
+
+/**
+ * Handles filter change results.
+ * @param {!calendarmailer.ui.FilteringWidget.Event} e The event.
+ * @private
+ */
+calendarmailer.App.prototype.handleFilterChange_ = function(e) {
+  var filterStr = e.filterStr;
+  if (this.calendarListUi_.isEnabled()) {
+    this.calendarListUi_.setFilterStr(filterStr);
+  }
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    ui.setFilterByRepeating(e.filterByRepeats);
+  }, this);
+};
+
+
+/**
+ * Handles a global select all event.
+ * @private
+ */
+calendarmailer.App.prototype.handleGlobalSelectAll_ = function() {
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    ui.selectAll(true);
+  }, this);
+};
+
+
+/**
+ * Handles a global select none event.
+ * @private
+ */
+calendarmailer.App.prototype.handleGlobalSelectNone_ = function() {
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    ui.selectAll(false);
+  }, this);
+};
+
+
+/**
+ * Handles a global add names event.
+ * @private
+ */
+calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
+  if (this.calendarListUi_.isEnabled()) {
+    return;
+  }
+  this.nameList_.render(document.getElementById('namelist'));
+  document.getElementById('email-preview').appendChild(soy.renderAsElement(
+      calendarmailer.soy.email.all, {}));
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    if (!ui.isEnabled()) {
+      return;
+    }
+    var events = ui.getSelectedEvents();
+    for (var i = 0; i < events.length; ++i) {
+      var event = events[i];
+      var displayName = event.creator.displayName ?
+        event.creator.displayName + ' (' + event.creator.email + ')' :
+        event.creator.email;
+      this.nameList_.addItem({
+        id: event.creator.email,
+        summary: displayName
+      });
+    }
+    goog.array.extend(this.selectedEvents_, events);
+    ui.setEnabled(false);
+  }, this);
 };
 
 

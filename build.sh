@@ -1,10 +1,12 @@
 #!/bin/sh
 
 rm closure-gen/*
+rm soy-gen/*
 
 js_files="scripts/*.js"
 js_ui_files="scripts/ui/*.js"
 soy_files="soy/*.soy"
+css_files="css/*.css"
 
 gjslint ${js_files[@]} ${js_ui_files[@]}
 
@@ -27,6 +29,7 @@ java -jar ../css-compiler/closure-stylesheets-20111230.jar \
     ../closure-library/closure/goog/css/button.css \
     ../closure-library/closure/goog/css/checkbox.css \
     ../closure-library/closure/goog/css/common.css \
+    ${css_files[@]} \
     --output-file closure-gen/app.css \
     --pretty-print
     

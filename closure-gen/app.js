@@ -13125,6 +13125,3893 @@ calendarmailer.CalendarApi.Event = function(type, result, opt_id) {
   this.id = opt_id || null;
 };
 goog.inherits(calendarmailer.CalendarApi.Event, goog.events.Event);
+// Copyright 2007 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Detection of JScript version.
+ *
+ * @author arv@google.com (Erik Arvidsson)
+ */
+
+
+goog.provide('goog.userAgent.jscript');
+
+goog.require('goog.string');
+
+
+/**
+ * @define {boolean} True if it is known at compile time that the runtime
+ *     environment will not be using JScript.
+ */
+goog.userAgent.jscript.ASSUME_NO_JSCRIPT = false;
+
+
+/**
+ * Initializer for goog.userAgent.jscript.  Detects if the user agent is using
+ * Microsoft JScript and which version of it.
+ *
+ * This is a named function so that it can be stripped via the jscompiler
+ * option for stripping types.
+ * @private
+ */
+goog.userAgent.jscript.init_ = function() {
+  var hasScriptEngine = 'ScriptEngine' in goog.global;
+
+  /**
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ =
+      hasScriptEngine && goog.global['ScriptEngine']() == 'JScript';
+
+  /**
+   * @type {string}
+   * @private
+   */
+  goog.userAgent.jscript.DETECTED_VERSION_ =
+      goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ ?
+      (goog.global['ScriptEngineMajorVersion']() + '.' +
+       goog.global['ScriptEngineMinorVersion']() + '.' +
+       goog.global['ScriptEngineBuildVersion']()) :
+      '0';
+};
+
+if (!goog.userAgent.jscript.ASSUME_NO_JSCRIPT) {
+  goog.userAgent.jscript.init_();
+}
+
+
+/**
+ * Whether we detect that the user agent is using Microsoft JScript.
+ * @type {boolean}
+ */
+goog.userAgent.jscript.HAS_JSCRIPT = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
+    false : goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_;
+
+
+/**
+ * The installed version of JScript.
+ * @type {string}
+ */
+goog.userAgent.jscript.VERSION = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
+    '0' : goog.userAgent.jscript.DETECTED_VERSION_;
+
+
+/**
+ * Whether the installed version of JScript is as new or newer than a given
+ * version.
+ * @param {string} version The version to check.
+ * @return {boolean} Whether the installed version of JScript is as new or
+ *     newer than the given version.
+ */
+goog.userAgent.jscript.isVersion = function(version) {
+  return goog.string.compareVersions(goog.userAgent.jscript.VERSION,
+                                     version) >= 0;
+};
+// Copyright 2006 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Utility for fast string concatenation.
+ */
+
+goog.provide('goog.string.StringBuffer');
+
+goog.require('goog.userAgent.jscript');
+
+
+
+/**
+ * Utility class to facilitate much faster string concatenation in IE,
+ * using Array.join() rather than the '+' operator.  For other browsers
+ * we simply use the '+' operator.
+ *
+ * @param {Object|number|string|boolean=} opt_a1 Optional first initial item
+ *     to append.
+ * @param {...Object|number|string|boolean} var_args Other initial items to
+ *     append, e.g., new goog.string.StringBuffer('foo', 'bar').
+ * @constructor
+ */
+goog.string.StringBuffer = function(opt_a1, var_args) {
+  /**
+   * Internal buffer for the string to be concatenated.
+   * @type {string|Array}
+   * @private
+   */
+  this.buffer_ = goog.userAgent.jscript.HAS_JSCRIPT ? [] : '';
+
+  if (opt_a1 != null) {
+    this.append.apply(this, arguments);
+  }
+};
+
+
+/**
+ * Sets the contents of the string buffer object, replacing what's currently
+ * there.
+ *
+ * @param {string} s String to set.
+ */
+goog.string.StringBuffer.prototype.set = function(s) {
+  this.clear();
+  this.append(s);
+};
+
+
+if (goog.userAgent.jscript.HAS_JSCRIPT) {
+  /**
+   * Length of internal buffer (faster than calling buffer_.length).
+   * Only used if buffer_ is an array.
+   * @type {number}
+   * @private
+   */
+  goog.string.StringBuffer.prototype.bufferLength_ = 0;
+
+  /**
+   * Appends one or more items to the buffer.
+   *
+   * Calling this with null, undefined, or empty arguments is an error.
+   *
+   * @param {Object|number|string|boolean} a1 Required first string.
+   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
+   * @param {...Object|number|string|boolean} var_args Other items to append,
+   *     e.g., sb.append('foo', 'bar', 'baz').
+   * @return {goog.string.StringBuffer} This same StringBuffer object.
+   */
+  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
+    // IE version.
+
+    if (opt_a2 == null) { // second argument is undefined (null == undefined)
+      // Array assignment is 2x faster than Array push.  Also, use a1
+      // directly to avoid arguments instantiation, another 2x improvement.
+      this.buffer_[this.bufferLength_++] = a1;
+    } else {
+      this.buffer_.push.apply(/** @type {Array} */ (this.buffer_), arguments);
+      this.bufferLength_ = this.buffer_.length;
+    }
+    return this;
+  };
+} else {
+
+  /**
+   * Appends one or more items to the buffer.
+   *
+   * Calling this with null, undefined, or empty arguments is an error.
+   *
+   * @param {Object|number|string|boolean} a1 Required first string.
+   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
+   * @param {...Object|number|string|boolean} var_args Other items to append,
+   *     e.g., sb.append('foo', 'bar', 'baz').
+   * @return {goog.string.StringBuffer} This same StringBuffer object.
+   * @suppress {duplicate}
+   */
+  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
+    // W3 version.
+
+    // Use a1 directly to avoid arguments instantiation for single-arg case.
+    this.buffer_ += a1;
+    if (opt_a2 != null) { // second argument is undefined (null == undefined)
+      for (var i = 1; i < arguments.length; i++) {
+        this.buffer_ += arguments[i];
+      }
+    }
+    return this;
+  };
+}
+
+
+/**
+ * Clears the internal buffer.
+ */
+goog.string.StringBuffer.prototype.clear = function() {
+  if (goog.userAgent.jscript.HAS_JSCRIPT) {
+     this.buffer_.length = 0;  // Reuse the array to avoid creating new object.
+     this.bufferLength_ = 0;
+   } else {
+     this.buffer_ = '';
+   }
+};
+
+
+/**
+ * Returns the length of the current contents of the buffer.  In IE, this is
+ * O(n) where n = number of appends, so to avoid quadratic behavior, do not call
+ * this after every append.
+ *
+ * @return {number} the length of the current contents of the buffer.
+ */
+goog.string.StringBuffer.prototype.getLength = function() {
+   return this.toString().length;
+};
+
+
+/**
+ * Returns the concatenated string.
+ *
+ * @return {string} The concatenated string.
+ */
+goog.string.StringBuffer.prototype.toString = function() {
+  if (goog.userAgent.jscript.HAS_JSCRIPT) {
+    var str = this.buffer_.join('');
+    // Given a string with the entire contents, simplify the StringBuffer by
+    // setting its contents to only be this string, rather than many fragments.
+    this.clear();
+    if (str) {
+      this.append(str);
+    }
+    return str;
+  } else {
+    return /** @type {string} */ (this.buffer_);
+  }
+};
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Provides utility methods to render soy template.
+ */
+
+goog.provide('goog.soy');
+
+goog.require('goog.dom');
+goog.require('goog.dom.NodeType');
+goog.require('goog.dom.TagName');
+
+
+
+/**
+ * Renders a Soy template and then set the output string as
+ * the innerHTML of an element. It is recommended to use this helper function
+ * instead of directly setting innerHTML in your hand-written code, so that it
+ * will be easier to audit the code for cross-site scripting vulnerabilities.
+ *
+ * @param {Element} element The element whose content we are rendering into.
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ */
+goog.soy.renderElement = function(element, template, opt_templateData,
+                                  opt_injectedData) {
+  element.innerHTML = template(
+      opt_templateData || goog.soy.defaultTemplateData_, undefined,
+      opt_injectedData);
+};
+
+
+/**
+ * Renders a Soy template into a single node or a document
+ * fragment. If the rendered HTML string represents a single node, then that
+ * node is returned (note that this is *not* a fragment, despite them name of
+ * the method). Otherwise a document fragment is returned containing the
+ * rendered nodes.
+ *
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
+ *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ * @return {!Node} The resulting node or document fragment.
+ */
+goog.soy.renderAsFragment = function(template, opt_templateData,
+                                     opt_injectedData, opt_domHelper) {
+  var dom = opt_domHelper || goog.dom.getDomHelper();
+  return dom.htmlToDocumentFragment(
+      template(opt_templateData || goog.soy.defaultTemplateData_,
+               undefined, opt_injectedData));
+};
+
+
+/**
+ * Renders a Soy template into a single node. If the rendered
+ * HTML string represents a single node, then that node is returned. Otherwise,
+ * a DIV element is returned containing the rendered nodes.
+ *
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
+ *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ * @return {!Element} Rendered template contents, wrapped in a parent DIV
+ *     element if necessary.
+ */
+goog.soy.renderAsElement = function(template, opt_templateData,
+                                    opt_injectedData, opt_domHelper) {
+  var dom = opt_domHelper || goog.dom.getDomHelper();
+  var wrapper = dom.createElement(goog.dom.TagName.DIV);
+  wrapper.innerHTML = template(
+      opt_templateData || goog.soy.defaultTemplateData_,
+      undefined, opt_injectedData);
+
+  // If the template renders as a single element, return it.
+  if (wrapper.childNodes.length == 1) {
+    var firstChild = wrapper.firstChild;
+    if (firstChild.nodeType == goog.dom.NodeType.ELEMENT) {
+      return /** @type {!Element} */ (firstChild);
+    }
+  }
+
+  // Otherwise, return the wrapper DIV.
+  return wrapper;
+};
+
+
+/**
+ * Immutable object that is passed into templates that are rendered
+ * without any data.
+ * @type {Object}
+ * @private
+ */
+goog.soy.defaultTemplateData_ = {};
+// Copyright 2008 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Provides inversion and inversion map functionality for storing
+ * integer ranges and corresponding values.
+ *
+ */
+
+goog.provide('goog.structs.InversionMap');
+
+goog.require('goog.array');
+
+
+
+/**
+ * Maps ranges to values using goog.structs.Inversion.
+ * @param {Array.<number>} rangeArray An array of monotonically
+ *     increasing integer values, with at least one instance.
+ * @param {Array.<*>} valueArray An array of corresponding values.
+ *     Length must be the same as rangeArray.
+ * @param {boolean=} opt_delta If true, saves only delta from previous value.
+ * @constructor
+ */
+goog.structs.InversionMap = function(rangeArray, valueArray, opt_delta) {
+  if (rangeArray.length != valueArray.length) {
+    // rangeArray and valueArray has to match in number of entries.
+    return null;
+  }
+  this.storeInversion_(rangeArray, opt_delta);
+
+  /**
+   * @type {Array}
+   * @protected
+   */
+  this.values = valueArray;
+};
+
+
+/**
+ * @type {Array}
+ * @protected
+ */
+goog.structs.InversionMap.prototype.rangeArray;
+
+
+/**
+ * Stores the integers as ranges (half-open).
+ * If delta is true, the integers are delta from the previous value and
+ * will be restored to the absolute value.
+ * When used as a set, even indices are IN, and odd are OUT.
+ * @param {Array.<number?>} rangeArray An array of monotonically
+ *     increasing integer values, with at least one instance.
+ * @param {boolean=} opt_delta If true, saves only delta from previous value.
+ * @private
+ */
+goog.structs.InversionMap.prototype.storeInversion_ = function(rangeArray,
+    opt_delta) {
+  this.rangeArray = rangeArray;
+
+  for (var i = 1; i < rangeArray.length; i++) {
+    if (rangeArray[i] == null) {
+      rangeArray[i] = rangeArray[i - 1] + 1;
+    } else if (opt_delta) {
+      rangeArray[i] += rangeArray[i - 1];
+    }
+  }
+};
+
+
+/**
+ * Splices a range -> value map into this inversion map.
+ * @param {Array.<number>} rangeArray An array of monotonically
+ *     increasing integer values, with at least one instance.
+ * @param {Array.<*>} valueArray An array of corresponding values.
+ *     Length must be the same as rangeArray.
+ * @param {boolean=} opt_delta If true, saves only delta from previous value.
+ */
+goog.structs.InversionMap.prototype.spliceInversion = function(
+    rangeArray, valueArray, opt_delta) {
+  // By building another inversion map, we build the arrays that we need
+  // to splice in.
+  var otherMap = new goog.structs.InversionMap(
+      rangeArray, valueArray, opt_delta);
+
+  // Figure out where to splice those arrays.
+  var startRange = otherMap.rangeArray[0];
+  var endRange =
+      (/** @type {number} */ goog.array.peek(otherMap.rangeArray));
+  var startSplice = this.getLeast(startRange);
+  var endSplice = this.getLeast(endRange);
+
+  // The inversion map works by storing the start points of ranges...
+  if (startRange != this.rangeArray[startSplice]) {
+    // ...if we're splicing in a start point that isn't already here,
+    // then we need to insert it after the insertion point.
+    startSplice++;
+  } // otherwise we overwrite the insertion point.
+
+  var spliceLength = endSplice - startSplice + 1;
+  goog.partial(goog.array.splice, this.rangeArray, startSplice,
+      spliceLength).apply(null, otherMap.rangeArray);
+  goog.partial(goog.array.splice, this.values, startSplice,
+      spliceLength).apply(null, otherMap.values);
+};
+
+
+/**
+ * Gets the value corresponding to a number from the inversion map.
+ * @param {number} intKey The number for which value needs to be retrieved
+ *     from inversion map.
+ * @return {*} Value retrieved from inversion map; null if not found.
+ */
+goog.structs.InversionMap.prototype.at = function(intKey) {
+  var index = this.getLeast(intKey);
+  if (index < 0) {
+    return null;
+  }
+  return this.values[index];
+};
+
+
+/**
+ * Gets the largest index such that rangeArray[index] <= intKey from the
+ * inversion map.
+ * @param {number} intKey The probe for which rangeArray is searched.
+ * @return {number} Largest index such that rangeArray[index] <= intKey.
+ * @protected
+ */
+goog.structs.InversionMap.prototype.getLeast = function(intKey) {
+  var arr = this.rangeArray;
+  var low = 0;
+  var high = arr.length;
+  while (high - low > 8) {
+    var mid = (high + low) >> 1;
+    if (arr[mid] <= intKey) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  for (; low < high; ++low) {
+    if (intKey < arr[low]) {
+      break;
+    }
+  }
+  return low - 1;
+};
+// Copyright 2006 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Detect Grapheme Cluster Break in a pair of codepoints. Follows
+ * Unicode 5.1 UAX#29.
+ *
+ */
+
+goog.provide('goog.i18n.GraphemeBreak');
+goog.require('goog.structs.InversionMap');
+
+
+/**
+ * Enum for all Grapheme Cluster Break properties.
+ * These enums directly corresponds to Grapheme_Cluster_Break property values
+ * mentioned in http://unicode.org/reports/tr29 table 2.
+ *
+ * CR and LF are moved to the bottom of the list because they occur only once
+ * and so good candidates to take 2 decimal digit values.
+ * @enum {number}
+ * @protected
+ */
+goog.i18n.GraphemeBreak.property = {
+  ANY: 0,
+  CONTROL: 1,
+  EXTEND: 2,
+  PREPEND: 3,
+  SPACING_MARK: 4,
+  L: 5,
+  V: 6,
+  T: 7,
+  LV: 8,
+  LVT: 9,
+  CR: 10,
+  LF: 11
+};
+
+
+/**
+ * Grapheme Cluster Break property values for all codepoints as inversion map.
+ * Constructed lazily.
+ *
+ * @type {goog.structs.InversionMap}
+ * @private
+ */
+goog.i18n.GraphemeBreak.inversions_ = null;
+
+
+/**
+ * There are two kinds of grapheme clusters: 1) Legacy 2)Extended. This method
+ * is to check for legacy rules.
+ *
+ * @param {number} prop_a The property enum value of the first character.
+ * @param {number} prop_b The property enum value of the second character.
+ * @return {boolean} True if a & b do not form a cluster; False otherwise.
+ * @private
+ */
+goog.i18n.GraphemeBreak.applyLegacyBreakRules_ = function(prop_a, prop_b) {
+
+  var prop = goog.i18n.GraphemeBreak.property;
+
+  if (prop_a == prop.CR && prop_b == prop.LF) {
+    return false;
+  }
+  if (prop_a == prop.CONTROL || prop_a == prop.CR || prop_a == prop.LF) {
+    return true;
+  }
+  if (prop_b == prop.CONTROL || prop_b == prop.CR || prop_b == prop.LF) {
+    return true;
+  }
+  if ((prop_a == prop.L) &&
+    (prop_b == prop.L || prop_b == prop.V ||
+     prop_b == prop.LV || prop_b == prop.LVT)) {
+    return false;
+  }
+  if ((prop_a == prop.LV || prop_a == prop.V) &&
+    (prop_b == prop.V || prop_b == prop.T)) {
+    return false;
+  }
+  if ((prop_a == prop.LVT || prop_a == prop.T) && (prop_b == prop.T)) {
+    return false;
+  }
+  if (prop_b == prop.EXTEND) {
+    return false;
+  }
+  return true;
+};
+
+
+/**
+ * Method to return property enum value of the codepoint. If it is Hangul LV or
+ * LVT, then it is computed; for the rest it is picked from the inversion map.
+ * @param {number} acode The code point value of the character.
+ * @return {number} Property enum value of codepoint.
+ * @private
+ */
+goog.i18n.GraphemeBreak.getBreakProp_ = function(acode) {
+  if (0xAC00 <= acode && acode <= 0xD7A3) {
+    var prop = goog.i18n.GraphemeBreak.property;
+    if (acode % 0x1C == 0x10) {
+      return prop.LV;
+    }
+    return prop.LVT;
+  } else {
+    if (!goog.i18n.GraphemeBreak.inversions_) {
+      goog.i18n.GraphemeBreak.inversions_ = new goog.structs.InversionMap(
+          [0, 10, 1, 2, 1, 18, 95, 33, 13, 1, 594, 112, 275, 7, 263, 45, 1, 1,
+           1, 2, 1, 2, 1, 1, 56, 4, 12, 11, 48, 20, 17, 1, 101, 7, 1, 7, 2, 2,
+           1, 4, 33, 1, 1, 1, 30, 27, 91, 11, 58, 9, 269, 2, 1, 56, 1, 1, 3, 8,
+           4, 1, 3, 4, 13, 2, 29, 1, 2, 56, 1, 1, 1, 2, 6, 6, 1, 9, 1, 10, 2,
+           29, 2, 1, 56, 2, 3, 17, 30, 2, 3, 14, 1, 56, 1, 1, 3, 8, 4, 1, 20,
+           2, 29, 1, 2, 56, 1, 1, 2, 1, 6, 6, 11, 10, 2, 30, 1, 59, 1, 1, 1,
+           12, 1, 9, 1, 41, 3, 58, 3, 5, 17, 11, 2, 30, 2, 56, 1, 1, 1, 1, 2,
+           1, 3, 1, 5, 11, 11, 2, 30, 2, 58, 1, 2, 5, 7, 11, 10, 2, 30, 2, 70,
+           6, 2, 6, 7, 19, 2, 60, 11, 5, 5, 1, 1, 8, 97, 13, 3, 5, 3, 6, 74, 2,
+           27, 1, 1, 1, 1, 1, 4, 2, 49, 14, 1, 5, 1, 2, 8, 45, 9, 1, 100, 2, 4,
+           1, 6, 1, 2, 2, 2, 23, 2, 2, 4, 3, 1, 3, 2, 7, 3, 4, 13, 1, 2, 2, 6,
+           1, 1, 1, 112, 96, 72, 82, 357, 1, 946, 3, 29, 3, 29, 2, 30, 2, 64,
+           2, 1, 7, 8, 1, 2, 11, 9, 1, 45, 3, 155, 1, 118, 3, 4, 2, 9, 1, 6, 3,
+           116, 17, 7, 2, 77, 2, 3, 228, 4, 1, 47, 1, 1, 5, 1, 1, 5, 1, 2, 38,
+           9, 12, 2, 1, 30, 1, 4, 2, 2, 1, 121, 8, 8, 2, 2, 392, 64, 523, 1, 2,
+           2, 24, 7, 49, 16, 96, 33, 3311, 32, 554, 6, 105, 2, 30164, 4, 9, 2,
+           388, 1, 3, 1, 4, 1, 23, 2, 2, 1, 88, 2, 50, 16, 1, 97, 8, 25, 11, 2,
+           213, 6, 2, 2, 2, 2, 12, 1, 8, 1, 1, 434, 11172, 1116, 1024, 6942, 1,
+           737, 16, 16, 7, 216, 1, 158, 2, 89, 3, 513, 1, 2051, 15, 40, 8,
+           50981, 1, 1, 3, 3, 1, 5, 8, 8, 2, 7, 30, 4, 148, 3, 798140, 255],
+          [1, 11, 1, 10, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0,
+           2, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 1, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0, 2,
+           0, 2, 0, 2, 0, 2, 4, 0, 2, 0, 4, 2, 4, 2, 0, 2, 0, 2, 0, 2, 4, 0, 2,
+           0, 2, 4, 2, 4, 2, 0, 2, 0, 2, 0, 2, 4, 0, 2, 4, 2, 0, 2, 0, 2, 4, 0,
+           2, 0, 4, 2, 4, 2, 0, 2, 0, 2, 4, 0, 2, 0, 2, 4, 2, 4, 2, 0, 2, 0, 2,
+           0, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4, 2, 0, 2, 0, 4, 0, 2, 0, 4, 2,
+           4, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4,
+           2, 4, 2, 4, 0, 2, 0, 3, 2, 0, 2, 0, 2, 0, 3, 0, 2, 0, 2, 0, 2, 0, 2,
+           0, 2, 0, 4, 0, 2, 4, 2, 0, 2, 0, 2, 0, 2, 0, 4, 2, 4, 2, 4, 2, 4, 2,
+           0, 4, 2, 0, 2, 0, 4, 0, 4, 0, 2, 0, 2, 4, 2, 4, 2, 0, 4, 0, 5, 6, 7,
+           0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 1, 4, 2, 4, 2, 4, 2, 0, 2, 0, 2, 0,
+           2, 0, 2, 4, 2, 4, 2, 4, 2, 0, 4, 0, 4, 0, 2, 4, 0, 2, 4, 0, 2, 4, 2,
+           4, 2, 4, 2, 4, 0, 2, 0, 2, 4, 0, 4, 2, 4, 2, 4, 0, 4, 2, 4, 2, 0, 2,
+           0, 1, 2, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0,
+           2, 0, 2, 0, 4, 2, 4, 0, 4, 0, 4, 2, 0, 2, 0, 2, 4, 0, 2, 4, 2, 4, 2,
+           0, 2, 0, 2, 4, 0, 9, 0, 2, 0, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0, 1, 0, 2,
+           0, 2, 0, 2, 0, 2, 4, 2, 0, 4, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 1, 2],
+          true);
+    }
+    return (/** @type {number} */
+        goog.i18n.GraphemeBreak.inversions_.at(acode));
+  }
+};
+
+
+/**
+ * There are two kinds of grapheme clusters: 1) Legacy 2)Extended. This method
+ * is to check for both using a boolean flag to switch between them.
+ * @param {number} a The code point value of the first character.
+ * @param {number} b The code point value of the second character.
+ * @param {boolean=} opt_extended If true, indicates extended grapheme cluster;
+ *     If false, indicates legacy cluster.
+ * @return {boolean} True if a & b do not form a cluster; False otherwise.
+ */
+goog.i18n.GraphemeBreak.hasGraphemeBreak = function(a, b, opt_extended) {
+
+  var prop_a = goog.i18n.GraphemeBreak.getBreakProp_(a);
+  var prop_b = goog.i18n.GraphemeBreak.getBreakProp_(b);
+  var prop = goog.i18n.GraphemeBreak.property;
+
+  return goog.i18n.GraphemeBreak.applyLegacyBreakRules_(prop_a, prop_b) &&
+    !(opt_extended && (prop_a == prop.PREPEND || prop_b == prop.SPACING_MARK));
+};
+// Copyright 2006 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Provides utility functions for formatting strings, numbers etc.
+ *
+ */
+
+goog.provide('goog.format');
+
+goog.require('goog.i18n.GraphemeBreak');
+goog.require('goog.string');
+goog.require('goog.userAgent');
+
+
+/**
+ * Formats a number of bytes in human readable form.
+ * 54, 450K, 1.3M, 5G etc.
+ * @param {number} bytes The number of bytes to show.
+ * @param {number=} opt_decimals The number of decimals to use.  Defaults to 2.
+ * @return {string} The human readable form of the byte size.
+ */
+goog.format.fileSize = function(bytes, opt_decimals) {
+  return goog.format.numBytesToString(bytes, opt_decimals, false);
+};
+
+
+/**
+ * Checks whether string value containing scaling units (K, M, G, T, P, m,
+ * u, n) can be converted to a number.
+ *
+ * Where there is a decimal, there must be a digit to the left of the
+ * decimal point.
+ *
+ * Negative numbers are valid.
+ *
+ * Examples:
+ *   0, 1, 1.0, 10.4K, 2.3M, -0.3P, 1.2m
+ *
+ * @param {string} val String value to check.
+ * @return {boolean} True if string could be converted to a numeric value.
+ */
+goog.format.isConvertableScaledNumber = function(val) {
+  return goog.format.SCALED_NUMERIC_RE_.test(val);
+};
+
+
+/**
+ * Converts a string to numeric value, taking into account the units.
+ * If string ends in 'B', use binary conversion.
+ * @param {string} stringValue String to be converted to numeric value.
+ * @return {number} Numeric value for string.
+ */
+goog.format.stringToNumericValue = function(stringValue) {
+  if (goog.string.endsWith(stringValue, 'B')) {
+    return goog.format.stringToNumericValue_(
+        stringValue, goog.format.NUMERIC_SCALES_BINARY_);
+  }
+  return goog.format.stringToNumericValue_(
+      stringValue, goog.format.NUMERIC_SCALES_SI_);
+};
+
+
+/**
+ * Converts a string to number of bytes, taking into account the units.
+ * Binary conversion.
+ * @param {string} stringValue String to be converted to numeric value.
+ * @return {number} Numeric value for string.
+ */
+goog.format.stringToNumBytes = function(stringValue) {
+  return goog.format.stringToNumericValue_(
+      stringValue, goog.format.NUMERIC_SCALES_BINARY_);
+};
+
+
+/**
+ * Converts a numeric value to string representation. SI conversion.
+ * @param {number} val Value to be converted.
+ * @param {number=} opt_decimals The number of decimals to use.  Defaults to 2.
+ * @return {string} String representation of number.
+ */
+goog.format.numericValueToString = function(val, opt_decimals) {
+  return goog.format.numericValueToString_(
+      val, goog.format.NUMERIC_SCALES_SI_, opt_decimals);
+};
+
+
+/**
+ * Converts number of bytes to string representation. Binary conversion.
+ * Default is to return the additional 'B' suffix, e.g. '10.5KB' to minimize
+ * confusion with counts that are scaled by powers of 1000.
+ * @param {number} val Value to be converted.
+ * @param {number=} opt_decimals The number of decimals to use.  Defaults to 2.
+ * @param {boolean=} opt_suffix If true, include trailing 'B' in returned
+ *     string.  Default is true.
+ * @return {string} String representation of number of bytes.
+ */
+goog.format.numBytesToString = function(val, opt_decimals, opt_suffix) {
+  var suffix = '';
+  if (!goog.isDef(opt_suffix) || opt_suffix) {
+    suffix = 'B';
+  }
+  return goog.format.numericValueToString_(
+      val, goog.format.NUMERIC_SCALES_BINARY_, opt_decimals, suffix);
+};
+
+
+/**
+ * Converts a string to numeric value, taking into account the units.
+ * @param {string} stringValue String to be converted to numeric value.
+ * @param {Object} conversion Dictionary of conversion scales.
+ * @return {number} Numeric value for string.  If it cannot be converted,
+ *    returns NaN.
+ * @private
+ */
+goog.format.stringToNumericValue_ = function(stringValue, conversion) {
+  var match = stringValue.match(goog.format.SCALED_NUMERIC_RE_);
+  if (!match) {
+    return NaN;
+  }
+  var val = match[1] * conversion[match[2]];
+  return val;
+};
+
+
+/**
+ * Converts a numeric value to string, using specified conversion
+ * scales.
+ * @param {number} val Value to be converted.
+ * @param {Object} conversion Dictionary of scaling factors.
+ * @param {number=} opt_decimals The number of decimals to use.  Default is 2.
+ * @param {string=} opt_suffix Optional suffix to append.
+ * @return {string} The human readable form of the byte size.
+ * @private
+ */
+goog.format.numericValueToString_ = function(val, conversion,
+                                             opt_decimals, opt_suffix) {
+  var prefixes = goog.format.NUMERIC_SCALE_PREFIXES_;
+  var orig_val = val;
+  var symbol = '';
+  var scale = 1;
+  if (val < 0) {
+    val = -val;
+  }
+  for (var i = 0; i < prefixes.length; i++) {
+    var unit = prefixes[i];
+    scale = conversion[unit];
+    if (val >= scale || (scale <= 1 && val > 0.1 * scale)) {
+      // Treat values less than 1 differently, allowing 0.5 to be "0.5" rather
+      // than "500m"
+      symbol = unit;
+      break;
+    }
+  }
+  if (!symbol) {
+    scale = 1;
+  } else if (opt_suffix) {
+    symbol += opt_suffix;
+  }
+  var ex = Math.pow(10, goog.isDef(opt_decimals) ? opt_decimals : 2);
+  return Math.round(orig_val / scale * ex) / ex + symbol;
+};
+
+
+/**
+ * Regular expression for detecting scaling units, such as K, M, G, etc. for
+ * converting a string representation to a numeric value.
+ *
+ * Also allow 'k' to be aliased to 'K'.  These could be used for SI (powers
+ * of 1000) or Binary (powers of 1024) conversions.
+ *
+ * Also allow final 'B' to be interpreted as byte-count, implicitly triggering
+ * binary conversion (e.g., '10.2MB').
+ *
+ * @type {RegExp}
+ * @private
+ */
+goog.format.SCALED_NUMERIC_RE_ = /^([-]?\d+\.?\d*)([K,M,G,T,P,k,m,u,n]?)[B]?$/;
+
+
+/**
+ * Ordered list of scaling prefixes in decreasing order.
+ * @type {Array}
+ * @private
+ */
+goog.format.NUMERIC_SCALE_PREFIXES_ = [
+  'P', 'T', 'G', 'M', 'K', '', 'm', 'u', 'n'
+];
+
+
+/**
+ * Scaling factors for conversion of numeric value to string.  SI conversion.
+ * @type {Object}
+ * @private
+ */
+goog.format.NUMERIC_SCALES_SI_ = {
+  '': 1,
+  'n': 1e-9,
+  'u': 1e-6,
+  'm': 1e-3,
+  'k': 1e3,
+  'K': 1e3,
+  'M': 1e6,
+  'G': 1e9,
+  'T': 1e12,
+  'P': 1e15
+};
+
+
+/**
+ * Scaling factors for conversion of numeric value to string.  Binary
+ * conversion.
+ * @type {Object}
+ * @private
+ */
+goog.format.NUMERIC_SCALES_BINARY_ = {
+  '': 1,
+  'n': Math.pow(1024, -3),
+  'u': Math.pow(1024, -2),
+  'm': 1.0 / 1024,
+  'k': 1024,
+  'K': 1024,
+  'M': Math.pow(1024, 2),
+  'G': Math.pow(1024, 3),
+  'T': Math.pow(1024, 4),
+  'P': Math.pow(1024, 5)
+};
+
+
+/**
+ * First Unicode code point that has the Mark property.
+ * @type {number}
+ * @private
+ */
+goog.format.FIRST_GRAPHEME_EXTEND_ = 0x300;
+
+
+/**
+ * Inserts word breaks into an HTML string at a given interval.  The counter is
+ * reset if a space is encountered.  WBRs aren't inserted into HTML tags or
+ * entities.  Entites count towards the character count, HTML tags do not.
+ *
+ * With common strings aliased, objects allocations are constant based on the
+ * length of the string: N + 3. This guarantee does not hold if the string
+ * contains an element >= U+0300 and hasGraphemeBreak is non-trivial.
+ *
+ * @param {string} str HTML to insert word breaks into.
+ * @param {function(number, number, boolean): boolean} hasGraphemeBreak A
+ *     function determining if there is a grapheme break between two characters,
+ *     in the same signature as goog.i18n.GraphemeBreak.hasGraphemeBreak.
+ * @param {number=} opt_maxlen Maximum length after which to ensure
+ *     there is a break.  Default is 10 characters.
+ * @return {string} The string including word breaks.
+ * @private
+ */
+goog.format.insertWordBreaksGeneric_ = function(str, hasGraphemeBreak,
+    opt_maxlen) {
+  var maxlen = opt_maxlen || 10;
+  if (maxlen > str.length) return str;
+
+  var rv = [];
+  var n = 0; // The length of the current token
+
+  // This will contain the ampersand or less-than character if one of the
+  // two has been seen; otherwise, the value is zero.
+  var nestingCharCode = 0;
+
+  // First character position from input string that has not been outputted.
+  var lastDumpPosition = 0;
+
+  var charCode = 0;
+  for (var i = 0; i < str.length; i++) {
+    // Using charCodeAt versus charAt avoids allocating new string objects.
+    var lastCharCode = charCode;
+    charCode = str.charCodeAt(i);
+
+    // Don't add a WBR before characters that might be grapheme extending.
+    var isPotentiallyGraphemeExtending =
+        charCode >= goog.format.FIRST_GRAPHEME_EXTEND_ &&
+        !hasGraphemeBreak(lastCharCode, charCode, true);
+
+    // Don't add a WBR at the end of a word.  For simplicity, all control
+    // characters are treated as whitespace.
+    if (n >= maxlen &&
+        charCode > goog.format.WbrToken_.SPACE &&
+        !isPotentiallyGraphemeExtending) {
+      // Flush everything seen so far, and append a word break.
+      rv.push(str.substring(lastDumpPosition, i), goog.format.WORD_BREAK_HTML);
+      lastDumpPosition = i;
+      n = 0;
+    }
+
+    if (!nestingCharCode) {
+      // Not currently within an HTML tag or entity
+
+      if (charCode == goog.format.WbrToken_.LT ||
+          charCode == goog.format.WbrToken_.AMP) {
+
+        // Entering an HTML Entity '&' or open tag '<'
+        nestingCharCode = charCode;
+      } else if (charCode <= goog.format.WbrToken_.SPACE) {
+
+        // A space or control character -- reset the token length
+        n = 0;
+      } else {
+
+        // A normal flow character - increment.  For grapheme extending
+        // characters, this is not *technically* a new character.  However,
+        // since the grapheme break detector might be overly conservative,
+        // we have to continue incrementing, or else we won't even be able
+        // to add breaks when we get to things like punctuation.  For the
+        // case where we have a full grapheme break detector, it is okay if
+        // we occasionally break slightly early.
+        n++;
+      }
+    } else if (charCode == goog.format.WbrToken_.GT &&
+        nestingCharCode == goog.format.WbrToken_.LT) {
+
+      // Leaving an HTML tag, treat the tag as zero-length
+      nestingCharCode = 0;
+    } else if (charCode == goog.format.WbrToken_.SEMI_COLON &&
+        nestingCharCode == goog.format.WbrToken_.AMP) {
+
+      // Leaving an HTML entity, treat it as length one
+      nestingCharCode = 0;
+      n++;
+    }
+  }
+
+  // Take care of anything we haven't flushed so far.
+  rv.push(str.substr(lastDumpPosition));
+
+  return rv.join('');
+};
+
+
+/**
+ * Inserts word breaks into an HTML string at a given interval.
+ *
+ * This method is as aggressive as possible, using a full table of Unicode
+ * characters where it is legal to insert word breaks; however, this table
+ * comes at a 2.5k pre-gzip (~1k post-gzip) size cost.  Consider using
+ * insertWordBreaksBasic to minimize the size impact.
+ *
+ * @param {string} str HTML to insert word breaks into.
+ * @param {number=} opt_maxlen Maximum length after which to ensure there is a
+ *     break.  Default is 10 characters.
+ * @return {string} The string including word breaks.
+ */
+goog.format.insertWordBreaks = function(str, opt_maxlen) {
+  return goog.format.insertWordBreaksGeneric_(str,
+      goog.i18n.GraphemeBreak.hasGraphemeBreak, opt_maxlen);
+};
+
+
+/**
+ * Determines conservatively if a character has a Grapheme break.
+ *
+ * Conforms to a similar signature as goog.i18n.GraphemeBreak, but is overly
+ * conservative, returning true only for characters in common scripts that
+ * are simple to account for.
+ *
+ * @param {number} lastCharCode The previous character code.  Ignored.
+ * @param {number} charCode The character code under consideration.  It must be
+ *     at least \u0300 as a precondition -- this case is covered by
+ *     insertWordBreaksGeneric_.
+ * @param {boolean=} opt_extended Ignored, to conform with the interface.
+ * @return {boolean} Whether it is one of the recognized subsets of characters
+ *     with a grapheme break.
+ * @private
+ */
+goog.format.conservativelyHasGraphemeBreak_ = function(
+    lastCharCode, charCode, opt_extended) {
+  // Return false for everything except the most common Cyrillic characters.
+  // Don't worry about Latin characters, because insertWordBreaksGeneric_
+  // itself already handles those.
+  // TODO(gboyer): Also account for Greek, Armenian, and Georgian if it is
+  // simple to do so.
+  return charCode >= 0x400 && charCode < 0x523;
+};
+
+
+// TODO(gboyer): Consider using a compile-time flag to switch implementations
+// rather than relying on the developers to toggle implementations.
+/**
+ * Inserts word breaks into an HTML string at a given interval.
+ *
+ * This method is less aggressive than insertWordBreaks, only inserting
+ * breaks next to punctuation and between Latin or Cyrillic characters.
+ * However, this is good enough for the common case of URLs.  It also
+ * works for all Latin and Cyrillic languages, plus CJK has no need for word
+ * breaks.  When this method is used, goog.i18n.GraphemeBreak may be dead
+ * code eliminated.
+ *
+ * @param {string} str HTML to insert word breaks into.
+ * @param {number=} opt_maxlen Maximum length after which to ensure there is a
+ *     break.  Default is 10 characters.
+ * @return {string} The string including word breaks.
+ */
+goog.format.insertWordBreaksBasic = function(str, opt_maxlen) {
+  return goog.format.insertWordBreaksGeneric_(str,
+      goog.format.conservativelyHasGraphemeBreak_, opt_maxlen);
+};
+
+
+/**
+ * True iff the current userAgent is IE8 or above.
+ * @type {boolean}
+ * @private
+ */
+goog.format.IS_IE8_OR_ABOVE_ = goog.userAgent.IE &&
+    goog.userAgent.isVersion(8);
+
+
+/**
+ * Constant for the WBR replacement used by insertWordBreaks.  Safari requires
+ * <wbr></wbr>, Opera needs the &shy; entity, though this will give a visible
+ * hyphen at breaks.  IE8 uses a zero width space.
+ * Other browsers just use <wbr>.
+ * @type {string}
+ */
+goog.format.WORD_BREAK_HTML =
+    goog.userAgent.WEBKIT ?
+        '<wbr></wbr>' : goog.userAgent.OPERA ?
+            '&shy;' : goog.format.IS_IE8_OR_ABOVE_ ?
+                '&#8203;' : '<wbr>';
+
+
+/**
+ * Tokens used within insertWordBreaks.
+ * @private
+ * @enum {number}
+ */
+goog.format.WbrToken_ = {
+  LT: 60, // '<'.charCodeAt(0)
+  GT: 62, // '>'.charCodeAt(0)
+  AMP: 38, // '&'.charCodeAt(0)
+  SEMI_COLON: 59, // ';'.charCodeAt(0)
+  SPACE: 32 // ' '.charCodeAt(0)
+};
+// Copyright 2007 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Utility functions for supporting Bidi issues.
+ */
+
+
+/**
+ * Namespace for bidi supporting functions.
+ */
+goog.provide('goog.i18n.bidi');
+
+
+/**
+ * @define {boolean} FORCE_RTL forces the {@link goog.i18n.bidi.IS_RTL} constant
+ * to say that the current locale is a RTL locale.  This should only be used
+ * if you want to override the default behavior for deciding whether the
+ * current locale is RTL or not.
+ *
+ * {@see goog.i18n.bidi.IS_RTL}
+ */
+goog.i18n.bidi.FORCE_RTL = false;
+
+
+/**
+ * Constant that defines whether or not the current locale is a RTL locale.
+ * If {@link goog.i18n.bidi.FORCE_RTL} is not true, this constant will default
+ * to check that {@link goog.LOCALE} is one of a few major RTL locales.
+ *
+ * <p>Since this constant refers to the directionality of the locale, it is up
+ * to the caller to determine if this constant should also be used for the
+ * direction of the UI.
+ *
+ * {@see goog.LOCALE}
+ *
+ * @type {boolean}
+ *
+ * TODO(user): write a test that checks that this is a compile-time constant.
+ * For example, for the default goog.LOCALE, compiling
+ * "if (goog.i18n.bidi.IS_RTL) alert('rtl') else {}" should produce no code.
+ */
+goog.i18n.bidi.IS_RTL = goog.i18n.bidi.FORCE_RTL ||
+    (goog.LOCALE.substring(0, 2).toLowerCase() == 'ar' ||
+     goog.LOCALE.substring(0, 2).toLowerCase() == 'fa' ||
+     goog.LOCALE.substring(0, 2).toLowerCase() == 'he' ||
+     goog.LOCALE.substring(0, 2).toLowerCase() == 'iw' ||
+     goog.LOCALE.substring(0, 2).toLowerCase() == 'ur' ||
+     goog.LOCALE.substring(0, 2).toLowerCase() == 'yi') &&
+    (goog.LOCALE.length == 2 ||
+     goog.LOCALE.substring(2, 3) == '-' ||
+     goog.LOCALE.substring(2, 3) == '_');
+
+
+/**
+ * Unicode formatting characters and directionality string constants.
+ * @enum {string}
+ */
+goog.i18n.bidi.Format = {
+  /** Unicode "Left-To-Right Embedding" (LRE) character. */
+  LRE: '\u202A',
+  /** Unicode "Right-To-Left Embedding" (RLE) character. */
+  RLE: '\u202B',
+  /** Unicode "Pop Directional Formatting" (PDF) character. */
+  PDF: '\u202C',
+  /** Unicode "Left-To-Right Mark" (LRM) character. */
+  LRM: '\u200E',
+  /** Unicode "Right-To-Left Mark" (RLM) character. */
+  RLM: '\u200F'
+};
+
+
+/**
+ * Directionality enum.
+ * @enum {number}
+ */
+goog.i18n.bidi.Dir = {
+  RTL: -1,
+  UNKNOWN: 0,
+  LTR: 1
+};
+
+
+/**
+ * 'right' string constant.
+ * @type {string}
+ */
+goog.i18n.bidi.RIGHT = 'right';
+
+
+/**
+ * 'left' string constant.
+ * @type {string}
+ */
+goog.i18n.bidi.LEFT = 'left';
+
+
+/**
+ * 'left' if locale is RTL, 'right' if not.
+ * @type {string}
+ */
+goog.i18n.bidi.I18N_RIGHT = goog.i18n.bidi.IS_RTL ? goog.i18n.bidi.LEFT :
+    goog.i18n.bidi.RIGHT;
+
+
+/**
+ * 'right' if locale is RTL, 'left' if not.
+ * @type {string}
+ */
+goog.i18n.bidi.I18N_LEFT = goog.i18n.bidi.IS_RTL ? goog.i18n.bidi.RIGHT :
+    goog.i18n.bidi.LEFT;
+
+
+/**
+ * Convert a directionality given in various formats to a goog.i18n.bidi.Dir
+ * constant. Useful for interaction with different standards of directionality
+ * representation.
+ *
+ * @param {goog.i18n.bidi.Dir|number|boolean} givenDir Directionality given in
+ *     one of the following formats:
+ *     1. A goog.i18n.bidi.Dir constant.
+ *     2. A number (positive = LRT, negative = RTL, 0 = unknown).
+ *     3. A boolean (true = RTL, false = LTR).
+ * @return {goog.i18n.bidi.Dir} A goog.i18n.bidi.Dir constant matching the given
+ *     directionality.
+ */
+goog.i18n.bidi.toDir = function(givenDir) {
+  if (typeof givenDir == 'number') {
+    return givenDir > 0 ? goog.i18n.bidi.Dir.LTR :
+        givenDir < 0 ? goog.i18n.bidi.Dir.RTL : goog.i18n.bidi.Dir.UNKNOWN;
+  } else {
+    return givenDir ? goog.i18n.bidi.Dir.RTL : goog.i18n.bidi.Dir.LTR;
+  }
+};
+
+
+/**
+ * A practical pattern to identify strong LTR characters. This pattern is not
+ * theoretically correct according to the Unicode standard. It is simplified for
+ * performance and small code size.
+ * @type {string}
+ * @private
+ */
+goog.i18n.bidi.ltrChars_ =
+    'A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02B8\u0300-\u0590\u0800-\u1FFF' +
+    '\u2C00-\uFB1C\uFE00-\uFE6F\uFEFD-\uFFFF';
+
+
+/**
+ * A practical pattern to identify strong RTL character. This pattern is not
+ * theoretically correct according to the Unicode standard. It is simplified
+ * for performance and small code size.
+ * @type {string}
+ * @private
+ */
+goog.i18n.bidi.rtlChars_ = '\u0591-\u07FF\uFB1D-\uFDFF\uFE70-\uFEFC';
+
+
+/**
+ * Simplified regular expression for an HTML tag (opening or closing) or an HTML
+ * escape. We might want to skip over such expressions when estimating the text
+ * directionality.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.htmlSkipReg_ = /<[^>]*>|&[^;]+;/g;
+
+
+/**
+ * Returns the input text with spaces instead of HTML tags or HTML escapes, if
+ * opt_isStripNeeded is true. Else returns the input as is.
+ * Useful for text directionality estimation.
+ * Note: the function should not be used in other contexts; it is not 100%
+ * correct, but rather a good-enough implementation for directionality
+ * estimation purposes.
+ * @param {string} str The given string.
+ * @param {boolean=} opt_isStripNeeded Whether to perform the stripping.
+ *     Default: false (to retain consistency with calling functions).
+ * @return {string} The given string cleaned of HTML tags / escapes.
+ * @private
+ */
+goog.i18n.bidi.stripHtmlIfNeeded_ = function(str, opt_isStripNeeded) {
+  return opt_isStripNeeded ? str.replace(goog.i18n.bidi.htmlSkipReg_, ' ') :
+      str;
+};
+
+
+/**
+ * Regular expression to check for RTL characters.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.rtlCharReg_ = new RegExp('[' + goog.i18n.bidi.rtlChars_ + ']');
+
+
+/**
+ * Regular expression to check for LTR characters.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.ltrCharReg_ = new RegExp('[' + goog.i18n.bidi.ltrChars_ + ']');
+
+
+/**
+ * Test whether the given string has any RTL characters in it.
+ * @param {string} str The given string that need to be tested.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether the string contains RTL characters.
+ */
+goog.i18n.bidi.hasAnyRtl = function(str, opt_isHtml) {
+  return goog.i18n.bidi.rtlCharReg_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
+      str, opt_isHtml));
+};
+
+
+/**
+ * Test whether the given string has any RTL characters in it.
+ * @param {string} str The given string that need to be tested.
+ * @return {boolean} Whether the string contains RTL characters.
+ * @deprecated Use hasAnyRtl.
+ */
+goog.i18n.bidi.hasRtlChar = goog.i18n.bidi.hasAnyRtl;
+
+
+/**
+ * Test whether the given string has any LTR characters in it.
+ * @param {string} str The given string that need to be tested.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether the string contains LTR characters.
+ */
+goog.i18n.bidi.hasAnyLtr = function(str, opt_isHtml) {
+  return goog.i18n.bidi.ltrCharReg_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
+      str, opt_isHtml));
+};
+
+
+/**
+ * Regular expression pattern to check if the first character in the string
+ * is LTR.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.ltrRe_ = new RegExp('^[' + goog.i18n.bidi.ltrChars_ + ']');
+
+
+/**
+ * Regular expression pattern to check if the first character in the string
+ * is RTL.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.rtlRe_ = new RegExp('^[' + goog.i18n.bidi.rtlChars_ + ']');
+
+
+/**
+ * Check if the first character in the string is RTL or not.
+ * @param {string} str The given string that need to be tested.
+ * @return {boolean} Whether the first character in str is an RTL char.
+ */
+goog.i18n.bidi.isRtlChar = function(str) {
+  return goog.i18n.bidi.rtlRe_.test(str);
+};
+
+
+/**
+ * Check if the first character in the string is LTR or not.
+ * @param {string} str The given string that need to be tested.
+ * @return {boolean} Whether the first character in str is an LTR char.
+ */
+goog.i18n.bidi.isLtrChar = function(str) {
+  return goog.i18n.bidi.ltrRe_.test(str);
+};
+
+
+/**
+ * Check if the first character in the string is neutral or not.
+ * @param {string} str The given string that need to be tested.
+ * @return {boolean} Whether the first character in str is a neutral char.
+ */
+goog.i18n.bidi.isNeutralChar = function(str) {
+  return !goog.i18n.bidi.isLtrChar(str) && !goog.i18n.bidi.isRtlChar(str);
+};
+
+
+/**
+ * Regular expressions to check if a piece of text if of LTR directionality
+ * on first character with strong directionality.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.ltrDirCheckRe_ = new RegExp(
+    '^[^' + goog.i18n.bidi.rtlChars_ + ']*[' + goog.i18n.bidi.ltrChars_ + ']');
+
+
+/**
+ * Regular expressions to check if a piece of text if of RTL directionality
+ * on first character with strong directionality.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.rtlDirCheckRe_ = new RegExp(
+    '^[^' + goog.i18n.bidi.ltrChars_ + ']*[' + goog.i18n.bidi.rtlChars_ + ']');
+
+
+/**
+ * Check whether the first strongly directional character (if any) is RTL.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether RTL directionality is detected using the first
+ *     strongly-directional character method.
+ */
+goog.i18n.bidi.startsWithRtl = function(str, opt_isHtml) {
+  return goog.i18n.bidi.rtlDirCheckRe_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
+      str, opt_isHtml));
+};
+
+
+/**
+ * Check whether the first strongly directional character (if any) is RTL.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether RTL directionality is detected using the first
+ *     strongly-directional character method.
+ * @deprecated Use startsWithRtl.
+ */
+goog.i18n.bidi.isRtlText = goog.i18n.bidi.startsWithRtl;
+
+
+/**
+ * Check whether the first strongly directional character (if any) is LTR.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether LTR directionality is detected using the first
+ *     strongly-directional character method.
+ */
+goog.i18n.bidi.startsWithLtr = function(str, opt_isHtml) {
+  return goog.i18n.bidi.ltrDirCheckRe_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
+      str, opt_isHtml));
+};
+
+
+/**
+ * Check whether the first strongly directional character (if any) is LTR.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether LTR directionality is detected using the first
+ *     strongly-directional character method.
+ * @deprecated Use startsWithLtr.
+ */
+goog.i18n.bidi.isLtrText = goog.i18n.bidi.startsWithLtr;
+
+
+/**
+ * Regular expression to check if a string looks like something that must
+ * always be LTR even in RTL text, e.g. a URL. When estimating the
+ * directionality of text containing these, we treat these as weakly LTR,
+ * like numbers.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.isRequiredLtrRe_ = /^http:\/\/.*/;
+
+
+/**
+ * Check whether the input string either contains no strongly directional
+ * characters or looks like a url.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether neutral directionality is detected.
+ */
+goog.i18n.bidi.isNeutralText = function(str, opt_isHtml) {
+  str = goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml);
+  return goog.i18n.bidi.isRequiredLtrRe_.test(str) ||
+      !goog.i18n.bidi.hasAnyLtr(str) && !goog.i18n.bidi.hasAnyRtl(str);
+};
+
+
+/**
+ * Regular expressions to check if the last strongly-directional character in a
+ * piece of text is LTR.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.ltrExitDirCheckRe_ = new RegExp(
+    '[' + goog.i18n.bidi.ltrChars_ + '][^' + goog.i18n.bidi.rtlChars_ + ']*$');
+
+
+/**
+ * Regular expressions to check if the last strongly-directional character in a
+ * piece of text is RTL.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.rtlExitDirCheckRe_ = new RegExp(
+    '[' + goog.i18n.bidi.rtlChars_ + '][^' + goog.i18n.bidi.ltrChars_ + ']*$');
+
+
+/**
+ * Check if the exit directionality a piece of text is LTR, i.e. if the last
+ * strongly-directional character in the string is LTR.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether LTR exit directionality was detected.
+ */
+goog.i18n.bidi.endsWithLtr = function(str, opt_isHtml) {
+  return goog.i18n.bidi.ltrExitDirCheckRe_.test(
+      goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml));
+};
+
+
+/**
+ * Check if the exit directionality a piece of text is LTR, i.e. if the last
+ * strongly-directional character in the string is LTR.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether LTR exit directionality was detected.
+ * @deprecated Use endsWithLtr.
+ */
+goog.i18n.bidi.isLtrExitText = goog.i18n.bidi.endsWithLtr;
+
+
+/**
+ * Check if the exit directionality a piece of text is RTL, i.e. if the last
+ * strongly-directional character in the string is RTL.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether RTL exit directionality was detected.
+ */
+goog.i18n.bidi.endsWithRtl = function(str, opt_isHtml) {
+  return goog.i18n.bidi.rtlExitDirCheckRe_.test(
+      goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml));
+};
+
+
+/**
+ * Check if the exit directionality a piece of text is RTL, i.e. if the last
+ * strongly-directional character in the string is RTL.
+ * @param {string} str String being checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether RTL exit directionality was detected.
+ * @deprecated Use endsWithRtl.
+ */
+goog.i18n.bidi.isRtlExitText = goog.i18n.bidi.endsWithRtl;
+
+
+/**
+ * A regular expression for matching right-to-left language codes.
+ * See {@link #isRtlLanguage} for the design.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.rtlLocalesRe_ = new RegExp(
+    '^(ar|dv|he|iw|fa|nqo|ps|sd|ug|ur|yi|.*[-_](Arab|Hebr|Thaa|Nkoo|Tfng))' +
+    '(?!.*[-_](Latn|Cyrl)($|-|_))($|-|_)');
+
+
+/**
+ * Check if a BCP 47 / III language code indicates an RTL language, i.e. either:
+ * - a language code explicitly specifying one of the right-to-left scripts,
+ *   e.g. "az-Arab", or<p>
+ * - a language code specifying one of the languages normally written in a
+ *   right-to-left script, e.g. "fa" (Farsi), except ones explicitly specifying
+ *   Latin or Cyrillic script (which are the usual LTR alternatives).<p>
+ * The list of right-to-left scripts appears in the 100-199 range in
+ * http://www.unicode.org/iso15924/iso15924-num.html, of which Arabic and
+ * Hebrew are by far the most widely used. We also recognize Thaana, N'Ko, and
+ * Tifinagh, which also have significant modern usage. The rest (Syriac,
+ * Samaritan, Mandaic, etc.) seem to have extremely limited or no modern usage
+ * and are not recognized to save on code size.
+ * The languages usually written in a right-to-left script are taken as those
+ * with Suppress-Script: Hebr|Arab|Thaa|Nkoo|Tfng  in
+ * http://www.iana.org/assignments/language-subtag-registry,
+ * as well as Sindhi (sd) and Uyghur (ug).
+ * Other subtags of the language code, e.g. regions like EG (Egypt), are
+ * ignored.
+ * @param {string} lang BCP 47 (a.k.a III) language code.
+ * @return {boolean} Whether the language code is an RTL language.
+ */
+goog.i18n.bidi.isRtlLanguage = function(lang) {
+  return goog.i18n.bidi.rtlLocalesRe_.test(lang);
+};
+
+
+/**
+ * Regular expression for bracket guard replacement in html.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.bracketGuardHtmlRe_ =
+    /(\(.*?\)+)|(\[.*?\]+)|(\{.*?\}+)|(&lt;.*?(&gt;)+)/g;
+
+
+/**
+ * Regular expression for bracket guard replacement in text.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.bracketGuardTextRe_ =
+    /(\(.*?\)+)|(\[.*?\]+)|(\{.*?\}+)|(<.*?>+)/g;
+
+
+/**
+ * Apply bracket guard using html span tag. This is to address the problem of
+ * messy bracket display frequently happens in RTL layout.
+ * @param {string} s The string that need to be processed.
+ * @param {boolean=} opt_isRtlContext specifies default direction (usually
+ *     direction of the UI).
+ * @return {string} The processed string, with all bracket guarded.
+ */
+goog.i18n.bidi.guardBracketInHtml = function(s, opt_isRtlContext) {
+  var useRtl = opt_isRtlContext === undefined ?
+      goog.i18n.bidi.hasAnyRtl(s) : opt_isRtlContext;
+  if (useRtl) {
+    return s.replace(goog.i18n.bidi.bracketGuardHtmlRe_,
+        '<span dir=rtl>$&</span>');
+  }
+  return s.replace(goog.i18n.bidi.bracketGuardHtmlRe_,
+      '<span dir=ltr>$&</span>');
+};
+
+
+/**
+ * Apply bracket guard using LRM and RLM. This is to address the problem of
+ * messy bracket display frequently happens in RTL layout.
+ * This version works for both plain text and html. But it does not work as
+ * good as guardBracketInHtml in some cases.
+ * @param {string} s The string that need to be processed.
+ * @param {boolean=} opt_isRtlContext specifies default direction (usually
+ *     direction of the UI).
+ * @return {string} The processed string, with all bracket guarded.
+ */
+goog.i18n.bidi.guardBracketInText = function(s, opt_isRtlContext) {
+  var useRtl = opt_isRtlContext === undefined ?
+      goog.i18n.bidi.hasAnyRtl(s) : opt_isRtlContext;
+  var mark = useRtl ? goog.i18n.bidi.Format.RLM : goog.i18n.bidi.Format.LRM;
+  return s.replace(goog.i18n.bidi.bracketGuardTextRe_, mark + '$&' + mark);
+};
+
+
+/**
+ * Enforce the html snippet in RTL directionality regardless overall context.
+ * If the html piece was enclosed by tag, dir will be applied to existing
+ * tag, otherwise a span tag will be added as wrapper. For this reason, if
+ * html snippet start with with tag, this tag must enclose the whole piece. If
+ * the tag already has a dir specified, this new one will override existing
+ * one in behavior (tested on FF and IE).
+ * @param {string} html The string that need to be processed.
+ * @return {string} The processed string, with directionality enforced to RTL.
+ */
+goog.i18n.bidi.enforceRtlInHtml = function(html) {
+  if (html.charAt(0) == '<') {
+    return html.replace(/<\w+/, '$& dir=rtl');
+  }
+  // '\n' is important for FF so that it won't incorrectly merge span groups
+  return '\n<span dir=rtl>' + html + '</span>';
+};
+
+
+/**
+ * Enforce RTL on both end of the given text piece using unicode BiDi formatting
+ * characters RLE and PDF.
+ * @param {string} text The piece of text that need to be wrapped.
+ * @return {string} The wrapped string after process.
+ */
+goog.i18n.bidi.enforceRtlInText = function(text) {
+  return goog.i18n.bidi.Format.RLE + text + goog.i18n.bidi.Format.PDF;
+};
+
+
+/**
+ * Enforce the html snippet in RTL directionality regardless overall context.
+ * If the html piece was enclosed by tag, dir will be applied to existing
+ * tag, otherwise a span tag will be added as wrapper. For this reason, if
+ * html snippet start with with tag, this tag must enclose the whole piece. If
+ * the tag already has a dir specified, this new one will override existing
+ * one in behavior (tested on FF and IE).
+ * @param {string} html The string that need to be processed.
+ * @return {string} The processed string, with directionality enforced to RTL.
+ */
+goog.i18n.bidi.enforceLtrInHtml = function(html) {
+  if (html.charAt(0) == '<') {
+    return html.replace(/<\w+/, '$& dir=ltr');
+  }
+  // '\n' is important for FF so that it won't incorrectly merge span groups
+  return '\n<span dir=ltr>' + html + '</span>';
+};
+
+
+/**
+ * Enforce LTR on both end of the given text piece using unicode BiDi formatting
+ * characters LRE and PDF.
+ * @param {string} text The piece of text that need to be wrapped.
+ * @return {string} The wrapped string after process.
+ */
+goog.i18n.bidi.enforceLtrInText = function(text) {
+  return goog.i18n.bidi.Format.LRE + text + goog.i18n.bidi.Format.PDF;
+};
+
+
+/**
+ * Regular expression to find dimensions such as "padding: .3 0.4ex 5px 6;"
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.dimensionsRe_ =
+     /:\s*([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)/g;
+
+
+/**
+ * Regular expression for left.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.leftRe_ = /left/gi;
+
+
+/**
+ * Regular expression for right.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.rightRe_ = /right/gi;
+
+
+/**
+ * Placeholder regular expression for swapping.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.tempRe_ = /%%%%/g;
+
+
+/**
+ * Swap location parameters and 'left'/'right' in CSS specification. The
+ * processed string will be suited for RTL layout. Though this function can
+ * cover most cases, there are always exceptions. It is suggested to put
+ * those exceptions in separate group of CSS string.
+ * @param {string} cssStr CSS spefication string.
+ * @return {string} Processed CSS specification string.
+ */
+goog.i18n.bidi.mirrorCSS = function(cssStr) {
+  return cssStr.
+    // reverse dimensions
+    replace(goog.i18n.bidi.dimensionsRe_, ':$1 $4 $3 $2').
+    replace(goog.i18n.bidi.leftRe_, '%%%%').          // swap left and right
+    replace(goog.i18n.bidi.rightRe_, goog.i18n.bidi.LEFT).
+    replace(goog.i18n.bidi.tempRe_, goog.i18n.bidi.RIGHT);
+};
+
+
+/**
+ * Regular expression for hebrew double quote substitution, finding quote
+ * directly after hebrew characters.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.doubleQuoteSubstituteRe_ = /([\u0591-\u05f2])"/g;
+
+
+/**
+ * Regular expression for hebrew single quote substitution, finding quote
+ * directly after hebrew characters.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.singleQuoteSubstituteRe_ = /([\u0591-\u05f2])'/g;
+
+
+/**
+ * Replace the double and single quote directly after a Hebrew character with
+ * GERESH and GERSHAYIM. In such case, most likely that's user intention.
+ * @param {string} str String that need to be processed.
+ * @return {string} Processed string with double/single quote replaced.
+ */
+goog.i18n.bidi.normalizeHebrewQuote = function(str) {
+  return str.
+    replace(goog.i18n.bidi.doubleQuoteSubstituteRe_, '$1\u05f4').
+    replace(goog.i18n.bidi.singleQuoteSubstituteRe_, '$1\u05f3');
+};
+
+
+/**
+ * Regular expression to split a string into "words" for directionality
+ * estimation based on relative word counts.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.wordSeparatorRe_ = /\s+/;
+
+
+/**
+ * Regular expression to check if a string contains any numerals. Used to
+ * differentiate between completely neutral strings and those containing
+ * numbers, which are weakly LTR.
+ * @type {RegExp}
+ * @private
+ */
+goog.i18n.bidi.hasNumeralsRe_ = /\d/;
+
+
+/**
+ * This constant controls threshold of RTL directionality.
+ * @type {number}
+ * @private
+ */
+goog.i18n.bidi.rtlDetectionThreshold_ = 0.40;
+
+
+/**
+ * Estimates the directionality of a string based on relative word counts.
+ * If the number of RTL words is above a certain percentage of the total number
+ * of strongly directional words, returns RTL.
+ * Otherwise, if any words are strongly or weakly LTR, returns LTR.
+ * Otherwise, returns UNKNOWN, which is used to mean "neutral".
+ * Numbers are counted as weakly LTR.
+ * @param {string} str The string to be checked.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {goog.i18n.bidi.Dir} Estimated overall directionality of {@code str}.
+ */
+goog.i18n.bidi.estimateDirection = function(str, opt_isHtml) {
+  var rtlCount = 0;
+  var totalCount = 0;
+  var hasWeaklyLtr = false;
+  var tokens = goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml).
+      split(goog.i18n.bidi.wordSeparatorRe_);
+  for (var i = 0; i < tokens.length; i++) {
+    var token = tokens[i];
+    if (goog.i18n.bidi.startsWithRtl(token)) {
+      rtlCount++;
+      totalCount++;
+    } else if (goog.i18n.bidi.isRequiredLtrRe_.test(token)) {
+      hasWeaklyLtr = true;
+    } else if (goog.i18n.bidi.hasAnyLtr(token)) {
+      totalCount++;
+    } else if (goog.i18n.bidi.hasNumeralsRe_.test(token)) {
+      hasWeaklyLtr = true;
+    }
+  }
+
+  return totalCount == 0 ?
+      (hasWeaklyLtr ? goog.i18n.bidi.Dir.LTR : goog.i18n.bidi.Dir.UNKNOWN) :
+      (rtlCount / totalCount > goog.i18n.bidi.rtlDetectionThreshold_ ?
+          goog.i18n.bidi.Dir.RTL : goog.i18n.bidi.Dir.LTR);
+};
+
+
+/**
+ * Check the directionality of a piece of text, return true if the piece of
+ * text should be laid out in RTL direction.
+ * @param {string} str The piece of text that need to be detected.
+ * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {boolean} Whether this piece of text should be laid out in RTL.
+ */
+goog.i18n.bidi.detectRtlDirectionality = function(str, opt_isHtml) {
+  return goog.i18n.bidi.estimateDirection(str, opt_isHtml) ==
+      goog.i18n.bidi.Dir.RTL;
+};
+
+
+/**
+ * Sets text input element's directionality and text alignment based on a
+ * given directionality.
+ * @param {Element} element Input field element to set directionality to.
+ * @param {goog.i18n.bidi.Dir|number|boolean} dir Desired directionality, given
+ *     in one of the following formats:
+ *     1. A goog.i18n.bidi.Dir constant.
+ *     2. A number (positive = LRT, negative = RTL, 0 = unknown).
+ *     3. A boolean (true = RTL, false = LTR).
+ */
+goog.i18n.bidi.setElementDirAndAlign = function(element, dir) {
+  if (element &&
+      (dir = goog.i18n.bidi.toDir(dir)) != goog.i18n.bidi.Dir.UNKNOWN) {
+    element.style.textAlign = dir == goog.i18n.bidi.Dir.RTL ? 'right' : 'left';
+    element.dir = dir == goog.i18n.bidi.Dir.RTL ? 'rtl' : 'ltr';
+  }
+};
+// Copyright 2009 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Utility for formatting text for display in a potentially
+ * opposite-directionality context without garbling.
+ * Mostly a port of http://go/formatter.cc.
+ */
+
+
+goog.provide('goog.i18n.BidiFormatter');
+
+goog.require('goog.i18n.bidi');
+goog.require('goog.string');
+
+
+
+/**
+ * Utility class for formatting text for display in a potentially
+ * opposite-directionality context without garbling. Provides the following
+ * functionality:
+ *
+ * 1. BiDi Wrapping
+ * When text in one language is mixed into a document in another, opposite-
+ * directionality language, e.g. when an English business name is embedded in a
+ * Hebrew web page, both the inserted string and the text following it may be
+ * displayed incorrectly unless the inserted string is explicitly separated
+ * from the surrounding text in a "wrapper" that declares its directionality at
+ * the start and then resets it back at the end. This wrapping can be done in
+ * HTML mark-up (e.g. a 'span dir=rtl' tag) or - only in contexts where mark-up
+ * can not be used - in Unicode BiDi formatting codes (LRE|RLE and PDF).
+ * Providing such wrapping services is the basic purpose of the BiDi formatter.
+ *
+ * 2. Directionality estimation
+ * How does one know whether a string about to be inserted into surrounding
+ * text has the same directionality? Well, in many cases, one knows that this
+ * must be the case when writing the code doing the insertion, e.g. when a
+ * localized message is inserted into a localized page. In such cases there is
+ * no need to involve the BiDi formatter at all. In the remaining cases, e.g.
+ * when the string is user-entered or comes from a database, the language of
+ * the string (and thus its directionality) is not known a priori, and must be
+ * estimated at run-time. The BiDi formatter does this automatically.
+ *
+ * 3. Escaping
+ * When wrapping plain text - i.e. text that is not already HTML or HTML-
+ * escaped - in HTML mark-up, the text must first be HTML-escaped to prevent XSS
+ * attacks and other nasty business. This of course is always true, but the
+ * escaping can not be done after the string has already been wrapped in
+ * mark-up, so the BiDi formatter also serves as a last chance and includes
+ * escaping services.
+ *
+ * Thus, in a single call, the formatter will escape the input string as
+ * specified, determine its directionality, and wrap it as necessary. It is
+ * then up to the caller to insert the return value in the output.
+ *
+ * See http://wiki/Main/TemplatesAndBiDi for more information.
+ *
+ * @param {goog.i18n.bidi.Dir|number|boolean} contextDir The context
+ *     directionality. May be supplied either as a goog.i18n.bidi.Dir constant,
+ *     as a number (positive = LRT, negative = RTL, 0 = unknown) or as a boolean
+ *     (true = RTL, false = LTR).
+ * @param {boolean=} opt_alwaysSpan Whether {@link #spanWrap} should always
+ *     use a 'span' tag, even when the input directionality is neutral or
+ *     matches the context, so that the DOM structure of the output does not
+ *     depend on the combination of directionalities. Default: false.
+ * @constructor
+ */
+goog.i18n.BidiFormatter = function(contextDir, opt_alwaysSpan) {
+  /**
+   * The overall directionality of the context in which the formatter is being
+   * used.
+   * @type {goog.i18n.bidi.Dir}
+   * @private
+   */
+  this.contextDir_ = goog.i18n.bidi.toDir(contextDir);
+
+  /**
+   * Whether {@link #spanWrap} and similar methods should always use the same
+   * span structure, regardless of the combination of directionalities, for a
+   * stable DOM structure.
+   * @type {boolean}
+   * @private
+   */
+  this.alwaysSpan_ = !!opt_alwaysSpan;
+};
+
+
+/**
+ * @return {goog.i18n.bidi.Dir} The context directionality.
+ */
+goog.i18n.BidiFormatter.prototype.getContextDir = function() {
+  return this.contextDir_;
+};
+
+
+/**
+ * @return {boolean} Whether alwaysSpan is set.
+ */
+goog.i18n.BidiFormatter.prototype.getAlwaysSpan = function() {
+  return this.alwaysSpan_;
+};
+
+
+/**
+ * @param {goog.i18n.bidi.Dir|number|boolean} contextDir The context
+ *     directionality. May be supplied either as a goog.i18n.bidi.Dir constant,
+ *     as a number (positive = LRT, negative = RTL, 0 = unknown) or as a boolean
+ *     (true = RTL, false = LTR).
+ */
+goog.i18n.BidiFormatter.prototype.setContextDir = function(contextDir) {
+  this.contextDir_ = goog.i18n.bidi.toDir(contextDir);
+};
+
+
+/**
+ * @param {boolean} alwaysSpan Whether {@link #spanWrap} should always use a
+ *     'span' tag, even when the input directionality is neutral or matches the
+ *     context, so that the DOM structure of the output does not depend on the
+ *     combination of directionalities.
+ */
+goog.i18n.BidiFormatter.prototype.setAlwaysSpan = function(alwaysSpan) {
+  this.alwaysSpan_ = alwaysSpan;
+};
+
+
+/**
+ * Returns the directionality of input argument {@code str}.
+ * Identical to {@link goog.i18n.bidi.estimateDirection}.
+ *
+ * @param {string} str The input text.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {goog.i18n.bidi.Dir} Estimated overall directionality of {@code str}.
+ */
+goog.i18n.BidiFormatter.prototype.estimateDirection =
+    goog.i18n.bidi.estimateDirection;
+
+
+/**
+ * Returns true if two given directionalities are opposite.
+ * Note: the implementation is based on the numeric values of the Dir enum.
+ *
+ * @param {goog.i18n.bidi.Dir} dir1 1st directionality.
+ * @param {goog.i18n.bidi.Dir} dir2 2nd directionality.
+ * @return {boolean} Whether the directionalities are opposite.
+ * @private
+ */
+goog.i18n.BidiFormatter.prototype.areDirectionalitiesOpposite_ = function(dir1,
+    dir2) {
+  return dir1 * dir2 < 0;
+};
+
+
+/**
+ * Returns a unicode BiDi mark matching the context directionality (LRM or
+ * RLM) if {@code opt_dirReset}, and if either the directionality or the exit
+ * directionality of {@code str} is opposite to the context directionality.
+ * Otherwise returns the empty string.
+ *
+ * @param {string} str The input text.
+ * @param {goog.i18n.bidi.Dir} dir {@code str}'s overall directionality.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @param {boolean=} opt_dirReset Whether to perform the reset. Default: false.
+ * @return {string} A unicode BiDi mark or the empty string.
+ * @private
+ */
+goog.i18n.BidiFormatter.prototype.dirResetIfNeeded_ = function(str, dir,
+    opt_isHtml, opt_dirReset) {
+  // endsWithRtl and endsWithLtr are called only if needed (short-circuit).
+  if (opt_dirReset &&
+      (this.areDirectionalitiesOpposite_(dir, this.contextDir_) ||
+       (this.contextDir_ == goog.i18n.bidi.Dir.LTR &&
+        goog.i18n.bidi.endsWithRtl(str, opt_isHtml)) ||
+       (this.contextDir_ == goog.i18n.bidi.Dir.RTL &&
+        goog.i18n.bidi.endsWithLtr(str, opt_isHtml)))) {
+   return this.contextDir_ == goog.i18n.bidi.Dir.LTR ?
+       goog.i18n.bidi.Format.LRM : goog.i18n.bidi.Format.RLM;
+  } else {
+    return '';
+  }
+};
+
+
+/**
+ * Returns "rtl" if {@code str}'s estimated directionality is RTL, and "ltr" if
+ * it is LTR. In case it's UNKNOWN, returns "rtl" if the context directionality
+ * is RTL, and "ltr" otherwise.
+ * Needed for GXP, which can't handle dirAttr.
+ * Example use case:
+ * <td expr:dir='bidiFormatter.dirAttrValue(foo)'><gxp:eval expr='foo'></td>
+ *
+ * @param {string} str Text whose directionality is to be estimated.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {string} "rtl" or "ltr", according to the logic described above.
+ */
+goog.i18n.BidiFormatter.prototype.dirAttrValue = function(str, opt_isHtml) {
+  return this.knownDirAttrValue(this.estimateDirection(str, opt_isHtml));
+};
+
+
+/**
+ * Returns "rtl" if the given directionality is RTL, and "ltr" if it is LTR. In
+ * case it's UNKNOWN, returns "rtl" if the context directionality is RTL, and
+ * "ltr" otherwise.
+ *
+ * @param {goog.i18n.bidi.Dir} dir A directionality.
+ * @return {string} "rtl" or "ltr", according to the logic described above.
+ */
+goog.i18n.BidiFormatter.prototype.knownDirAttrValue = function(dir) {
+  if (dir == goog.i18n.bidi.Dir.UNKNOWN) {
+    dir = this.contextDir_;
+  }
+
+  return dir == goog.i18n.bidi.Dir.RTL ? 'rtl' : 'ltr';
+};
+
+
+/**
+ * Returns "dir=ltr" or "dir=rtl", depending on {@code str}'s estimated
+ * directionality, if it is not the same as the context directionality.
+ * Otherwise, returns the empty string.
+ *
+ * @param {string} str Text whose directionality is to be estimated.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {string} "dir=rtl" for RTL text in non-RTL context; "dir=ltr" for LTR
+ *     text in non-LTR context; else, the empty string.
+ */
+goog.i18n.BidiFormatter.prototype.dirAttr = function(str, opt_isHtml) {
+  return this.knownDirAttr(this.estimateDirection(str, opt_isHtml));
+};
+
+
+/**
+ * Returns "dir=ltr" or "dir=rtl", depending on the given directionality, if it
+ * is not the same as the context directionality. Otherwise, returns the empty
+ * string.
+ *
+ * @param {goog.i18n.bidi.Dir} dir A directionality.
+ * @return {string} "dir=rtl" for RTL text in non-RTL context; "dir=ltr" for LTR
+ *     text in non-LTR context; else, the empty string.
+ */
+goog.i18n.BidiFormatter.prototype.knownDirAttr = function(dir) {
+  if (dir != this.contextDir_) {
+    return dir == goog.i18n.bidi.Dir.RTL ? 'dir=rtl' :
+        dir == goog.i18n.bidi.Dir.LTR ? 'dir=ltr' : '';
+  }
+  return '';
+};
+
+
+/**
+ * Formats a string of unknown directionality for use in HTML output of the
+ * context directionality, so an opposite-directionality string is neither
+ * garbled nor garbles what follows it.
+ * The algorithm: estimates the directionality of input argument {@code str}. In
+ * case its directionality doesn't match the context directionality, wraps it
+ * with a 'span' tag and adds a "dir" attribute (either 'dir=rtl' or 'dir=ltr').
+ * If setAlwaysSpan(true) was used, the input is always wrapped with 'span',
+ * skipping just the dir attribute when it's not needed.
+ *
+ * If {@code opt_dirReset}, and if the overall directionality or the exit
+ * directionality of {@code str} are opposite to the context directionality, a
+ * trailing unicode BiDi mark matching the context directionality is appened
+ * (LRM or RLM).
+ *
+ * If !{@code opt_isHtml}, HTML-escapes {@code str} regardless of wrapping.
+ *
+ * @param {string} str The input text.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
+ *     matching the context directionality, when needed, to prevent the possible
+ *     garbling of whatever may follow {@code str}. Default: true.
+ * @return {string} Input text after applying the above processing.
+ */
+goog.i18n.BidiFormatter.prototype.spanWrap = function(str, opt_isHtml,
+    opt_dirReset) {
+  var dir = this.estimateDirection(str, opt_isHtml);
+  return this.spanWrapWithKnownDir(dir, str, opt_isHtml, opt_dirReset);
+};
+
+
+/**
+ * Formats a string of given directionality for use in HTML output of the
+ * context directionality, so an opposite-directionality string is neither
+ * garbled nor garbles what follows it.
+ * The algorithm: If {@code dir} doesn't match the context directionality, wraps
+ * {@code str} with a 'span' tag and adds a "dir" attribute (either 'dir=rtl' or
+ * 'dir=ltr'). If setAlwaysSpan(true) was used, the input is always wrapped with
+ * 'span', skipping just the dir attribute when it's not needed.
+ *
+ * If {@code opt_dirReset}, and if {@code dir} or the exit directionality of
+ * {@code str} are opposite to the context directionality, a trailing unicode
+ * BiDi mark matching the context directionality is appened (LRM or RLM).
+ *
+ * If !{@code opt_isHtml}, HTML-escapes {@code str} regardless of wrapping.
+ *
+ * @param {goog.i18n.bidi.Dir} dir {@code str}'s overall directionality.
+ * @param {string} str The input text.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
+ *     matching the context directionality, when needed, to prevent the possible
+ *     garbling of whatever may follow {@code str}. Default: true.
+ * @return {string} Input text after applying the above processing.
+ */
+goog.i18n.BidiFormatter.prototype.spanWrapWithKnownDir = function(dir, str,
+    opt_isHtml, opt_dirReset) {
+  opt_dirReset = opt_dirReset || (opt_dirReset == undefined);
+  // Whether to add the "dir" attribute.
+  var dirCondition = dir != goog.i18n.bidi.Dir.UNKNOWN && dir !=
+      this.contextDir_;
+  if (!opt_isHtml) {
+    str = goog.string.htmlEscape(str);
+  }
+
+  var result = [];
+  if (this.alwaysSpan_ || dirCondition) {  // Wrap is needed
+    result.push('<span');
+    if (dirCondition) {
+      result.push(dir == goog.i18n.bidi.Dir.RTL ? ' dir=rtl' : ' dir=ltr');
+    }
+    result.push('>' + str + '</span>');
+  } else {
+    result.push(str);
+  }
+
+  result.push(this.dirResetIfNeeded_(str, dir, true, opt_dirReset));
+  return result.join('');
+};
+
+
+/**
+ * Formats a string of unknown directionality for use in plain-text output of
+ * the context directionality, so an opposite-directionality string is neither
+ * garbled nor garbles what follows it.
+ * As opposed to {@link #spanWrap}, this makes use of unicode BiDi formatting
+ * characters. In HTML, its *only* valid use is inside of elements that do not
+ * allow mark-up, e.g. an 'option' tag.
+ * The algorithm: estimates the directionality of input argument {@code str}.
+ * In case it doesn't match  the context directionality, wraps it with Unicode
+ * BiDi formatting characters: RLE{@code str}PDF for RTL text, and
+ * LRE{@code str}PDF for LTR text.
+ *
+ * If {@code opt_dirReset}, and if the overall directionality or the exit
+ * directionality of {@code str} are opposite to the context directionality, a
+ * trailing unicode BiDi mark matching the context directionality is appended
+ * (LRM or RLM).
+ *
+ * Does *not* do HTML-escaping regardless of the value of {@code opt_isHtml}.
+ * The return value can be HTML-escaped as necessary.
+ *
+ * @param {string} str The input text.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
+ *     matching the context directionality, when needed, to prevent the possible
+ *     garbling of whatever may follow {@code str}. Default: true.
+ * @return {string} Input text after applying the above processing.
+ */
+goog.i18n.BidiFormatter.prototype.unicodeWrap = function(str, opt_isHtml,
+    opt_dirReset) {
+  var dir = this.estimateDirection(str, opt_isHtml);
+  return this.unicodeWrapWithKnownDir(dir, str, opt_isHtml, opt_dirReset);
+};
+
+
+/**
+ * Formats a string of given directionality for use in plain-text output of the
+ * context directionality, so an opposite-directionality string is neither
+ * garbled nor garbles what follows it.
+ * As opposed to {@link #spanWrapWithKnownDir}, makes use of unicode BiDi
+ * formatting characters. In HTML, its *only* valid use is inside of elements
+ * that do not allow mark-up, e.g. an 'option' tag.
+ * The algorithm: If {@code dir} doesn't match the context directionality, wraps
+ * {@code str} with Unicode BiDi formatting characters: RLE{@code str}PDF for
+ * RTL text, and LRE{@code str}PDF for LTR text.
+ *
+ * If {@code opt_dirReset}, and if the overall directionality or the exit
+ * directionality of {@code str} are opposite to the context directionality, a
+ * trailing unicode BiDi mark matching the context directionality is appended
+ * (LRM or RLM).
+ *
+ * Does *not* do HTML-escaping regardless of the value of {@code opt_isHtml}.
+ * The return value can be HTML-escaped as necessary.
+ *
+ * @param {goog.i18n.bidi.Dir} dir {@code str}'s overall directionality.
+ * @param {string} str The input text.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
+ *     matching the context directionality, when needed, to prevent the possible
+ *     garbling of whatever may follow {@code str}. Default: true.
+ * @return {string} Input text after applying the above processing.
+ */
+goog.i18n.BidiFormatter.prototype.unicodeWrapWithKnownDir = function(dir, str,
+    opt_isHtml, opt_dirReset) {
+  opt_dirReset = opt_dirReset || (opt_dirReset == undefined);
+  var result = [];
+  if (dir != goog.i18n.bidi.Dir.UNKNOWN && dir != this.contextDir_) {
+    result.push(dir == goog.i18n.bidi.Dir.RTL ? goog.i18n.bidi.Format.RLE :
+                                                goog.i18n.bidi.Format.LRE);
+    result.push(str);
+    result.push(goog.i18n.bidi.Format.PDF);
+  } else {
+    result.push(str);
+  }
+
+  result.push(this.dirResetIfNeeded_(str, dir, opt_isHtml, opt_dirReset));
+  return result.join('');
+};
+
+
+/**
+ * Returns a Unicode BiDi mark matching the context directionality (LRM or RLM)
+ * if the directionality or the exit directionality of {@code str} are opposite
+ * to the context directionality. Otherwise returns the empty string.
+ *
+ * @param {string} str The input text.
+ * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
+ *     Default: false.
+ * @return {string} A Unicode bidi mark matching the global directionality or
+ *     the empty string.
+ */
+goog.i18n.BidiFormatter.prototype.markAfter = function(str, opt_isHtml) {
+  return this.dirResetIfNeeded_(str,
+      this.estimateDirection(str, opt_isHtml), opt_isHtml, true);
+};
+
+
+/**
+ * Returns the Unicode BiDi mark matching the context directionality (LRM for
+ * LTR context directionality, RLM for RTL context directionality), or the
+ * empty string for neutral / unknown context directionality.
+ *
+ * @return {string} LRM for LTR context directionality and RLM for RTL context
+ *     directionality.
+ */
+goog.i18n.BidiFormatter.prototype.mark = function() {
+  switch (this.contextDir_) {
+  case (goog.i18n.bidi.Dir.LTR):
+      return goog.i18n.bidi.Format.LRM;
+  case (goog.i18n.bidi.Dir.RTL):
+      return goog.i18n.bidi.Format.RLM;
+  default:
+      return '';
+  }
+};
+
+
+/**
+ * Returns 'right' for RTL context directionality. Otherwise (LTR or neutral /
+ * unknown context directionality) returns 'left'.
+ *
+ * @return {string} 'right' for RTL context directionality and 'left' for other
+ *     context directionality.
+ */
+goog.i18n.BidiFormatter.prototype.startEdge = function() {
+  return this.contextDir_ == goog.i18n.bidi.Dir.RTL ?
+      goog.i18n.bidi.RIGHT : goog.i18n.bidi.LEFT;
+};
+
+
+/**
+ * Returns 'left' for RTL context directionality. Otherwise (LTR or neutral /
+ * unknown context directionality) returns 'right'.
+ *
+ * @return {string} 'left' for RTL context directionality and 'right' for other
+ *     context directionality.
+ */
+goog.i18n.BidiFormatter.prototype.endEdge = function() {
+  return this.contextDir_ == goog.i18n.bidi.Dir.RTL ?
+      goog.i18n.bidi.LEFT : goog.i18n.bidi.RIGHT;
+};
+/*
+ * Copyright 2008 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @fileoverview
+ * Utility functions and classes for Soy.
+ *
+ * <p>
+ * The top portion of this file contains utilities for Soy users:<ul>
+ *   <li> soy.StringBuilder: Compatible with the 'stringbuilder' code style.
+ *   <li> soy.renderElement: Render template and set as innerHTML of an element.
+ *   <li> soy.renderAsFragment: Render template and return as HTML fragment.
+ * </ul>
+ *
+ * <p>
+ * The bottom portion of this file contains utilities that should only be called
+ * by Soy-generated JS code. Please do not use these functions directly from
+ * your hand-writen code. Their names all start with '$$'.
+ *
+ */
+
+goog.provide('soy');
+goog.provide('soy.StringBuilder');
+goog.provide('soy.esc');
+goog.provide('soydata');
+goog.provide('soydata.SanitizedHtml');
+goog.provide('soydata.SanitizedHtmlAttribute');
+goog.provide('soydata.SanitizedJsStrChars');
+goog.provide('soydata.SanitizedUri');
+
+goog.require('goog.asserts');
+goog.require('goog.dom.DomHelper');
+goog.require('goog.format');
+goog.require('goog.i18n.BidiFormatter');
+goog.require('goog.i18n.bidi');
+goog.require('goog.soy');
+goog.require('goog.string');
+goog.require('goog.string.StringBuffer');
+
+
+// -----------------------------------------------------------------------------
+// StringBuilder (compatible with the 'stringbuilder' code style).
+
+
+/**
+ * Utility class to facilitate much faster string concatenation in IE,
+ * using Array.join() rather than the '+' operator.  For other browsers
+ * we simply use the '+' operator.
+ *
+ * @param {Object} var_args Initial items to append,
+ *     e.g., new soy.StringBuilder('foo', 'bar').
+ * @constructor
+ */
+soy.StringBuilder = goog.string.StringBuffer;
+
+
+// -----------------------------------------------------------------------------
+// soydata: Defines typed strings, e.g. an HTML string {@code "a<b>c"} is
+// semantically distinct from the plain text string {@code "a<b>c"} and smart
+// templates can take that distinction into account.
+
+/**
+ * A type of textual content.
+ * @enum {number}
+ */
+soydata.SanitizedContentKind = {
+
+  /**
+   * A snippet of HTML that does not start or end inside a tag, comment, entity,
+   * or DOCTYPE; and that does not contain any executable code
+   * (JS, {@code <object>}s, etc.) from a different trust domain.
+   */
+  HTML: 0,
+
+  /**
+   * A sequence of code units that can appear between quotes (either kind) in a
+   * JS program without causing a parse error, and without causing any side
+   * effects.
+   * <p>
+   * The content should not contain unescaped quotes, newlines, or anything else
+   * that would cause parsing to fail or to cause a JS parser to finish the
+   * string its parsing inside the content.
+   * <p>
+   * The content must also not end inside an escape sequence ; no partial octal
+   * escape sequences or odd number of '{@code \}'s at the end.
+   */
+  JS_STR_CHARS: 1,
+
+  /** A properly encoded portion of a URI. */
+  URI: 2,
+
+  /** An attribute name and value such as {@code dir="ltr"}. */
+  HTML_ATTRIBUTE: 3
+};
+
+
+/**
+ * A string-like object that carries a content-type.
+ * @param {string} content
+ * @constructor
+ * @private
+ */
+soydata.SanitizedContent = function(content) {
+  /**
+   * The textual content.
+   * @type {string}
+   */
+  this.content = content;
+};
+
+/** @type {soydata.SanitizedContentKind} */
+soydata.SanitizedContent.prototype.contentKind;
+
+/** @override */
+soydata.SanitizedContent.prototype.toString = function() {
+  return this.content;
+};
+
+
+/**
+ * Content of type {@link soydata.SanitizedContentKind.HTML}.
+ * @param {string} content A string of HTML that can safely be embedded in
+ *     a PCDATA context in your app.  If you would be surprised to find that an
+ *     HTML sanitizer produced {@code s} (e.g. it runs code or fetches bad URLs)
+ *     and you wouldn't write a template that produces {@code s} on security or
+ *     privacy grounds, then don't pass {@code s} here.
+ * @constructor
+ * @extends {soydata.SanitizedContent}
+ */
+soydata.SanitizedHtml = function(content) {
+  soydata.SanitizedContent.call(this, content);
+};
+goog.inherits(soydata.SanitizedHtml, soydata.SanitizedContent);
+
+/** @override */
+soydata.SanitizedHtml.prototype.contentKind = soydata.SanitizedContentKind.HTML;
+
+
+/**
+ * Content of type {@link soydata.SanitizedContentKind.JS_STR_CHARS}.
+ * @param {string} content A string of JS that when evaled, produces a
+ *     value that does not depend on any sensitive data and has no side effects
+ *     <b>OR</b> a string of JS that does not reference any variables or have
+ *     any side effects not known statically to the app authors.
+ * @constructor
+ * @extends {soydata.SanitizedContent}
+ */
+soydata.SanitizedJsStrChars = function(content) {
+  soydata.SanitizedContent.call(this, content);
+};
+goog.inherits(soydata.SanitizedJsStrChars, soydata.SanitizedContent);
+
+/** @override */
+soydata.SanitizedJsStrChars.prototype.contentKind =
+    soydata.SanitizedContentKind.JS_STR_CHARS;
+
+
+/**
+ * Content of type {@link soydata.SanitizedContentKind.URI}.
+ * @param {string} content A chunk of URI that the caller knows is safe to
+ *     emit in a template.
+ * @constructor
+ * @extends {soydata.SanitizedContent}
+ */
+soydata.SanitizedUri = function(content) {
+  soydata.SanitizedContent.call(this, content);
+};
+goog.inherits(soydata.SanitizedUri, soydata.SanitizedContent);
+
+/** @override */
+soydata.SanitizedUri.prototype.contentKind = soydata.SanitizedContentKind.URI;
+
+
+/**
+ * Content of type {@link soydata.SanitizedContentKind.HTML_ATTRIBUTE}.
+ * @param {string} content An attribute name and value, such as
+ *     {@code dir="ltr"}.
+ * @constructor
+ * @extends {soydata.SanitizedContent}
+ */
+soydata.SanitizedHtmlAttribute = function(content) {
+  soydata.SanitizedContent.call(this, content);
+};
+goog.inherits(soydata.SanitizedHtmlAttribute, soydata.SanitizedContent);
+
+/** @override */
+soydata.SanitizedHtmlAttribute.prototype.contentKind =
+    soydata.SanitizedContentKind.HTML_ATTRIBUTE;
+
+
+// -----------------------------------------------------------------------------
+// Public utilities.
+
+
+/**
+ * Helper function to render a Soy template and then set the output string as
+ * the innerHTML of an element. It is recommended to use this helper function
+ * instead of directly setting innerHTML in your hand-written code, so that it
+ * will be easier to audit the code for cross-site scripting vulnerabilities.
+ *
+ * NOTE: New code should consider using goog.soy.renderElement instead.
+ *
+ * @param {Element} element The element whose content we are rendering.
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ */
+soy.renderElement = goog.soy.renderElement;
+
+
+/**
+ * Helper function to render a Soy template into a single node or a document
+ * fragment. If the rendered HTML string represents a single node, then that
+ * node is returned (note that this is *not* a fragment, despite them name of
+ * the method). Otherwise a document fragment is returned containing the
+ * rendered nodes.
+ *
+ * NOTE: New code should consider using goog.soy.renderAsFragment
+ * instead (note that the arguments are different).
+ *
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Document=} opt_document The document used to create DOM nodes. If not
+ *     specified, global document object is used.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ * @return {!Node} The resulting node or document fragment.
+ */
+soy.renderAsFragment = function(
+    template, opt_templateData, opt_document, opt_injectedData) {
+  return goog.soy.renderAsFragment(
+      template, opt_templateData, opt_injectedData,
+      new goog.dom.DomHelper(opt_document));
+};
+
+
+/**
+ * Helper function to render a Soy template into a single node. If the rendered
+ * HTML string represents a single node, then that node is returned. Otherwise,
+ * a DIV element is returned containing the rendered nodes.
+ *
+ * NOTE: New code should consider using goog.soy.renderAsElement
+ * instead (note that the arguments are different).
+ *
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Document=} opt_document The document used to create DOM nodes. If not
+ *     specified, global document object is used.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ * @return {!Element} Rendered template contents, wrapped in a parent DIV
+ *     element if necessary.
+ */
+soy.renderAsElement = function(
+    template, opt_templateData, opt_document, opt_injectedData) {
+  return goog.soy.renderAsElement(
+      template, opt_templateData, opt_injectedData,
+      new goog.dom.DomHelper(opt_document));
+};
+
+
+// -----------------------------------------------------------------------------
+// Below are private utilities to be used by Soy-generated code only.
+
+
+/**
+ * Builds an augmented data object to be passed when a template calls another,
+ * and needs to pass both original data and additional params. The returned
+ * object will contain both the original data and the additional params. If the
+ * same key appears in both, then the value from the additional params will be
+ * visible, while the value from the original data will be hidden. The original
+ * data object will be used, but not modified.
+ *
+ * @param {!Object} origData The original data to pass.
+ * @param {Object} additionalParams The additional params to pass.
+ * @return {Object} An augmented data object containing both the original data
+ *     and the additional params.
+ */
+soy.$$augmentData = function(origData, additionalParams) {
+
+  // Create a new object whose '__proto__' field is set to origData.
+  /** @constructor */
+  function TempCtor() {}
+  TempCtor.prototype = origData;
+  var newData = new TempCtor();
+
+  // Add the additional params to the new object.
+  for (var key in additionalParams) {
+    newData[key] = additionalParams[key];
+  }
+
+  return newData;
+};
+
+
+/**
+ * Gets the keys in a map as an array. There are no guarantees on the order.
+ * @param {Object} map The map to get the keys of.
+ * @return {Array.<string>} The array of keys in the given map.
+ */
+soy.$$getMapKeys = function(map) {
+  var mapKeys = [];
+  for (var key in map) {
+    mapKeys.push(key);
+  }
+  return mapKeys;
+};
+
+
+/**
+ * Gets a consistent unique id for the given delegate template name. Two calls
+ * to this function will return the same id if and only if the input names are
+ * the same.
+ *
+ * <p> Important: This function must always be called with a string constant.
+ *
+ * <p> If Closure Compiler is not being used, then this is just this identity
+ * function. If Closure Compiler is being used, then each call to this function
+ * will be replaced with a short string constant, which will be consistent per
+ * input name.
+ *
+ * @param {string} delTemplateName The delegate template name for which to get a
+ *     consistent unique id.
+ * @return {string} A unique id that is consistent per input name.
+ *
+ * @consistentIdGenerator
+ */
+soy.$$getDelegateId = function(delTemplateName) {
+  return delTemplateName;
+};
+
+
+/**
+ * Map from registered delegate template id/name to the priority of the
+ * implementation.
+ * @type {Object}
+ * @private
+ */
+soy.$$DELEGATE_REGISTRY_PRIORITIES_ = {};
+
+/**
+ * Map from registered delegate template id/name to the implementation function.
+ * @type {Object}
+ * @private
+ */
+soy.$$DELEGATE_REGISTRY_FUNCTIONS_ = {};
+
+
+/**
+ * Registers a delegate implementation. If the same delegate template id/name
+ * has been registered previously, then priority values are compared and only
+ * the higher priority implementation is stored (if priorities are equal, an
+ * error is thrown).
+ *
+ * @param {string} delTemplateId The delegate template id/name to register.
+ * @param {number} delPriority The implementation's priority value.
+ * @param {Function} delFn The implementation function.
+ */
+soy.$$registerDelegateFn = function(delTemplateId, delPriority, delFn) {
+  var mapKey = 'key_' + delTemplateId;
+  var currPriority = soy.$$DELEGATE_REGISTRY_PRIORITIES_[mapKey];
+  if (currPriority === undefined || delPriority > currPriority) {
+    // Registering new or higher-priority function: replace registry entry.
+    soy.$$DELEGATE_REGISTRY_PRIORITIES_[mapKey] = delPriority;
+    soy.$$DELEGATE_REGISTRY_FUNCTIONS_[mapKey] = delFn;
+  } else if (delPriority == currPriority) {
+    // Registering same-priority function: error.
+    throw Error(
+        'Encountered two active delegates with same priority (id/name "' +
+        delTemplateId + '").');
+  } else {
+    // Registering lower-priority function: do nothing.
+  }
+};
+
+
+/**
+ * Retrieves the (highest-priority) implementation that has been registered for
+ * a given delegate template id/name. If no implementation has been registered
+ * for the id/name, then returns an implementation that is equivalent to an
+ * empty template (i.e. rendered output would be empty string).
+ *
+ * @param {string} delTemplateId The delegate template id/name to get.
+ * @return {Function} The retrieved implementation function.
+ */
+soy.$$getDelegateFn = function(delTemplateId) {
+  var delFn = soy.$$DELEGATE_REGISTRY_FUNCTIONS_['key_' + delTemplateId];
+  return delFn ? delFn : soy.$$EMPTY_TEMPLATE_FN_;
+};
+
+
+/**
+ * Private helper soy.$$getDelegateFn(). This is the empty template function
+ * that is returned whenever there's no delegate implementation found.
+ *
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @param {Object.<string, *>=} opt_ijData
+ * @return {string}
+ * @private
+ */
+soy.$$EMPTY_TEMPLATE_FN_ = function(opt_data, opt_sb, opt_ijData) {
+  return '';
+};
+
+
+// -----------------------------------------------------------------------------
+// Escape/filter/normalize.
+
+
+/**
+ * Escapes HTML special characters in a string.  Escapes double quote '"' in
+ * addition to '&', '<', and '>' so that a string can be included in an HTML
+ * tag attribute value within double quotes.
+ * Will emit known safe HTML as-is.
+ *
+ * @param {*} value The string-like value to be escaped.  May not be a string,
+ *     but the value will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeHtml = function(value) {
+  if (typeof value === 'object' && value &&
+      value.contentKind === soydata.SanitizedContentKind.HTML) {
+    return value.content;
+  }
+  return soy.esc.$$escapeHtmlHelper(value);
+};
+
+
+/**
+ * Escapes HTML special characters in a string so that it can be embedded in
+ * RCDATA.
+ * <p>
+ * Escapes HTML special characters so that the value will not prematurely end
+ * the body of a tag like {@code <textarea>} or {@code <title>}.  RCDATA tags
+ * cannot contain other HTML entities, so it is not strictly necessary to escape
+ * HTML special characters except when part of that text looks like an HTML
+ * entity or like a close tag : {@code </textarea>}.
+ * <p>
+ * Will normalize known safe HTML to make sure that sanitized HTML (which could
+ * contain an innocuous {@code </textarea>} don't prematurely end an RCDATA
+ * element.
+ *
+ * @param {*} value The string-like value to be escaped.  May not be a string,
+ *     but the value will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeHtmlRcdata = function(value) {
+  if (typeof value === 'object' && value &&
+      value.contentKind === soydata.SanitizedContentKind.HTML) {
+    return soy.esc.$$normalizeHtmlHelper(value.content);
+  }
+  return soy.esc.$$escapeHtmlHelper(value);
+};
+
+
+/**
+ * Removes HTML tags from a string of known safe HTML so it can be used as an
+ * attribute value.
+ *
+ * @param {*} value The HTML to be escaped.  May not be a string, but the
+ *     value will be coerced to a string.
+ * @return {string} A representation of value without tags, HTML comments, or
+ *     other content.
+ */
+soy.$$stripHtmlTags = function(value) {
+  return String(value).replace(soy.esc.$$HTML_TAG_REGEX_, '');
+};
+
+
+/**
+ * Escapes HTML special characters in an HTML attribute value.
+ *
+ * @param {*} value The HTML to be escaped.  May not be a string, but the
+ *     value will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeHtmlAttribute = function(value) {
+  if (typeof value === 'object' && value &&
+      value.contentKind === soydata.SanitizedContentKind.HTML) {
+    return soy.esc.$$normalizeHtmlHelper(soy.$$stripHtmlTags(value.content));
+  }
+  return soy.esc.$$escapeHtmlHelper(value);
+};
+
+
+/**
+ * Escapes HTML special characters in a string including space and other
+ * characters that can end an unquoted HTML attribute value.
+ *
+ * @param {*} value The HTML to be escaped.  May not be a string, but the
+ *     value will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeHtmlAttributeNospace = function(value) {
+  if (typeof value === 'object' && value &&
+      value.contentKind === soydata.SanitizedContentKind.HTML) {
+    return soy.esc.$$normalizeHtmlNospaceHelper(
+        soy.$$stripHtmlTags(value.content));
+  }
+  return soy.esc.$$escapeHtmlNospaceHelper(value);
+};
+
+
+/**
+ * Filters out strings that cannot be a substring of a valid HTML attribute.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} A valid HTML attribute name part or name/value pair.
+ *     {@code "zSoyz"} if the input is invalid.
+ */
+soy.$$filterHtmlAttribute = function(value) {
+  if (typeof value === 'object' && value &&
+      value.contentKind === soydata.SanitizedContentKind.HTML_ATTRIBUTE) {
+    return value.content.replace(/=([^"']*)$/, '="$1"');
+  }
+  return soy.esc.$$filterHtmlAttributeHelper(value);
+};
+
+
+/**
+ * Filters out strings that cannot be a substring of a valid HTML element name.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} A valid HTML element name part.
+ *     {@code "zSoyz"} if the input is invalid.
+ */
+soy.$$filterHtmlElementName = function(value) {
+  return soy.esc.$$filterHtmlElementNameHelper(value);
+};
+
+
+/**
+ * Escapes characters in the value to make it valid content for a JS string
+ * literal.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ * @deprecated
+ */
+soy.$$escapeJs = function(value) {
+  return soy.$$escapeJsString(value);
+};
+
+
+/**
+ * Escapes characters in the value to make it valid content for a JS string
+ * literal.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeJsString = function(value) {
+  if (typeof value === 'object' &&
+      value.contentKind === soydata.SanitizedContentKind.JS_STR_CHARS) {
+    return value.content;
+  }
+  return soy.esc.$$escapeJsStringHelper(value);
+};
+
+
+/**
+ * Encodes a value as a JavaScript literal.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} A JavaScript code representation of the input.
+ */
+soy.$$escapeJsValue = function(value) {
+  // We surround values with spaces so that they can't be interpolated into
+  // identifiers by accident.
+  // We could use parentheses but those might be interpreted as a function call.
+  if (value == null) {  // Intentionally matches undefined.
+    // Java returns null from maps where there is no corresponding key while
+    // JS returns undefined.
+    // We always output null for compatibility with Java which does not have a
+    // distinct undefined value.
+    return ' null ';
+  }
+  switch (typeof value) {
+    case 'boolean': case 'number':
+      return ' ' + value + ' ';
+    default:
+      return "'" + soy.esc.$$escapeJsStringHelper(String(value)) + "'";
+  }
+};
+
+
+/**
+ * Escapes characters in the string to make it valid content for a JS regular
+ * expression literal.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeJsRegex = function(value) {
+  return soy.esc.$$escapeJsRegexHelper(value);
+};
+
+
+/**
+ * Matches all URI mark characters that conflict with HTML attribute delimiters
+ * or that cannot appear in a CSS uri.
+ * From <a href="http://www.w3.org/TR/CSS2/grammar.html">G.2: CSS grammar</a>
+ * <pre>
+ *     url        ([!#$%&*-~]|{nonascii}|{escape})*
+ * </pre>
+ *
+ * @type {RegExp}
+ * @private
+ */
+soy.$$problematicUriMarks_ = /['()]/g;
+
+/**
+ * @param {string} ch A single character in {@link soy.$$problematicUriMarks_}.
+ * @return {string}
+ * @private
+ */
+soy.$$pctEncode_ = function(ch) {
+  return '%' + ch.charCodeAt(0).toString(16);
+};
+
+/**
+ * Escapes a string so that it can be safely included in a URI.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeUri = function(value) {
+  if (typeof value === 'object' &&
+      value.contentKind === soydata.SanitizedContentKind.URI) {
+    return soy.$$normalizeUri(value);
+  }
+  // Apostophes and parentheses are not matched by encodeURIComponent.
+  // They are technically special in URIs, but only appear in the obsolete mark
+  // production in Appendix D.2 of RFC 3986, so can be encoded without changing
+  // semantics.
+  var encoded = soy.esc.$$escapeUriHelper(value);
+  soy.$$problematicUriMarks_.lastIndex = 0;
+  if (soy.$$problematicUriMarks_.test(encoded)) {
+    return encoded.replace(soy.$$problematicUriMarks_, soy.$$pctEncode_);
+  }
+  return encoded;
+};
+
+
+/**
+ * Removes rough edges from a URI by escaping any raw HTML/JS string delimiters.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$normalizeUri = function(value) {
+  return soy.esc.$$normalizeUriHelper(value);
+};
+
+
+/**
+ * Vets a URI's protocol and removes rough edges from a URI by escaping
+ * any raw HTML/JS string delimiters.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$filterNormalizeUri = function(value) {
+  return soy.esc.$$filterNormalizeUriHelper(value);
+};
+
+
+/**
+ * Escapes a string so it can safely be included inside a quoted CSS string.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} An escaped version of value.
+ */
+soy.$$escapeCssString = function(value) {
+  return soy.esc.$$escapeCssStringHelper(value);
+};
+
+
+/**
+ * Encodes a value as a CSS identifier part, keyword, or quantity.
+ *
+ * @param {*} value The value to escape.  May not be a string, but the value
+ *     will be coerced to a string.
+ * @return {string} A safe CSS identifier part, keyword, or quanitity.
+ */
+soy.$$filterCssValue = function(value) {
+  // Uses == to intentionally match null and undefined for Java compatibility.
+  if (value == null) {
+    return '';
+  }
+  return soy.esc.$$filterCssValueHelper(value);
+};
+
+
+// -----------------------------------------------------------------------------
+// Basic directives/functions.
+
+
+/**
+ * Converts \r\n, \r, and \n to <br>s
+ * @param {*} str The string in which to convert newlines.
+ * @return {string} A copy of {@code str} with converted newlines.
+ */
+soy.$$changeNewlineToBr = function(str) {
+  return goog.string.newLineToBr(String(str), false);
+};
+
+
+/**
+ * Inserts word breaks ('wbr' tags) into a HTML string at a given interval. The
+ * counter is reset if a space is encountered. Word breaks aren't inserted into
+ * HTML tags or entities. Entites count towards the character count; HTML tags
+ * do not.
+ *
+ * @param {*} str The HTML string to insert word breaks into. Can be other
+ *     types, but the value will be coerced to a string.
+ * @param {number} maxCharsBetweenWordBreaks Maximum number of non-space
+ *     characters to allow before adding a word break.
+ * @return {string} The string including word breaks.
+ */
+soy.$$insertWordBreaks = function(str, maxCharsBetweenWordBreaks) {
+  return goog.format.insertWordBreaks(String(str), maxCharsBetweenWordBreaks);
+};
+
+
+/**
+ * Truncates a string to a given max length (if it's currently longer),
+ * optionally adding ellipsis at the end.
+ *
+ * @param {*} str The string to truncate. Can be other types, but the value will
+ *     be coerced to a string.
+ * @param {number} maxLen The maximum length of the string after truncation
+ *     (including ellipsis, if applicable).
+ * @param {boolean} doAddEllipsis Whether to add ellipsis if the string needs
+ *     truncation.
+ * @return {string} The string after truncation.
+ */
+soy.$$truncate = function(str, maxLen, doAddEllipsis) {
+
+  str = String(str);
+  if (str.length <= maxLen) {
+    return str;  // no need to truncate
+  }
+
+  // If doAddEllipsis, either reduce maxLen to compensate, or else if maxLen is
+  // too small, just turn off doAddEllipsis.
+  if (doAddEllipsis) {
+    if (maxLen > 3) {
+      maxLen -= 3;
+    } else {
+      doAddEllipsis = false;
+    }
+  }
+
+  // Make sure truncating at maxLen doesn't cut up a unicode surrogate pair.
+  if (soy.$$isHighSurrogate_(str.charAt(maxLen - 1)) &&
+      soy.$$isLowSurrogate_(str.charAt(maxLen))) {
+    maxLen -= 1;
+  }
+
+  // Truncate.
+  str = str.substring(0, maxLen);
+
+  // Add ellipsis.
+  if (doAddEllipsis) {
+    str += '...';
+  }
+
+  return str;
+};
+
+/**
+ * Private helper for $$truncate() to check whether a char is a high surrogate.
+ * @param {string} ch The char to check.
+ * @return {boolean} Whether the given char is a unicode high surrogate.
+ * @private
+ */
+soy.$$isHighSurrogate_ = function(ch) {
+  return 0xD800 <= ch && ch <= 0xDBFF;
+};
+
+/**
+ * Private helper for $$truncate() to check whether a char is a low surrogate.
+ * @param {string} ch The char to check.
+ * @return {boolean} Whether the given char is a unicode low surrogate.
+ * @private
+ */
+soy.$$isLowSurrogate_ = function(ch) {
+  return 0xDC00 <= ch && ch <= 0xDFFF;
+};
+
+
+// -----------------------------------------------------------------------------
+// Bidi directives/functions.
+
+
+/**
+ * Cache of bidi formatter by context directionality, so we don't keep on
+ * creating new objects.
+ * @type {!Object.<!goog.i18n.BidiFormatter>}
+ * @private
+ */
+soy.$$bidiFormatterCache_ = {};
+
+
+/**
+ * Returns cached bidi formatter for bidiGlobalDir, or creates a new one.
+ * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
+ *     if rtl, 0 if unknown.
+ * @return {goog.i18n.BidiFormatter} A formatter for bidiGlobalDir.
+ * @private
+ */
+soy.$$getBidiFormatterInstance_ = function(bidiGlobalDir) {
+  return soy.$$bidiFormatterCache_[bidiGlobalDir] ||
+         (soy.$$bidiFormatterCache_[bidiGlobalDir] =
+             new goog.i18n.BidiFormatter(bidiGlobalDir));
+};
+
+
+/**
+ * Estimate the overall directionality of text. If opt_isHtml, makes sure to
+ * ignore the LTR nature of the mark-up and escapes in text, making the logic
+ * suitable for HTML and HTML-escaped text.
+ * @param {string} text The text whose directionality is to be estimated.
+ * @param {boolean=} opt_isHtml Whether text is HTML/HTML-escaped.
+ *     Default: false.
+ * @return {number} 1 if text is LTR, -1 if it is RTL, and 0 if it is neutral.
+ */
+soy.$$bidiTextDir = function(text, opt_isHtml) {
+  if (!text) {
+    return 0;
+  }
+  return goog.i18n.bidi.detectRtlDirectionality(text, opt_isHtml) ? -1 : 1;
+};
+
+
+/**
+ * Returns "dir=ltr" or "dir=rtl", depending on text's estimated
+ * directionality, if it is not the same as bidiGlobalDir.
+ * Otherwise, returns the empty string.
+ * If opt_isHtml, makes sure to ignore the LTR nature of the mark-up and escapes
+ * in text, making the logic suitable for HTML and HTML-escaped text.
+ * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
+ *     if rtl, 0 if unknown.
+ * @param {string} text The text whose directionality is to be estimated.
+ * @param {boolean=} opt_isHtml Whether text is HTML/HTML-escaped.
+ *     Default: false.
+ * @return {soydata.SanitizedHtmlAttribute} "dir=rtl" for RTL text in non-RTL
+ *     context; "dir=ltr" for LTR text in non-LTR context;
+ *     else, the empty string.
+ */
+soy.$$bidiDirAttr = function(bidiGlobalDir, text, opt_isHtml) {
+  return new soydata.SanitizedHtmlAttribute(
+      soy.$$getBidiFormatterInstance_(bidiGlobalDir).dirAttr(text, opt_isHtml));
+};
+
+
+/**
+ * Returns a Unicode BiDi mark matching bidiGlobalDir (LRM or RLM) if the
+ * directionality or the exit directionality of text are opposite to
+ * bidiGlobalDir. Otherwise returns the empty string.
+ * If opt_isHtml, makes sure to ignore the LTR nature of the mark-up and escapes
+ * in text, making the logic suitable for HTML and HTML-escaped text.
+ * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
+ *     if rtl, 0 if unknown.
+ * @param {string} text The text whose directionality is to be estimated.
+ * @param {boolean=} opt_isHtml Whether text is HTML/HTML-escaped.
+ *     Default: false.
+ * @return {string} A Unicode bidi mark matching bidiGlobalDir, or the empty
+ *     string when text's overall and exit directionalities both match
+ *     bidiGlobalDir, or bidiGlobalDir is 0 (unknown).
+ */
+soy.$$bidiMarkAfter = function(bidiGlobalDir, text, opt_isHtml) {
+  var formatter = soy.$$getBidiFormatterInstance_(bidiGlobalDir);
+  return formatter.markAfter(text, opt_isHtml);
+};
+
+
+/**
+ * Returns str wrapped in a <span dir=ltr|rtl> according to its directionality -
+ * but only if that is neither neutral nor the same as the global context.
+ * Otherwise, returns str unchanged.
+ * Always treats str as HTML/HTML-escaped, i.e. ignores mark-up and escapes when
+ * estimating str's directionality.
+ * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
+ *     if rtl, 0 if unknown.
+ * @param {*} str The string to be wrapped. Can be other types, but the value
+ *     will be coerced to a string.
+ * @return {string} The wrapped string.
+ */
+soy.$$bidiSpanWrap = function(bidiGlobalDir, str) {
+  var formatter = soy.$$getBidiFormatterInstance_(bidiGlobalDir);
+  return formatter.spanWrap(str + '', true);
+};
+
+
+/**
+ * Returns str wrapped in Unicode BiDi formatting characters according to its
+ * directionality, i.e. either LRE or RLE at the beginning and PDF at the end -
+ * but only if str's directionality is neither neutral nor the same as the
+ * global context. Otherwise, returns str unchanged.
+ * Always treats str as HTML/HTML-escaped, i.e. ignores mark-up and escapes when
+ * estimating str's directionality.
+ * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
+ *     if rtl, 0 if unknown.
+ * @param {*} str The string to be wrapped. Can be other types, but the value
+ *     will be coerced to a string.
+ * @return {string} The wrapped string.
+ */
+soy.$$bidiUnicodeWrap = function(bidiGlobalDir, str) {
+  var formatter = soy.$$getBidiFormatterInstance_(bidiGlobalDir);
+  return formatter.unicodeWrap(str + '', true);
+};
+
+
+// -----------------------------------------------------------------------------
+// Generated code.
+
+
+
+
+// START GENERATED CODE FOR ESCAPERS.
+
+/**
+ * @type {function (*) : string}
+ */
+soy.esc.$$escapeUriHelper = function(v) {
+  return goog.string.urlEncode(String(v));
+};
+
+/**
+ * Maps charcters to the escaped versions for the named escape directives.
+ * @type {Object.<string, string>}
+ * @private
+ */
+soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_ = {
+  '\x00': '\x26#0;',
+  '\x22': '\x26quot;',
+  '\x26': '\x26amp;',
+  '\x27': '\x26#39;',
+  '\x3c': '\x26lt;',
+  '\x3e': '\x26gt;',
+  '\x09': '\x26#9;',
+  '\x0a': '\x26#10;',
+  '\x0b': '\x26#11;',
+  '\x0c': '\x26#12;',
+  '\x0d': '\x26#13;',
+  ' ': '\x26#32;',
+  '-': '\x26#45;',
+  '\/': '\x26#47;',
+  '\x3d': '\x26#61;',
+  '`': '\x26#96;',
+  '\x85': '\x26#133;',
+  '\xa0': '\x26#160;',
+  '\u2028': '\x26#8232;',
+  '\u2029': '\x26#8233;'
+};
+
+/**
+ * A function that can be used with String.replace..
+ * @param {string} ch A single character matched by a compatible matcher.
+ * @return {string} A token in the output language.
+ * @private
+ */
+soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_ = function(ch) {
+  return soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_[ch];
+};
+
+/**
+ * Maps charcters to the escaped versions for the named escape directives.
+ * @type {Object.<string, string>}
+ * @private
+ */
+soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_ = {
+  '\x00': '\\x00',
+  '\x08': '\\x08',
+  '\x09': '\\t',
+  '\x0a': '\\n',
+  '\x0b': '\\x0b',
+  '\x0c': '\\f',
+  '\x0d': '\\r',
+  '\x22': '\\x22',
+  '\x26': '\\x26',
+  '\x27': '\\x27',
+  '\/': '\\\/',
+  '\x3c': '\\x3c',
+  '\x3d': '\\x3d',
+  '\x3e': '\\x3e',
+  '\\': '\\\\',
+  '\x85': '\\x85',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+  '$': '\\x24',
+  '(': '\\x28',
+  ')': '\\x29',
+  '*': '\\x2a',
+  '+': '\\x2b',
+  ',': '\\x2c',
+  '-': '\\x2d',
+  '.': '\\x2e',
+  ':': '\\x3a',
+  '?': '\\x3f',
+  '[': '\\x5b',
+  ']': '\\x5d',
+  '^': '\\x5e',
+  '{': '\\x7b',
+  '|': '\\x7c',
+  '}': '\\x7d'
+};
+
+/**
+ * A function that can be used with String.replace..
+ * @param {string} ch A single character matched by a compatible matcher.
+ * @return {string} A token in the output language.
+ * @private
+ */
+soy.esc.$$REPLACER_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_ = function(ch) {
+  return soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_[ch];
+};
+
+/**
+ * Maps charcters to the escaped versions for the named escape directives.
+ * @type {Object.<string, string>}
+ * @private
+ */
+soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_CSS_STRING_ = {
+  '\x00': '\\0 ',
+  '\x08': '\\8 ',
+  '\x09': '\\9 ',
+  '\x0a': '\\a ',
+  '\x0b': '\\b ',
+  '\x0c': '\\c ',
+  '\x0d': '\\d ',
+  '\x22': '\\22 ',
+  '\x26': '\\26 ',
+  '\x27': '\\27 ',
+  '(': '\\28 ',
+  ')': '\\29 ',
+  '*': '\\2a ',
+  '\/': '\\2f ',
+  ':': '\\3a ',
+  ';': '\\3b ',
+  '\x3c': '\\3c ',
+  '\x3d': '\\3d ',
+  '\x3e': '\\3e ',
+  '@': '\\40 ',
+  '\\': '\\5c ',
+  '{': '\\7b ',
+  '}': '\\7d ',
+  '\x85': '\\85 ',
+  '\xa0': '\\a0 ',
+  '\u2028': '\\2028 ',
+  '\u2029': '\\2029 '
+};
+
+/**
+ * A function that can be used with String.replace..
+ * @param {string} ch A single character matched by a compatible matcher.
+ * @return {string} A token in the output language.
+ * @private
+ */
+soy.esc.$$REPLACER_FOR_ESCAPE_CSS_STRING_ = function(ch) {
+  return soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_CSS_STRING_[ch];
+};
+
+/**
+ * Maps charcters to the escaped versions for the named escape directives.
+ * @type {Object.<string, string>}
+ * @private
+ */
+soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = {
+  '\x00': '%00',
+  '\x01': '%01',
+  '\x02': '%02',
+  '\x03': '%03',
+  '\x04': '%04',
+  '\x05': '%05',
+  '\x06': '%06',
+  '\x07': '%07',
+  '\x08': '%08',
+  '\x09': '%09',
+  '\x0a': '%0A',
+  '\x0b': '%0B',
+  '\x0c': '%0C',
+  '\x0d': '%0D',
+  '\x0e': '%0E',
+  '\x0f': '%0F',
+  '\x10': '%10',
+  '\x11': '%11',
+  '\x12': '%12',
+  '\x13': '%13',
+  '\x14': '%14',
+  '\x15': '%15',
+  '\x16': '%16',
+  '\x17': '%17',
+  '\x18': '%18',
+  '\x19': '%19',
+  '\x1a': '%1A',
+  '\x1b': '%1B',
+  '\x1c': '%1C',
+  '\x1d': '%1D',
+  '\x1e': '%1E',
+  '\x1f': '%1F',
+  ' ': '%20',
+  '\x22': '%22',
+  '\x27': '%27',
+  '(': '%28',
+  ')': '%29',
+  '\x3c': '%3C',
+  '\x3e': '%3E',
+  '\\': '%5C',
+  '{': '%7B',
+  '}': '%7D',
+  '\x7f': '%7F',
+  '\x85': '%C2%85',
+  '\xa0': '%C2%A0',
+  '\u2028': '%E2%80%A8',
+  '\u2029': '%E2%80%A9',
+  '\uff01': '%EF%BC%81',
+  '\uff03': '%EF%BC%83',
+  '\uff04': '%EF%BC%84',
+  '\uff06': '%EF%BC%86',
+  '\uff07': '%EF%BC%87',
+  '\uff08': '%EF%BC%88',
+  '\uff09': '%EF%BC%89',
+  '\uff0a': '%EF%BC%8A',
+  '\uff0b': '%EF%BC%8B',
+  '\uff0c': '%EF%BC%8C',
+  '\uff0f': '%EF%BC%8F',
+  '\uff1a': '%EF%BC%9A',
+  '\uff1b': '%EF%BC%9B',
+  '\uff1d': '%EF%BC%9D',
+  '\uff1f': '%EF%BC%9F',
+  '\uff20': '%EF%BC%A0',
+  '\uff3b': '%EF%BC%BB',
+  '\uff3d': '%EF%BC%BD'
+};
+
+/**
+ * A function that can be used with String.replace..
+ * @param {string} ch A single character matched by a compatible matcher.
+ * @return {string} A token in the output language.
+ * @private
+ */
+soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = function(ch) {
+  return soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_[ch];
+};
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_ESCAPE_HTML_ = /[\x00\x22\x26\x27\x3c\x3e]/g;
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_ = /[\x00\x22\x27\x3c\x3e]/g;
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_ESCAPE_HTML_NOSPACE_ = /[\x00\x09-\x0d \x22\x26\x27\x2d\/\x3c-\x3e`\x85\xa0\u2028\u2029]/g;
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_NOSPACE_ = /[\x00\x09-\x0d \x22\x27\x2d\/\x3c-\x3e`\x85\xa0\u2028\u2029]/g;
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_ESCAPE_JS_STRING_ = /[\x00\x08-\x0d\x22\x26\x27\/\x3c-\x3e\\\x85\u2028\u2029]/g;
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_ESCAPE_JS_REGEX_ = /[\x00\x08-\x0d\x22\x24\x26-\/\x3a\x3c-\x3f\x5b-\x5e\x7b-\x7d\x85\u2028\u2029]/g;
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_ESCAPE_CSS_STRING_ = /[\x00\x08-\x0d\x22\x26-\x2a\/\x3a-\x3e@\\\x7b\x7d\x85\xa0\u2028\u2029]/g;
+
+/**
+ * Matches characters that need to be escaped for the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = /[\x00- \x22\x27-\x29\x3c\x3e\\\x7b\x7d\x7f\x85\xa0\u2028\u2029\uff01\uff03\uff04\uff06-\uff0c\uff0f\uff1a\uff1b\uff1d\uff1f\uff20\uff3b\uff3d]/g;
+
+/**
+ * A pattern that vets values produced by the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$FILTER_FOR_FILTER_CSS_VALUE_ = /^(?!-*(?:expression|(?:moz-)?binding))(?:[.#]?-?(?:[_a-z0-9-]+)(?:-[_a-z0-9-]+)*-?|-?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[a-z]{1,2}|%)?|!important|)$/i;
+
+/**
+ * A pattern that vets values produced by the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_URI_ = /^(?:(?:https?|mailto):|[^&:\/?#]*(?:[\/?#]|$))/i;
+
+/**
+ * A pattern that vets values produced by the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTE_ = /^(?!style|on|action|archive|background|cite|classid|codebase|data|dsync|href|longdesc|src|usemap)(?:[a-z0-9_$:-]*)$/i;
+
+/**
+ * A pattern that vets values produced by the named directives.
+ * @type RegExp
+ * @private
+ */
+soy.esc.$$FILTER_FOR_FILTER_HTML_ELEMENT_NAME_ = /^(?!script|style|title|textarea|xmp|no)[a-z0-9_$:-]*$/i;
+
+/**
+ * A helper for the Soy directive |escapeHtml
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$escapeHtmlHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_ESCAPE_HTML_,
+      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
+};
+
+/**
+ * A helper for the Soy directive |normalizeHtml
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$normalizeHtmlHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_,
+      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
+};
+
+/**
+ * A helper for the Soy directive |escapeHtmlNospace
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$escapeHtmlNospaceHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_ESCAPE_HTML_NOSPACE_,
+      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
+};
+
+/**
+ * A helper for the Soy directive |normalizeHtmlNospace
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$normalizeHtmlNospaceHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_NOSPACE_,
+      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
+};
+
+/**
+ * A helper for the Soy directive |escapeJsString
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$escapeJsStringHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_ESCAPE_JS_STRING_,
+      soy.esc.$$REPLACER_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_);
+};
+
+/**
+ * A helper for the Soy directive |escapeJsRegex
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$escapeJsRegexHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_ESCAPE_JS_REGEX_,
+      soy.esc.$$REPLACER_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_);
+};
+
+/**
+ * A helper for the Soy directive |escapeCssString
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$escapeCssStringHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_ESCAPE_CSS_STRING_,
+      soy.esc.$$REPLACER_FOR_ESCAPE_CSS_STRING_);
+};
+
+/**
+ * A helper for the Soy directive |filterCssValue
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$filterCssValueHelper = function(value) {
+  var str = String(value);
+  if (!soy.esc.$$FILTER_FOR_FILTER_CSS_VALUE_.test(str)) {
+    goog.asserts.fail('Bad value `%s` for |filterCssValue', [str]);
+    return 'zSoyz';
+  }
+  return str;
+};
+
+/**
+ * A helper for the Soy directive |normalizeUri
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$normalizeUriHelper = function(value) {
+  var str = String(value);
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_,
+      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_);
+};
+
+/**
+ * A helper for the Soy directive |filterNormalizeUri
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$filterNormalizeUriHelper = function(value) {
+  var str = String(value);
+  if (!soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_URI_.test(str)) {
+    goog.asserts.fail('Bad value `%s` for |filterNormalizeUri', [str]);
+    return 'zSoyz';
+  }
+  return str.replace(
+      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_,
+      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_);
+};
+
+/**
+ * A helper for the Soy directive |filterHtmlAttribute
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$filterHtmlAttributeHelper = function(value) {
+  var str = String(value);
+  if (!soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTE_.test(str)) {
+    goog.asserts.fail('Bad value `%s` for |filterHtmlAttribute', [str]);
+    return 'zSoyz';
+  }
+  return str;
+};
+
+/**
+ * A helper for the Soy directive |filterHtmlElementName
+ * @param {*} value Can be of any type but will be coerced to a string.
+ * @return {string} The escaped text.
+ */
+soy.esc.$$filterHtmlElementNameHelper = function(value) {
+  var str = String(value);
+  if (!soy.esc.$$FILTER_FOR_FILTER_HTML_ELEMENT_NAME_.test(str)) {
+    goog.asserts.fail('Bad value `%s` for |filterHtmlElementName', [str]);
+    return 'zSoyz';
+  }
+  return str;
+};
+
+/**
+ * Matches all tags, HTML comments, and DOCTYPEs in tag soup HTML.
+ *
+ * @type {RegExp}
+ * @private
+ */
+soy.esc.$$HTML_TAG_REGEX_ = /<(?:!|\/?[a-zA-Z])(?:[^>'"]|"[^"]*"|'[^']*')*>/g;
+
+// END GENERATED CODE
+// This file was automatically generated from emailpreview.soy.
+// Please don't edit this file by hand.
+
+goog.provide('calendarmailer.soy.email');
+
+goog.require('soy');
+goog.require('soy.StringBuilder');
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.email.all = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<div class="email-preview-title">Sample email</div><div class="email-preview-outer">Hello [name]<br>Your friendly calendar cleanup bot here. I\'ve noticed you are the owner of one or more recurring events that books a room at a particular time for the unending forseeable future. Here are some details of the recurring events you own:<br>[Event name] [Event time(s)] [Room name]<br>If you no longer need any of these rooms, please remove your event to free up the room for other users.<br>Regards, [Operator name]</div>');
+  return opt_sb ? '' : output.toString();
+};
 
 goog.provide('rfctimestamp');
 
@@ -17232,4073 +21119,6 @@ goog.ui.Component.prototype.removeChildren = function(opt_unrender) {
   while (this.hasChildren()) {
     this.removeChildAt(0, opt_unrender);
   }
-};
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Detection of JScript version.
- *
- * @author arv@google.com (Erik Arvidsson)
- */
-
-
-goog.provide('goog.userAgent.jscript');
-
-goog.require('goog.string');
-
-
-/**
- * @define {boolean} True if it is known at compile time that the runtime
- *     environment will not be using JScript.
- */
-goog.userAgent.jscript.ASSUME_NO_JSCRIPT = false;
-
-
-/**
- * Initializer for goog.userAgent.jscript.  Detects if the user agent is using
- * Microsoft JScript and which version of it.
- *
- * This is a named function so that it can be stripped via the jscompiler
- * option for stripping types.
- * @private
- */
-goog.userAgent.jscript.init_ = function() {
-  var hasScriptEngine = 'ScriptEngine' in goog.global;
-
-  /**
-   * @type {boolean}
-   * @private
-   */
-  goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ =
-      hasScriptEngine && goog.global['ScriptEngine']() == 'JScript';
-
-  /**
-   * @type {string}
-   * @private
-   */
-  goog.userAgent.jscript.DETECTED_VERSION_ =
-      goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ ?
-      (goog.global['ScriptEngineMajorVersion']() + '.' +
-       goog.global['ScriptEngineMinorVersion']() + '.' +
-       goog.global['ScriptEngineBuildVersion']()) :
-      '0';
-};
-
-if (!goog.userAgent.jscript.ASSUME_NO_JSCRIPT) {
-  goog.userAgent.jscript.init_();
-}
-
-
-/**
- * Whether we detect that the user agent is using Microsoft JScript.
- * @type {boolean}
- */
-goog.userAgent.jscript.HAS_JSCRIPT = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
-    false : goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_;
-
-
-/**
- * The installed version of JScript.
- * @type {string}
- */
-goog.userAgent.jscript.VERSION = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
-    '0' : goog.userAgent.jscript.DETECTED_VERSION_;
-
-
-/**
- * Whether the installed version of JScript is as new or newer than a given
- * version.
- * @param {string} version The version to check.
- * @return {boolean} Whether the installed version of JScript is as new or
- *     newer than the given version.
- */
-goog.userAgent.jscript.isVersion = function(version) {
-  return goog.string.compareVersions(goog.userAgent.jscript.VERSION,
-                                     version) >= 0;
-};
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Utility for fast string concatenation.
- */
-
-goog.provide('goog.string.StringBuffer');
-
-goog.require('goog.userAgent.jscript');
-
-
-
-/**
- * Utility class to facilitate much faster string concatenation in IE,
- * using Array.join() rather than the '+' operator.  For other browsers
- * we simply use the '+' operator.
- *
- * @param {Object|number|string|boolean=} opt_a1 Optional first initial item
- *     to append.
- * @param {...Object|number|string|boolean} var_args Other initial items to
- *     append, e.g., new goog.string.StringBuffer('foo', 'bar').
- * @constructor
- */
-goog.string.StringBuffer = function(opt_a1, var_args) {
-  /**
-   * Internal buffer for the string to be concatenated.
-   * @type {string|Array}
-   * @private
-   */
-  this.buffer_ = goog.userAgent.jscript.HAS_JSCRIPT ? [] : '';
-
-  if (opt_a1 != null) {
-    this.append.apply(this, arguments);
-  }
-};
-
-
-/**
- * Sets the contents of the string buffer object, replacing what's currently
- * there.
- *
- * @param {string} s String to set.
- */
-goog.string.StringBuffer.prototype.set = function(s) {
-  this.clear();
-  this.append(s);
-};
-
-
-if (goog.userAgent.jscript.HAS_JSCRIPT) {
-  /**
-   * Length of internal buffer (faster than calling buffer_.length).
-   * Only used if buffer_ is an array.
-   * @type {number}
-   * @private
-   */
-  goog.string.StringBuffer.prototype.bufferLength_ = 0;
-
-  /**
-   * Appends one or more items to the buffer.
-   *
-   * Calling this with null, undefined, or empty arguments is an error.
-   *
-   * @param {Object|number|string|boolean} a1 Required first string.
-   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
-   * @param {...Object|number|string|boolean} var_args Other items to append,
-   *     e.g., sb.append('foo', 'bar', 'baz').
-   * @return {goog.string.StringBuffer} This same StringBuffer object.
-   */
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    // IE version.
-
-    if (opt_a2 == null) { // second argument is undefined (null == undefined)
-      // Array assignment is 2x faster than Array push.  Also, use a1
-      // directly to avoid arguments instantiation, another 2x improvement.
-      this.buffer_[this.bufferLength_++] = a1;
-    } else {
-      this.buffer_.push.apply(/** @type {Array} */ (this.buffer_), arguments);
-      this.bufferLength_ = this.buffer_.length;
-    }
-    return this;
-  };
-} else {
-
-  /**
-   * Appends one or more items to the buffer.
-   *
-   * Calling this with null, undefined, or empty arguments is an error.
-   *
-   * @param {Object|number|string|boolean} a1 Required first string.
-   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
-   * @param {...Object|number|string|boolean} var_args Other items to append,
-   *     e.g., sb.append('foo', 'bar', 'baz').
-   * @return {goog.string.StringBuffer} This same StringBuffer object.
-   * @suppress {duplicate}
-   */
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    // W3 version.
-
-    // Use a1 directly to avoid arguments instantiation for single-arg case.
-    this.buffer_ += a1;
-    if (opt_a2 != null) { // second argument is undefined (null == undefined)
-      for (var i = 1; i < arguments.length; i++) {
-        this.buffer_ += arguments[i];
-      }
-    }
-    return this;
-  };
-}
-
-
-/**
- * Clears the internal buffer.
- */
-goog.string.StringBuffer.prototype.clear = function() {
-  if (goog.userAgent.jscript.HAS_JSCRIPT) {
-     this.buffer_.length = 0;  // Reuse the array to avoid creating new object.
-     this.bufferLength_ = 0;
-   } else {
-     this.buffer_ = '';
-   }
-};
-
-
-/**
- * Returns the length of the current contents of the buffer.  In IE, this is
- * O(n) where n = number of appends, so to avoid quadratic behavior, do not call
- * this after every append.
- *
- * @return {number} the length of the current contents of the buffer.
- */
-goog.string.StringBuffer.prototype.getLength = function() {
-   return this.toString().length;
-};
-
-
-/**
- * Returns the concatenated string.
- *
- * @return {string} The concatenated string.
- */
-goog.string.StringBuffer.prototype.toString = function() {
-  if (goog.userAgent.jscript.HAS_JSCRIPT) {
-    var str = this.buffer_.join('');
-    // Given a string with the entire contents, simplify the StringBuffer by
-    // setting its contents to only be this string, rather than many fragments.
-    this.clear();
-    if (str) {
-      this.append(str);
-    }
-    return str;
-  } else {
-    return /** @type {string} */ (this.buffer_);
-  }
-};
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Provides utility methods to render soy template.
- */
-
-goog.provide('goog.soy');
-
-goog.require('goog.dom');
-goog.require('goog.dom.NodeType');
-goog.require('goog.dom.TagName');
-
-
-
-/**
- * Renders a Soy template and then set the output string as
- * the innerHTML of an element. It is recommended to use this helper function
- * instead of directly setting innerHTML in your hand-written code, so that it
- * will be easier to audit the code for cross-site scripting vulnerabilities.
- *
- * @param {Element} element The element whose content we are rendering into.
- * @param {Function} template The Soy template defining the element's content.
- * @param {Object=} opt_templateData The data for the template.
- * @param {Object=} opt_injectedData The injected data for the template.
- */
-goog.soy.renderElement = function(element, template, opt_templateData,
-                                  opt_injectedData) {
-  element.innerHTML = template(
-      opt_templateData || goog.soy.defaultTemplateData_, undefined,
-      opt_injectedData);
-};
-
-
-/**
- * Renders a Soy template into a single node or a document
- * fragment. If the rendered HTML string represents a single node, then that
- * node is returned (note that this is *not* a fragment, despite them name of
- * the method). Otherwise a document fragment is returned containing the
- * rendered nodes.
- *
- * @param {Function} template The Soy template defining the element's content.
- * @param {Object=} opt_templateData The data for the template.
- * @param {Object=} opt_injectedData The injected data for the template.
- * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
- *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
- * @return {!Node} The resulting node or document fragment.
- */
-goog.soy.renderAsFragment = function(template, opt_templateData,
-                                     opt_injectedData, opt_domHelper) {
-  var dom = opt_domHelper || goog.dom.getDomHelper();
-  return dom.htmlToDocumentFragment(
-      template(opt_templateData || goog.soy.defaultTemplateData_,
-               undefined, opt_injectedData));
-};
-
-
-/**
- * Renders a Soy template into a single node. If the rendered
- * HTML string represents a single node, then that node is returned. Otherwise,
- * a DIV element is returned containing the rendered nodes.
- *
- * @param {Function} template The Soy template defining the element's content.
- * @param {Object=} opt_templateData The data for the template.
- * @param {Object=} opt_injectedData The injected data for the template.
- * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
- *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
- * @return {!Element} Rendered template contents, wrapped in a parent DIV
- *     element if necessary.
- */
-goog.soy.renderAsElement = function(template, opt_templateData,
-                                    opt_injectedData, opt_domHelper) {
-  var dom = opt_domHelper || goog.dom.getDomHelper();
-  var wrapper = dom.createElement(goog.dom.TagName.DIV);
-  wrapper.innerHTML = template(
-      opt_templateData || goog.soy.defaultTemplateData_,
-      undefined, opt_injectedData);
-
-  // If the template renders as a single element, return it.
-  if (wrapper.childNodes.length == 1) {
-    var firstChild = wrapper.firstChild;
-    if (firstChild.nodeType == goog.dom.NodeType.ELEMENT) {
-      return /** @type {!Element} */ (firstChild);
-    }
-  }
-
-  // Otherwise, return the wrapper DIV.
-  return wrapper;
-};
-
-
-/**
- * Immutable object that is passed into templates that are rendered
- * without any data.
- * @type {Object}
- * @private
- */
-goog.soy.defaultTemplateData_ = {};
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Provides inversion and inversion map functionality for storing
- * integer ranges and corresponding values.
- *
- */
-
-goog.provide('goog.structs.InversionMap');
-
-goog.require('goog.array');
-
-
-
-/**
- * Maps ranges to values using goog.structs.Inversion.
- * @param {Array.<number>} rangeArray An array of monotonically
- *     increasing integer values, with at least one instance.
- * @param {Array.<*>} valueArray An array of corresponding values.
- *     Length must be the same as rangeArray.
- * @param {boolean=} opt_delta If true, saves only delta from previous value.
- * @constructor
- */
-goog.structs.InversionMap = function(rangeArray, valueArray, opt_delta) {
-  if (rangeArray.length != valueArray.length) {
-    // rangeArray and valueArray has to match in number of entries.
-    return null;
-  }
-  this.storeInversion_(rangeArray, opt_delta);
-
-  /**
-   * @type {Array}
-   * @protected
-   */
-  this.values = valueArray;
-};
-
-
-/**
- * @type {Array}
- * @protected
- */
-goog.structs.InversionMap.prototype.rangeArray;
-
-
-/**
- * Stores the integers as ranges (half-open).
- * If delta is true, the integers are delta from the previous value and
- * will be restored to the absolute value.
- * When used as a set, even indices are IN, and odd are OUT.
- * @param {Array.<number?>} rangeArray An array of monotonically
- *     increasing integer values, with at least one instance.
- * @param {boolean=} opt_delta If true, saves only delta from previous value.
- * @private
- */
-goog.structs.InversionMap.prototype.storeInversion_ = function(rangeArray,
-    opt_delta) {
-  this.rangeArray = rangeArray;
-
-  for (var i = 1; i < rangeArray.length; i++) {
-    if (rangeArray[i] == null) {
-      rangeArray[i] = rangeArray[i - 1] + 1;
-    } else if (opt_delta) {
-      rangeArray[i] += rangeArray[i - 1];
-    }
-  }
-};
-
-
-/**
- * Splices a range -> value map into this inversion map.
- * @param {Array.<number>} rangeArray An array of monotonically
- *     increasing integer values, with at least one instance.
- * @param {Array.<*>} valueArray An array of corresponding values.
- *     Length must be the same as rangeArray.
- * @param {boolean=} opt_delta If true, saves only delta from previous value.
- */
-goog.structs.InversionMap.prototype.spliceInversion = function(
-    rangeArray, valueArray, opt_delta) {
-  // By building another inversion map, we build the arrays that we need
-  // to splice in.
-  var otherMap = new goog.structs.InversionMap(
-      rangeArray, valueArray, opt_delta);
-
-  // Figure out where to splice those arrays.
-  var startRange = otherMap.rangeArray[0];
-  var endRange =
-      (/** @type {number} */ goog.array.peek(otherMap.rangeArray));
-  var startSplice = this.getLeast(startRange);
-  var endSplice = this.getLeast(endRange);
-
-  // The inversion map works by storing the start points of ranges...
-  if (startRange != this.rangeArray[startSplice]) {
-    // ...if we're splicing in a start point that isn't already here,
-    // then we need to insert it after the insertion point.
-    startSplice++;
-  } // otherwise we overwrite the insertion point.
-
-  var spliceLength = endSplice - startSplice + 1;
-  goog.partial(goog.array.splice, this.rangeArray, startSplice,
-      spliceLength).apply(null, otherMap.rangeArray);
-  goog.partial(goog.array.splice, this.values, startSplice,
-      spliceLength).apply(null, otherMap.values);
-};
-
-
-/**
- * Gets the value corresponding to a number from the inversion map.
- * @param {number} intKey The number for which value needs to be retrieved
- *     from inversion map.
- * @return {*} Value retrieved from inversion map; null if not found.
- */
-goog.structs.InversionMap.prototype.at = function(intKey) {
-  var index = this.getLeast(intKey);
-  if (index < 0) {
-    return null;
-  }
-  return this.values[index];
-};
-
-
-/**
- * Gets the largest index such that rangeArray[index] <= intKey from the
- * inversion map.
- * @param {number} intKey The probe for which rangeArray is searched.
- * @return {number} Largest index such that rangeArray[index] <= intKey.
- * @protected
- */
-goog.structs.InversionMap.prototype.getLeast = function(intKey) {
-  var arr = this.rangeArray;
-  var low = 0;
-  var high = arr.length;
-  while (high - low > 8) {
-    var mid = (high + low) >> 1;
-    if (arr[mid] <= intKey) {
-      low = mid;
-    } else {
-      high = mid;
-    }
-  }
-  for (; low < high; ++low) {
-    if (intKey < arr[low]) {
-      break;
-    }
-  }
-  return low - 1;
-};
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Detect Grapheme Cluster Break in a pair of codepoints. Follows
- * Unicode 5.1 UAX#29.
- *
- */
-
-goog.provide('goog.i18n.GraphemeBreak');
-goog.require('goog.structs.InversionMap');
-
-
-/**
- * Enum for all Grapheme Cluster Break properties.
- * These enums directly corresponds to Grapheme_Cluster_Break property values
- * mentioned in http://unicode.org/reports/tr29 table 2.
- *
- * CR and LF are moved to the bottom of the list because they occur only once
- * and so good candidates to take 2 decimal digit values.
- * @enum {number}
- * @protected
- */
-goog.i18n.GraphemeBreak.property = {
-  ANY: 0,
-  CONTROL: 1,
-  EXTEND: 2,
-  PREPEND: 3,
-  SPACING_MARK: 4,
-  L: 5,
-  V: 6,
-  T: 7,
-  LV: 8,
-  LVT: 9,
-  CR: 10,
-  LF: 11
-};
-
-
-/**
- * Grapheme Cluster Break property values for all codepoints as inversion map.
- * Constructed lazily.
- *
- * @type {goog.structs.InversionMap}
- * @private
- */
-goog.i18n.GraphemeBreak.inversions_ = null;
-
-
-/**
- * There are two kinds of grapheme clusters: 1) Legacy 2)Extended. This method
- * is to check for legacy rules.
- *
- * @param {number} prop_a The property enum value of the first character.
- * @param {number} prop_b The property enum value of the second character.
- * @return {boolean} True if a & b do not form a cluster; False otherwise.
- * @private
- */
-goog.i18n.GraphemeBreak.applyLegacyBreakRules_ = function(prop_a, prop_b) {
-
-  var prop = goog.i18n.GraphemeBreak.property;
-
-  if (prop_a == prop.CR && prop_b == prop.LF) {
-    return false;
-  }
-  if (prop_a == prop.CONTROL || prop_a == prop.CR || prop_a == prop.LF) {
-    return true;
-  }
-  if (prop_b == prop.CONTROL || prop_b == prop.CR || prop_b == prop.LF) {
-    return true;
-  }
-  if ((prop_a == prop.L) &&
-    (prop_b == prop.L || prop_b == prop.V ||
-     prop_b == prop.LV || prop_b == prop.LVT)) {
-    return false;
-  }
-  if ((prop_a == prop.LV || prop_a == prop.V) &&
-    (prop_b == prop.V || prop_b == prop.T)) {
-    return false;
-  }
-  if ((prop_a == prop.LVT || prop_a == prop.T) && (prop_b == prop.T)) {
-    return false;
-  }
-  if (prop_b == prop.EXTEND) {
-    return false;
-  }
-  return true;
-};
-
-
-/**
- * Method to return property enum value of the codepoint. If it is Hangul LV or
- * LVT, then it is computed; for the rest it is picked from the inversion map.
- * @param {number} acode The code point value of the character.
- * @return {number} Property enum value of codepoint.
- * @private
- */
-goog.i18n.GraphemeBreak.getBreakProp_ = function(acode) {
-  if (0xAC00 <= acode && acode <= 0xD7A3) {
-    var prop = goog.i18n.GraphemeBreak.property;
-    if (acode % 0x1C == 0x10) {
-      return prop.LV;
-    }
-    return prop.LVT;
-  } else {
-    if (!goog.i18n.GraphemeBreak.inversions_) {
-      goog.i18n.GraphemeBreak.inversions_ = new goog.structs.InversionMap(
-          [0, 10, 1, 2, 1, 18, 95, 33, 13, 1, 594, 112, 275, 7, 263, 45, 1, 1,
-           1, 2, 1, 2, 1, 1, 56, 4, 12, 11, 48, 20, 17, 1, 101, 7, 1, 7, 2, 2,
-           1, 4, 33, 1, 1, 1, 30, 27, 91, 11, 58, 9, 269, 2, 1, 56, 1, 1, 3, 8,
-           4, 1, 3, 4, 13, 2, 29, 1, 2, 56, 1, 1, 1, 2, 6, 6, 1, 9, 1, 10, 2,
-           29, 2, 1, 56, 2, 3, 17, 30, 2, 3, 14, 1, 56, 1, 1, 3, 8, 4, 1, 20,
-           2, 29, 1, 2, 56, 1, 1, 2, 1, 6, 6, 11, 10, 2, 30, 1, 59, 1, 1, 1,
-           12, 1, 9, 1, 41, 3, 58, 3, 5, 17, 11, 2, 30, 2, 56, 1, 1, 1, 1, 2,
-           1, 3, 1, 5, 11, 11, 2, 30, 2, 58, 1, 2, 5, 7, 11, 10, 2, 30, 2, 70,
-           6, 2, 6, 7, 19, 2, 60, 11, 5, 5, 1, 1, 8, 97, 13, 3, 5, 3, 6, 74, 2,
-           27, 1, 1, 1, 1, 1, 4, 2, 49, 14, 1, 5, 1, 2, 8, 45, 9, 1, 100, 2, 4,
-           1, 6, 1, 2, 2, 2, 23, 2, 2, 4, 3, 1, 3, 2, 7, 3, 4, 13, 1, 2, 2, 6,
-           1, 1, 1, 112, 96, 72, 82, 357, 1, 946, 3, 29, 3, 29, 2, 30, 2, 64,
-           2, 1, 7, 8, 1, 2, 11, 9, 1, 45, 3, 155, 1, 118, 3, 4, 2, 9, 1, 6, 3,
-           116, 17, 7, 2, 77, 2, 3, 228, 4, 1, 47, 1, 1, 5, 1, 1, 5, 1, 2, 38,
-           9, 12, 2, 1, 30, 1, 4, 2, 2, 1, 121, 8, 8, 2, 2, 392, 64, 523, 1, 2,
-           2, 24, 7, 49, 16, 96, 33, 3311, 32, 554, 6, 105, 2, 30164, 4, 9, 2,
-           388, 1, 3, 1, 4, 1, 23, 2, 2, 1, 88, 2, 50, 16, 1, 97, 8, 25, 11, 2,
-           213, 6, 2, 2, 2, 2, 12, 1, 8, 1, 1, 434, 11172, 1116, 1024, 6942, 1,
-           737, 16, 16, 7, 216, 1, 158, 2, 89, 3, 513, 1, 2051, 15, 40, 8,
-           50981, 1, 1, 3, 3, 1, 5, 8, 8, 2, 7, 30, 4, 148, 3, 798140, 255],
-          [1, 11, 1, 10, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0,
-           2, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 1, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0, 2,
-           0, 2, 0, 2, 0, 2, 4, 0, 2, 0, 4, 2, 4, 2, 0, 2, 0, 2, 0, 2, 4, 0, 2,
-           0, 2, 4, 2, 4, 2, 0, 2, 0, 2, 0, 2, 4, 0, 2, 4, 2, 0, 2, 0, 2, 4, 0,
-           2, 0, 4, 2, 4, 2, 0, 2, 0, 2, 4, 0, 2, 0, 2, 4, 2, 4, 2, 0, 2, 0, 2,
-           0, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4, 2, 0, 2, 0, 4, 0, 2, 0, 4, 2,
-           4, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4,
-           2, 4, 2, 4, 0, 2, 0, 3, 2, 0, 2, 0, 2, 0, 3, 0, 2, 0, 2, 0, 2, 0, 2,
-           0, 2, 0, 4, 0, 2, 4, 2, 0, 2, 0, 2, 0, 2, 0, 4, 2, 4, 2, 4, 2, 4, 2,
-           0, 4, 2, 0, 2, 0, 4, 0, 4, 0, 2, 0, 2, 4, 2, 4, 2, 0, 4, 0, 5, 6, 7,
-           0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 1, 4, 2, 4, 2, 4, 2, 0, 2, 0, 2, 0,
-           2, 0, 2, 4, 2, 4, 2, 4, 2, 0, 4, 0, 4, 0, 2, 4, 0, 2, 4, 0, 2, 4, 2,
-           4, 2, 4, 2, 4, 0, 2, 0, 2, 4, 0, 4, 2, 4, 2, 4, 0, 4, 2, 4, 2, 0, 2,
-           0, 1, 2, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0,
-           2, 0, 2, 0, 4, 2, 4, 0, 4, 0, 4, 2, 0, 2, 0, 2, 4, 0, 2, 4, 2, 4, 2,
-           0, 2, 0, 2, 4, 0, 9, 0, 2, 0, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0, 1, 0, 2,
-           0, 2, 0, 2, 0, 2, 4, 2, 0, 4, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 1, 2],
-          true);
-    }
-    return (/** @type {number} */
-        goog.i18n.GraphemeBreak.inversions_.at(acode));
-  }
-};
-
-
-/**
- * There are two kinds of grapheme clusters: 1) Legacy 2)Extended. This method
- * is to check for both using a boolean flag to switch between them.
- * @param {number} a The code point value of the first character.
- * @param {number} b The code point value of the second character.
- * @param {boolean=} opt_extended If true, indicates extended grapheme cluster;
- *     If false, indicates legacy cluster.
- * @return {boolean} True if a & b do not form a cluster; False otherwise.
- */
-goog.i18n.GraphemeBreak.hasGraphemeBreak = function(a, b, opt_extended) {
-
-  var prop_a = goog.i18n.GraphemeBreak.getBreakProp_(a);
-  var prop_b = goog.i18n.GraphemeBreak.getBreakProp_(b);
-  var prop = goog.i18n.GraphemeBreak.property;
-
-  return goog.i18n.GraphemeBreak.applyLegacyBreakRules_(prop_a, prop_b) &&
-    !(opt_extended && (prop_a == prop.PREPEND || prop_b == prop.SPACING_MARK));
-};
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Provides utility functions for formatting strings, numbers etc.
- *
- */
-
-goog.provide('goog.format');
-
-goog.require('goog.i18n.GraphemeBreak');
-goog.require('goog.string');
-goog.require('goog.userAgent');
-
-
-/**
- * Formats a number of bytes in human readable form.
- * 54, 450K, 1.3M, 5G etc.
- * @param {number} bytes The number of bytes to show.
- * @param {number=} opt_decimals The number of decimals to use.  Defaults to 2.
- * @return {string} The human readable form of the byte size.
- */
-goog.format.fileSize = function(bytes, opt_decimals) {
-  return goog.format.numBytesToString(bytes, opt_decimals, false);
-};
-
-
-/**
- * Checks whether string value containing scaling units (K, M, G, T, P, m,
- * u, n) can be converted to a number.
- *
- * Where there is a decimal, there must be a digit to the left of the
- * decimal point.
- *
- * Negative numbers are valid.
- *
- * Examples:
- *   0, 1, 1.0, 10.4K, 2.3M, -0.3P, 1.2m
- *
- * @param {string} val String value to check.
- * @return {boolean} True if string could be converted to a numeric value.
- */
-goog.format.isConvertableScaledNumber = function(val) {
-  return goog.format.SCALED_NUMERIC_RE_.test(val);
-};
-
-
-/**
- * Converts a string to numeric value, taking into account the units.
- * If string ends in 'B', use binary conversion.
- * @param {string} stringValue String to be converted to numeric value.
- * @return {number} Numeric value for string.
- */
-goog.format.stringToNumericValue = function(stringValue) {
-  if (goog.string.endsWith(stringValue, 'B')) {
-    return goog.format.stringToNumericValue_(
-        stringValue, goog.format.NUMERIC_SCALES_BINARY_);
-  }
-  return goog.format.stringToNumericValue_(
-      stringValue, goog.format.NUMERIC_SCALES_SI_);
-};
-
-
-/**
- * Converts a string to number of bytes, taking into account the units.
- * Binary conversion.
- * @param {string} stringValue String to be converted to numeric value.
- * @return {number} Numeric value for string.
- */
-goog.format.stringToNumBytes = function(stringValue) {
-  return goog.format.stringToNumericValue_(
-      stringValue, goog.format.NUMERIC_SCALES_BINARY_);
-};
-
-
-/**
- * Converts a numeric value to string representation. SI conversion.
- * @param {number} val Value to be converted.
- * @param {number=} opt_decimals The number of decimals to use.  Defaults to 2.
- * @return {string} String representation of number.
- */
-goog.format.numericValueToString = function(val, opt_decimals) {
-  return goog.format.numericValueToString_(
-      val, goog.format.NUMERIC_SCALES_SI_, opt_decimals);
-};
-
-
-/**
- * Converts number of bytes to string representation. Binary conversion.
- * Default is to return the additional 'B' suffix, e.g. '10.5KB' to minimize
- * confusion with counts that are scaled by powers of 1000.
- * @param {number} val Value to be converted.
- * @param {number=} opt_decimals The number of decimals to use.  Defaults to 2.
- * @param {boolean=} opt_suffix If true, include trailing 'B' in returned
- *     string.  Default is true.
- * @return {string} String representation of number of bytes.
- */
-goog.format.numBytesToString = function(val, opt_decimals, opt_suffix) {
-  var suffix = '';
-  if (!goog.isDef(opt_suffix) || opt_suffix) {
-    suffix = 'B';
-  }
-  return goog.format.numericValueToString_(
-      val, goog.format.NUMERIC_SCALES_BINARY_, opt_decimals, suffix);
-};
-
-
-/**
- * Converts a string to numeric value, taking into account the units.
- * @param {string} stringValue String to be converted to numeric value.
- * @param {Object} conversion Dictionary of conversion scales.
- * @return {number} Numeric value for string.  If it cannot be converted,
- *    returns NaN.
- * @private
- */
-goog.format.stringToNumericValue_ = function(stringValue, conversion) {
-  var match = stringValue.match(goog.format.SCALED_NUMERIC_RE_);
-  if (!match) {
-    return NaN;
-  }
-  var val = match[1] * conversion[match[2]];
-  return val;
-};
-
-
-/**
- * Converts a numeric value to string, using specified conversion
- * scales.
- * @param {number} val Value to be converted.
- * @param {Object} conversion Dictionary of scaling factors.
- * @param {number=} opt_decimals The number of decimals to use.  Default is 2.
- * @param {string=} opt_suffix Optional suffix to append.
- * @return {string} The human readable form of the byte size.
- * @private
- */
-goog.format.numericValueToString_ = function(val, conversion,
-                                             opt_decimals, opt_suffix) {
-  var prefixes = goog.format.NUMERIC_SCALE_PREFIXES_;
-  var orig_val = val;
-  var symbol = '';
-  var scale = 1;
-  if (val < 0) {
-    val = -val;
-  }
-  for (var i = 0; i < prefixes.length; i++) {
-    var unit = prefixes[i];
-    scale = conversion[unit];
-    if (val >= scale || (scale <= 1 && val > 0.1 * scale)) {
-      // Treat values less than 1 differently, allowing 0.5 to be "0.5" rather
-      // than "500m"
-      symbol = unit;
-      break;
-    }
-  }
-  if (!symbol) {
-    scale = 1;
-  } else if (opt_suffix) {
-    symbol += opt_suffix;
-  }
-  var ex = Math.pow(10, goog.isDef(opt_decimals) ? opt_decimals : 2);
-  return Math.round(orig_val / scale * ex) / ex + symbol;
-};
-
-
-/**
- * Regular expression for detecting scaling units, such as K, M, G, etc. for
- * converting a string representation to a numeric value.
- *
- * Also allow 'k' to be aliased to 'K'.  These could be used for SI (powers
- * of 1000) or Binary (powers of 1024) conversions.
- *
- * Also allow final 'B' to be interpreted as byte-count, implicitly triggering
- * binary conversion (e.g., '10.2MB').
- *
- * @type {RegExp}
- * @private
- */
-goog.format.SCALED_NUMERIC_RE_ = /^([-]?\d+\.?\d*)([K,M,G,T,P,k,m,u,n]?)[B]?$/;
-
-
-/**
- * Ordered list of scaling prefixes in decreasing order.
- * @type {Array}
- * @private
- */
-goog.format.NUMERIC_SCALE_PREFIXES_ = [
-  'P', 'T', 'G', 'M', 'K', '', 'm', 'u', 'n'
-];
-
-
-/**
- * Scaling factors for conversion of numeric value to string.  SI conversion.
- * @type {Object}
- * @private
- */
-goog.format.NUMERIC_SCALES_SI_ = {
-  '': 1,
-  'n': 1e-9,
-  'u': 1e-6,
-  'm': 1e-3,
-  'k': 1e3,
-  'K': 1e3,
-  'M': 1e6,
-  'G': 1e9,
-  'T': 1e12,
-  'P': 1e15
-};
-
-
-/**
- * Scaling factors for conversion of numeric value to string.  Binary
- * conversion.
- * @type {Object}
- * @private
- */
-goog.format.NUMERIC_SCALES_BINARY_ = {
-  '': 1,
-  'n': Math.pow(1024, -3),
-  'u': Math.pow(1024, -2),
-  'm': 1.0 / 1024,
-  'k': 1024,
-  'K': 1024,
-  'M': Math.pow(1024, 2),
-  'G': Math.pow(1024, 3),
-  'T': Math.pow(1024, 4),
-  'P': Math.pow(1024, 5)
-};
-
-
-/**
- * First Unicode code point that has the Mark property.
- * @type {number}
- * @private
- */
-goog.format.FIRST_GRAPHEME_EXTEND_ = 0x300;
-
-
-/**
- * Inserts word breaks into an HTML string at a given interval.  The counter is
- * reset if a space is encountered.  WBRs aren't inserted into HTML tags or
- * entities.  Entites count towards the character count, HTML tags do not.
- *
- * With common strings aliased, objects allocations are constant based on the
- * length of the string: N + 3. This guarantee does not hold if the string
- * contains an element >= U+0300 and hasGraphemeBreak is non-trivial.
- *
- * @param {string} str HTML to insert word breaks into.
- * @param {function(number, number, boolean): boolean} hasGraphemeBreak A
- *     function determining if there is a grapheme break between two characters,
- *     in the same signature as goog.i18n.GraphemeBreak.hasGraphemeBreak.
- * @param {number=} opt_maxlen Maximum length after which to ensure
- *     there is a break.  Default is 10 characters.
- * @return {string} The string including word breaks.
- * @private
- */
-goog.format.insertWordBreaksGeneric_ = function(str, hasGraphemeBreak,
-    opt_maxlen) {
-  var maxlen = opt_maxlen || 10;
-  if (maxlen > str.length) return str;
-
-  var rv = [];
-  var n = 0; // The length of the current token
-
-  // This will contain the ampersand or less-than character if one of the
-  // two has been seen; otherwise, the value is zero.
-  var nestingCharCode = 0;
-
-  // First character position from input string that has not been outputted.
-  var lastDumpPosition = 0;
-
-  var charCode = 0;
-  for (var i = 0; i < str.length; i++) {
-    // Using charCodeAt versus charAt avoids allocating new string objects.
-    var lastCharCode = charCode;
-    charCode = str.charCodeAt(i);
-
-    // Don't add a WBR before characters that might be grapheme extending.
-    var isPotentiallyGraphemeExtending =
-        charCode >= goog.format.FIRST_GRAPHEME_EXTEND_ &&
-        !hasGraphemeBreak(lastCharCode, charCode, true);
-
-    // Don't add a WBR at the end of a word.  For simplicity, all control
-    // characters are treated as whitespace.
-    if (n >= maxlen &&
-        charCode > goog.format.WbrToken_.SPACE &&
-        !isPotentiallyGraphemeExtending) {
-      // Flush everything seen so far, and append a word break.
-      rv.push(str.substring(lastDumpPosition, i), goog.format.WORD_BREAK_HTML);
-      lastDumpPosition = i;
-      n = 0;
-    }
-
-    if (!nestingCharCode) {
-      // Not currently within an HTML tag or entity
-
-      if (charCode == goog.format.WbrToken_.LT ||
-          charCode == goog.format.WbrToken_.AMP) {
-
-        // Entering an HTML Entity '&' or open tag '<'
-        nestingCharCode = charCode;
-      } else if (charCode <= goog.format.WbrToken_.SPACE) {
-
-        // A space or control character -- reset the token length
-        n = 0;
-      } else {
-
-        // A normal flow character - increment.  For grapheme extending
-        // characters, this is not *technically* a new character.  However,
-        // since the grapheme break detector might be overly conservative,
-        // we have to continue incrementing, or else we won't even be able
-        // to add breaks when we get to things like punctuation.  For the
-        // case where we have a full grapheme break detector, it is okay if
-        // we occasionally break slightly early.
-        n++;
-      }
-    } else if (charCode == goog.format.WbrToken_.GT &&
-        nestingCharCode == goog.format.WbrToken_.LT) {
-
-      // Leaving an HTML tag, treat the tag as zero-length
-      nestingCharCode = 0;
-    } else if (charCode == goog.format.WbrToken_.SEMI_COLON &&
-        nestingCharCode == goog.format.WbrToken_.AMP) {
-
-      // Leaving an HTML entity, treat it as length one
-      nestingCharCode = 0;
-      n++;
-    }
-  }
-
-  // Take care of anything we haven't flushed so far.
-  rv.push(str.substr(lastDumpPosition));
-
-  return rv.join('');
-};
-
-
-/**
- * Inserts word breaks into an HTML string at a given interval.
- *
- * This method is as aggressive as possible, using a full table of Unicode
- * characters where it is legal to insert word breaks; however, this table
- * comes at a 2.5k pre-gzip (~1k post-gzip) size cost.  Consider using
- * insertWordBreaksBasic to minimize the size impact.
- *
- * @param {string} str HTML to insert word breaks into.
- * @param {number=} opt_maxlen Maximum length after which to ensure there is a
- *     break.  Default is 10 characters.
- * @return {string} The string including word breaks.
- */
-goog.format.insertWordBreaks = function(str, opt_maxlen) {
-  return goog.format.insertWordBreaksGeneric_(str,
-      goog.i18n.GraphemeBreak.hasGraphemeBreak, opt_maxlen);
-};
-
-
-/**
- * Determines conservatively if a character has a Grapheme break.
- *
- * Conforms to a similar signature as goog.i18n.GraphemeBreak, but is overly
- * conservative, returning true only for characters in common scripts that
- * are simple to account for.
- *
- * @param {number} lastCharCode The previous character code.  Ignored.
- * @param {number} charCode The character code under consideration.  It must be
- *     at least \u0300 as a precondition -- this case is covered by
- *     insertWordBreaksGeneric_.
- * @param {boolean=} opt_extended Ignored, to conform with the interface.
- * @return {boolean} Whether it is one of the recognized subsets of characters
- *     with a grapheme break.
- * @private
- */
-goog.format.conservativelyHasGraphemeBreak_ = function(
-    lastCharCode, charCode, opt_extended) {
-  // Return false for everything except the most common Cyrillic characters.
-  // Don't worry about Latin characters, because insertWordBreaksGeneric_
-  // itself already handles those.
-  // TODO(gboyer): Also account for Greek, Armenian, and Georgian if it is
-  // simple to do so.
-  return charCode >= 0x400 && charCode < 0x523;
-};
-
-
-// TODO(gboyer): Consider using a compile-time flag to switch implementations
-// rather than relying on the developers to toggle implementations.
-/**
- * Inserts word breaks into an HTML string at a given interval.
- *
- * This method is less aggressive than insertWordBreaks, only inserting
- * breaks next to punctuation and between Latin or Cyrillic characters.
- * However, this is good enough for the common case of URLs.  It also
- * works for all Latin and Cyrillic languages, plus CJK has no need for word
- * breaks.  When this method is used, goog.i18n.GraphemeBreak may be dead
- * code eliminated.
- *
- * @param {string} str HTML to insert word breaks into.
- * @param {number=} opt_maxlen Maximum length after which to ensure there is a
- *     break.  Default is 10 characters.
- * @return {string} The string including word breaks.
- */
-goog.format.insertWordBreaksBasic = function(str, opt_maxlen) {
-  return goog.format.insertWordBreaksGeneric_(str,
-      goog.format.conservativelyHasGraphemeBreak_, opt_maxlen);
-};
-
-
-/**
- * True iff the current userAgent is IE8 or above.
- * @type {boolean}
- * @private
- */
-goog.format.IS_IE8_OR_ABOVE_ = goog.userAgent.IE &&
-    goog.userAgent.isVersion(8);
-
-
-/**
- * Constant for the WBR replacement used by insertWordBreaks.  Safari requires
- * <wbr></wbr>, Opera needs the &shy; entity, though this will give a visible
- * hyphen at breaks.  IE8 uses a zero width space.
- * Other browsers just use <wbr>.
- * @type {string}
- */
-goog.format.WORD_BREAK_HTML =
-    goog.userAgent.WEBKIT ?
-        '<wbr></wbr>' : goog.userAgent.OPERA ?
-            '&shy;' : goog.format.IS_IE8_OR_ABOVE_ ?
-                '&#8203;' : '<wbr>';
-
-
-/**
- * Tokens used within insertWordBreaks.
- * @private
- * @enum {number}
- */
-goog.format.WbrToken_ = {
-  LT: 60, // '<'.charCodeAt(0)
-  GT: 62, // '>'.charCodeAt(0)
-  AMP: 38, // '&'.charCodeAt(0)
-  SEMI_COLON: 59, // ';'.charCodeAt(0)
-  SPACE: 32 // ' '.charCodeAt(0)
-};
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Utility functions for supporting Bidi issues.
- */
-
-
-/**
- * Namespace for bidi supporting functions.
- */
-goog.provide('goog.i18n.bidi');
-
-
-/**
- * @define {boolean} FORCE_RTL forces the {@link goog.i18n.bidi.IS_RTL} constant
- * to say that the current locale is a RTL locale.  This should only be used
- * if you want to override the default behavior for deciding whether the
- * current locale is RTL or not.
- *
- * {@see goog.i18n.bidi.IS_RTL}
- */
-goog.i18n.bidi.FORCE_RTL = false;
-
-
-/**
- * Constant that defines whether or not the current locale is a RTL locale.
- * If {@link goog.i18n.bidi.FORCE_RTL} is not true, this constant will default
- * to check that {@link goog.LOCALE} is one of a few major RTL locales.
- *
- * <p>Since this constant refers to the directionality of the locale, it is up
- * to the caller to determine if this constant should also be used for the
- * direction of the UI.
- *
- * {@see goog.LOCALE}
- *
- * @type {boolean}
- *
- * TODO(user): write a test that checks that this is a compile-time constant.
- * For example, for the default goog.LOCALE, compiling
- * "if (goog.i18n.bidi.IS_RTL) alert('rtl') else {}" should produce no code.
- */
-goog.i18n.bidi.IS_RTL = goog.i18n.bidi.FORCE_RTL ||
-    (goog.LOCALE.substring(0, 2).toLowerCase() == 'ar' ||
-     goog.LOCALE.substring(0, 2).toLowerCase() == 'fa' ||
-     goog.LOCALE.substring(0, 2).toLowerCase() == 'he' ||
-     goog.LOCALE.substring(0, 2).toLowerCase() == 'iw' ||
-     goog.LOCALE.substring(0, 2).toLowerCase() == 'ur' ||
-     goog.LOCALE.substring(0, 2).toLowerCase() == 'yi') &&
-    (goog.LOCALE.length == 2 ||
-     goog.LOCALE.substring(2, 3) == '-' ||
-     goog.LOCALE.substring(2, 3) == '_');
-
-
-/**
- * Unicode formatting characters and directionality string constants.
- * @enum {string}
- */
-goog.i18n.bidi.Format = {
-  /** Unicode "Left-To-Right Embedding" (LRE) character. */
-  LRE: '\u202A',
-  /** Unicode "Right-To-Left Embedding" (RLE) character. */
-  RLE: '\u202B',
-  /** Unicode "Pop Directional Formatting" (PDF) character. */
-  PDF: '\u202C',
-  /** Unicode "Left-To-Right Mark" (LRM) character. */
-  LRM: '\u200E',
-  /** Unicode "Right-To-Left Mark" (RLM) character. */
-  RLM: '\u200F'
-};
-
-
-/**
- * Directionality enum.
- * @enum {number}
- */
-goog.i18n.bidi.Dir = {
-  RTL: -1,
-  UNKNOWN: 0,
-  LTR: 1
-};
-
-
-/**
- * 'right' string constant.
- * @type {string}
- */
-goog.i18n.bidi.RIGHT = 'right';
-
-
-/**
- * 'left' string constant.
- * @type {string}
- */
-goog.i18n.bidi.LEFT = 'left';
-
-
-/**
- * 'left' if locale is RTL, 'right' if not.
- * @type {string}
- */
-goog.i18n.bidi.I18N_RIGHT = goog.i18n.bidi.IS_RTL ? goog.i18n.bidi.LEFT :
-    goog.i18n.bidi.RIGHT;
-
-
-/**
- * 'right' if locale is RTL, 'left' if not.
- * @type {string}
- */
-goog.i18n.bidi.I18N_LEFT = goog.i18n.bidi.IS_RTL ? goog.i18n.bidi.RIGHT :
-    goog.i18n.bidi.LEFT;
-
-
-/**
- * Convert a directionality given in various formats to a goog.i18n.bidi.Dir
- * constant. Useful for interaction with different standards of directionality
- * representation.
- *
- * @param {goog.i18n.bidi.Dir|number|boolean} givenDir Directionality given in
- *     one of the following formats:
- *     1. A goog.i18n.bidi.Dir constant.
- *     2. A number (positive = LRT, negative = RTL, 0 = unknown).
- *     3. A boolean (true = RTL, false = LTR).
- * @return {goog.i18n.bidi.Dir} A goog.i18n.bidi.Dir constant matching the given
- *     directionality.
- */
-goog.i18n.bidi.toDir = function(givenDir) {
-  if (typeof givenDir == 'number') {
-    return givenDir > 0 ? goog.i18n.bidi.Dir.LTR :
-        givenDir < 0 ? goog.i18n.bidi.Dir.RTL : goog.i18n.bidi.Dir.UNKNOWN;
-  } else {
-    return givenDir ? goog.i18n.bidi.Dir.RTL : goog.i18n.bidi.Dir.LTR;
-  }
-};
-
-
-/**
- * A practical pattern to identify strong LTR characters. This pattern is not
- * theoretically correct according to the Unicode standard. It is simplified for
- * performance and small code size.
- * @type {string}
- * @private
- */
-goog.i18n.bidi.ltrChars_ =
-    'A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02B8\u0300-\u0590\u0800-\u1FFF' +
-    '\u2C00-\uFB1C\uFE00-\uFE6F\uFEFD-\uFFFF';
-
-
-/**
- * A practical pattern to identify strong RTL character. This pattern is not
- * theoretically correct according to the Unicode standard. It is simplified
- * for performance and small code size.
- * @type {string}
- * @private
- */
-goog.i18n.bidi.rtlChars_ = '\u0591-\u07FF\uFB1D-\uFDFF\uFE70-\uFEFC';
-
-
-/**
- * Simplified regular expression for an HTML tag (opening or closing) or an HTML
- * escape. We might want to skip over such expressions when estimating the text
- * directionality.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.htmlSkipReg_ = /<[^>]*>|&[^;]+;/g;
-
-
-/**
- * Returns the input text with spaces instead of HTML tags or HTML escapes, if
- * opt_isStripNeeded is true. Else returns the input as is.
- * Useful for text directionality estimation.
- * Note: the function should not be used in other contexts; it is not 100%
- * correct, but rather a good-enough implementation for directionality
- * estimation purposes.
- * @param {string} str The given string.
- * @param {boolean=} opt_isStripNeeded Whether to perform the stripping.
- *     Default: false (to retain consistency with calling functions).
- * @return {string} The given string cleaned of HTML tags / escapes.
- * @private
- */
-goog.i18n.bidi.stripHtmlIfNeeded_ = function(str, opt_isStripNeeded) {
-  return opt_isStripNeeded ? str.replace(goog.i18n.bidi.htmlSkipReg_, ' ') :
-      str;
-};
-
-
-/**
- * Regular expression to check for RTL characters.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.rtlCharReg_ = new RegExp('[' + goog.i18n.bidi.rtlChars_ + ']');
-
-
-/**
- * Regular expression to check for LTR characters.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.ltrCharReg_ = new RegExp('[' + goog.i18n.bidi.ltrChars_ + ']');
-
-
-/**
- * Test whether the given string has any RTL characters in it.
- * @param {string} str The given string that need to be tested.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether the string contains RTL characters.
- */
-goog.i18n.bidi.hasAnyRtl = function(str, opt_isHtml) {
-  return goog.i18n.bidi.rtlCharReg_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
-      str, opt_isHtml));
-};
-
-
-/**
- * Test whether the given string has any RTL characters in it.
- * @param {string} str The given string that need to be tested.
- * @return {boolean} Whether the string contains RTL characters.
- * @deprecated Use hasAnyRtl.
- */
-goog.i18n.bidi.hasRtlChar = goog.i18n.bidi.hasAnyRtl;
-
-
-/**
- * Test whether the given string has any LTR characters in it.
- * @param {string} str The given string that need to be tested.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether the string contains LTR characters.
- */
-goog.i18n.bidi.hasAnyLtr = function(str, opt_isHtml) {
-  return goog.i18n.bidi.ltrCharReg_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
-      str, opt_isHtml));
-};
-
-
-/**
- * Regular expression pattern to check if the first character in the string
- * is LTR.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.ltrRe_ = new RegExp('^[' + goog.i18n.bidi.ltrChars_ + ']');
-
-
-/**
- * Regular expression pattern to check if the first character in the string
- * is RTL.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.rtlRe_ = new RegExp('^[' + goog.i18n.bidi.rtlChars_ + ']');
-
-
-/**
- * Check if the first character in the string is RTL or not.
- * @param {string} str The given string that need to be tested.
- * @return {boolean} Whether the first character in str is an RTL char.
- */
-goog.i18n.bidi.isRtlChar = function(str) {
-  return goog.i18n.bidi.rtlRe_.test(str);
-};
-
-
-/**
- * Check if the first character in the string is LTR or not.
- * @param {string} str The given string that need to be tested.
- * @return {boolean} Whether the first character in str is an LTR char.
- */
-goog.i18n.bidi.isLtrChar = function(str) {
-  return goog.i18n.bidi.ltrRe_.test(str);
-};
-
-
-/**
- * Check if the first character in the string is neutral or not.
- * @param {string} str The given string that need to be tested.
- * @return {boolean} Whether the first character in str is a neutral char.
- */
-goog.i18n.bidi.isNeutralChar = function(str) {
-  return !goog.i18n.bidi.isLtrChar(str) && !goog.i18n.bidi.isRtlChar(str);
-};
-
-
-/**
- * Regular expressions to check if a piece of text if of LTR directionality
- * on first character with strong directionality.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.ltrDirCheckRe_ = new RegExp(
-    '^[^' + goog.i18n.bidi.rtlChars_ + ']*[' + goog.i18n.bidi.ltrChars_ + ']');
-
-
-/**
- * Regular expressions to check if a piece of text if of RTL directionality
- * on first character with strong directionality.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.rtlDirCheckRe_ = new RegExp(
-    '^[^' + goog.i18n.bidi.ltrChars_ + ']*[' + goog.i18n.bidi.rtlChars_ + ']');
-
-
-/**
- * Check whether the first strongly directional character (if any) is RTL.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether RTL directionality is detected using the first
- *     strongly-directional character method.
- */
-goog.i18n.bidi.startsWithRtl = function(str, opt_isHtml) {
-  return goog.i18n.bidi.rtlDirCheckRe_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
-      str, opt_isHtml));
-};
-
-
-/**
- * Check whether the first strongly directional character (if any) is RTL.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether RTL directionality is detected using the first
- *     strongly-directional character method.
- * @deprecated Use startsWithRtl.
- */
-goog.i18n.bidi.isRtlText = goog.i18n.bidi.startsWithRtl;
-
-
-/**
- * Check whether the first strongly directional character (if any) is LTR.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether LTR directionality is detected using the first
- *     strongly-directional character method.
- */
-goog.i18n.bidi.startsWithLtr = function(str, opt_isHtml) {
-  return goog.i18n.bidi.ltrDirCheckRe_.test(goog.i18n.bidi.stripHtmlIfNeeded_(
-      str, opt_isHtml));
-};
-
-
-/**
- * Check whether the first strongly directional character (if any) is LTR.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether LTR directionality is detected using the first
- *     strongly-directional character method.
- * @deprecated Use startsWithLtr.
- */
-goog.i18n.bidi.isLtrText = goog.i18n.bidi.startsWithLtr;
-
-
-/**
- * Regular expression to check if a string looks like something that must
- * always be LTR even in RTL text, e.g. a URL. When estimating the
- * directionality of text containing these, we treat these as weakly LTR,
- * like numbers.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.isRequiredLtrRe_ = /^http:\/\/.*/;
-
-
-/**
- * Check whether the input string either contains no strongly directional
- * characters or looks like a url.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether neutral directionality is detected.
- */
-goog.i18n.bidi.isNeutralText = function(str, opt_isHtml) {
-  str = goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml);
-  return goog.i18n.bidi.isRequiredLtrRe_.test(str) ||
-      !goog.i18n.bidi.hasAnyLtr(str) && !goog.i18n.bidi.hasAnyRtl(str);
-};
-
-
-/**
- * Regular expressions to check if the last strongly-directional character in a
- * piece of text is LTR.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.ltrExitDirCheckRe_ = new RegExp(
-    '[' + goog.i18n.bidi.ltrChars_ + '][^' + goog.i18n.bidi.rtlChars_ + ']*$');
-
-
-/**
- * Regular expressions to check if the last strongly-directional character in a
- * piece of text is RTL.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.rtlExitDirCheckRe_ = new RegExp(
-    '[' + goog.i18n.bidi.rtlChars_ + '][^' + goog.i18n.bidi.ltrChars_ + ']*$');
-
-
-/**
- * Check if the exit directionality a piece of text is LTR, i.e. if the last
- * strongly-directional character in the string is LTR.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether LTR exit directionality was detected.
- */
-goog.i18n.bidi.endsWithLtr = function(str, opt_isHtml) {
-  return goog.i18n.bidi.ltrExitDirCheckRe_.test(
-      goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml));
-};
-
-
-/**
- * Check if the exit directionality a piece of text is LTR, i.e. if the last
- * strongly-directional character in the string is LTR.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether LTR exit directionality was detected.
- * @deprecated Use endsWithLtr.
- */
-goog.i18n.bidi.isLtrExitText = goog.i18n.bidi.endsWithLtr;
-
-
-/**
- * Check if the exit directionality a piece of text is RTL, i.e. if the last
- * strongly-directional character in the string is RTL.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether RTL exit directionality was detected.
- */
-goog.i18n.bidi.endsWithRtl = function(str, opt_isHtml) {
-  return goog.i18n.bidi.rtlExitDirCheckRe_.test(
-      goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml));
-};
-
-
-/**
- * Check if the exit directionality a piece of text is RTL, i.e. if the last
- * strongly-directional character in the string is RTL.
- * @param {string} str String being checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether RTL exit directionality was detected.
- * @deprecated Use endsWithRtl.
- */
-goog.i18n.bidi.isRtlExitText = goog.i18n.bidi.endsWithRtl;
-
-
-/**
- * A regular expression for matching right-to-left language codes.
- * See {@link #isRtlLanguage} for the design.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.rtlLocalesRe_ = new RegExp(
-    '^(ar|dv|he|iw|fa|nqo|ps|sd|ug|ur|yi|.*[-_](Arab|Hebr|Thaa|Nkoo|Tfng))' +
-    '(?!.*[-_](Latn|Cyrl)($|-|_))($|-|_)');
-
-
-/**
- * Check if a BCP 47 / III language code indicates an RTL language, i.e. either:
- * - a language code explicitly specifying one of the right-to-left scripts,
- *   e.g. "az-Arab", or<p>
- * - a language code specifying one of the languages normally written in a
- *   right-to-left script, e.g. "fa" (Farsi), except ones explicitly specifying
- *   Latin or Cyrillic script (which are the usual LTR alternatives).<p>
- * The list of right-to-left scripts appears in the 100-199 range in
- * http://www.unicode.org/iso15924/iso15924-num.html, of which Arabic and
- * Hebrew are by far the most widely used. We also recognize Thaana, N'Ko, and
- * Tifinagh, which also have significant modern usage. The rest (Syriac,
- * Samaritan, Mandaic, etc.) seem to have extremely limited or no modern usage
- * and are not recognized to save on code size.
- * The languages usually written in a right-to-left script are taken as those
- * with Suppress-Script: Hebr|Arab|Thaa|Nkoo|Tfng  in
- * http://www.iana.org/assignments/language-subtag-registry,
- * as well as Sindhi (sd) and Uyghur (ug).
- * Other subtags of the language code, e.g. regions like EG (Egypt), are
- * ignored.
- * @param {string} lang BCP 47 (a.k.a III) language code.
- * @return {boolean} Whether the language code is an RTL language.
- */
-goog.i18n.bidi.isRtlLanguage = function(lang) {
-  return goog.i18n.bidi.rtlLocalesRe_.test(lang);
-};
-
-
-/**
- * Regular expression for bracket guard replacement in html.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.bracketGuardHtmlRe_ =
-    /(\(.*?\)+)|(\[.*?\]+)|(\{.*?\}+)|(&lt;.*?(&gt;)+)/g;
-
-
-/**
- * Regular expression for bracket guard replacement in text.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.bracketGuardTextRe_ =
-    /(\(.*?\)+)|(\[.*?\]+)|(\{.*?\}+)|(<.*?>+)/g;
-
-
-/**
- * Apply bracket guard using html span tag. This is to address the problem of
- * messy bracket display frequently happens in RTL layout.
- * @param {string} s The string that need to be processed.
- * @param {boolean=} opt_isRtlContext specifies default direction (usually
- *     direction of the UI).
- * @return {string} The processed string, with all bracket guarded.
- */
-goog.i18n.bidi.guardBracketInHtml = function(s, opt_isRtlContext) {
-  var useRtl = opt_isRtlContext === undefined ?
-      goog.i18n.bidi.hasAnyRtl(s) : opt_isRtlContext;
-  if (useRtl) {
-    return s.replace(goog.i18n.bidi.bracketGuardHtmlRe_,
-        '<span dir=rtl>$&</span>');
-  }
-  return s.replace(goog.i18n.bidi.bracketGuardHtmlRe_,
-      '<span dir=ltr>$&</span>');
-};
-
-
-/**
- * Apply bracket guard using LRM and RLM. This is to address the problem of
- * messy bracket display frequently happens in RTL layout.
- * This version works for both plain text and html. But it does not work as
- * good as guardBracketInHtml in some cases.
- * @param {string} s The string that need to be processed.
- * @param {boolean=} opt_isRtlContext specifies default direction (usually
- *     direction of the UI).
- * @return {string} The processed string, with all bracket guarded.
- */
-goog.i18n.bidi.guardBracketInText = function(s, opt_isRtlContext) {
-  var useRtl = opt_isRtlContext === undefined ?
-      goog.i18n.bidi.hasAnyRtl(s) : opt_isRtlContext;
-  var mark = useRtl ? goog.i18n.bidi.Format.RLM : goog.i18n.bidi.Format.LRM;
-  return s.replace(goog.i18n.bidi.bracketGuardTextRe_, mark + '$&' + mark);
-};
-
-
-/**
- * Enforce the html snippet in RTL directionality regardless overall context.
- * If the html piece was enclosed by tag, dir will be applied to existing
- * tag, otherwise a span tag will be added as wrapper. For this reason, if
- * html snippet start with with tag, this tag must enclose the whole piece. If
- * the tag already has a dir specified, this new one will override existing
- * one in behavior (tested on FF and IE).
- * @param {string} html The string that need to be processed.
- * @return {string} The processed string, with directionality enforced to RTL.
- */
-goog.i18n.bidi.enforceRtlInHtml = function(html) {
-  if (html.charAt(0) == '<') {
-    return html.replace(/<\w+/, '$& dir=rtl');
-  }
-  // '\n' is important for FF so that it won't incorrectly merge span groups
-  return '\n<span dir=rtl>' + html + '</span>';
-};
-
-
-/**
- * Enforce RTL on both end of the given text piece using unicode BiDi formatting
- * characters RLE and PDF.
- * @param {string} text The piece of text that need to be wrapped.
- * @return {string} The wrapped string after process.
- */
-goog.i18n.bidi.enforceRtlInText = function(text) {
-  return goog.i18n.bidi.Format.RLE + text + goog.i18n.bidi.Format.PDF;
-};
-
-
-/**
- * Enforce the html snippet in RTL directionality regardless overall context.
- * If the html piece was enclosed by tag, dir will be applied to existing
- * tag, otherwise a span tag will be added as wrapper. For this reason, if
- * html snippet start with with tag, this tag must enclose the whole piece. If
- * the tag already has a dir specified, this new one will override existing
- * one in behavior (tested on FF and IE).
- * @param {string} html The string that need to be processed.
- * @return {string} The processed string, with directionality enforced to RTL.
- */
-goog.i18n.bidi.enforceLtrInHtml = function(html) {
-  if (html.charAt(0) == '<') {
-    return html.replace(/<\w+/, '$& dir=ltr');
-  }
-  // '\n' is important for FF so that it won't incorrectly merge span groups
-  return '\n<span dir=ltr>' + html + '</span>';
-};
-
-
-/**
- * Enforce LTR on both end of the given text piece using unicode BiDi formatting
- * characters LRE and PDF.
- * @param {string} text The piece of text that need to be wrapped.
- * @return {string} The wrapped string after process.
- */
-goog.i18n.bidi.enforceLtrInText = function(text) {
-  return goog.i18n.bidi.Format.LRE + text + goog.i18n.bidi.Format.PDF;
-};
-
-
-/**
- * Regular expression to find dimensions such as "padding: .3 0.4ex 5px 6;"
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.dimensionsRe_ =
-     /:\s*([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)/g;
-
-
-/**
- * Regular expression for left.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.leftRe_ = /left/gi;
-
-
-/**
- * Regular expression for right.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.rightRe_ = /right/gi;
-
-
-/**
- * Placeholder regular expression for swapping.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.tempRe_ = /%%%%/g;
-
-
-/**
- * Swap location parameters and 'left'/'right' in CSS specification. The
- * processed string will be suited for RTL layout. Though this function can
- * cover most cases, there are always exceptions. It is suggested to put
- * those exceptions in separate group of CSS string.
- * @param {string} cssStr CSS spefication string.
- * @return {string} Processed CSS specification string.
- */
-goog.i18n.bidi.mirrorCSS = function(cssStr) {
-  return cssStr.
-    // reverse dimensions
-    replace(goog.i18n.bidi.dimensionsRe_, ':$1 $4 $3 $2').
-    replace(goog.i18n.bidi.leftRe_, '%%%%').          // swap left and right
-    replace(goog.i18n.bidi.rightRe_, goog.i18n.bidi.LEFT).
-    replace(goog.i18n.bidi.tempRe_, goog.i18n.bidi.RIGHT);
-};
-
-
-/**
- * Regular expression for hebrew double quote substitution, finding quote
- * directly after hebrew characters.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.doubleQuoteSubstituteRe_ = /([\u0591-\u05f2])"/g;
-
-
-/**
- * Regular expression for hebrew single quote substitution, finding quote
- * directly after hebrew characters.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.singleQuoteSubstituteRe_ = /([\u0591-\u05f2])'/g;
-
-
-/**
- * Replace the double and single quote directly after a Hebrew character with
- * GERESH and GERSHAYIM. In such case, most likely that's user intention.
- * @param {string} str String that need to be processed.
- * @return {string} Processed string with double/single quote replaced.
- */
-goog.i18n.bidi.normalizeHebrewQuote = function(str) {
-  return str.
-    replace(goog.i18n.bidi.doubleQuoteSubstituteRe_, '$1\u05f4').
-    replace(goog.i18n.bidi.singleQuoteSubstituteRe_, '$1\u05f3');
-};
-
-
-/**
- * Regular expression to split a string into "words" for directionality
- * estimation based on relative word counts.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.wordSeparatorRe_ = /\s+/;
-
-
-/**
- * Regular expression to check if a string contains any numerals. Used to
- * differentiate between completely neutral strings and those containing
- * numbers, which are weakly LTR.
- * @type {RegExp}
- * @private
- */
-goog.i18n.bidi.hasNumeralsRe_ = /\d/;
-
-
-/**
- * This constant controls threshold of RTL directionality.
- * @type {number}
- * @private
- */
-goog.i18n.bidi.rtlDetectionThreshold_ = 0.40;
-
-
-/**
- * Estimates the directionality of a string based on relative word counts.
- * If the number of RTL words is above a certain percentage of the total number
- * of strongly directional words, returns RTL.
- * Otherwise, if any words are strongly or weakly LTR, returns LTR.
- * Otherwise, returns UNKNOWN, which is used to mean "neutral".
- * Numbers are counted as weakly LTR.
- * @param {string} str The string to be checked.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {goog.i18n.bidi.Dir} Estimated overall directionality of {@code str}.
- */
-goog.i18n.bidi.estimateDirection = function(str, opt_isHtml) {
-  var rtlCount = 0;
-  var totalCount = 0;
-  var hasWeaklyLtr = false;
-  var tokens = goog.i18n.bidi.stripHtmlIfNeeded_(str, opt_isHtml).
-      split(goog.i18n.bidi.wordSeparatorRe_);
-  for (var i = 0; i < tokens.length; i++) {
-    var token = tokens[i];
-    if (goog.i18n.bidi.startsWithRtl(token)) {
-      rtlCount++;
-      totalCount++;
-    } else if (goog.i18n.bidi.isRequiredLtrRe_.test(token)) {
-      hasWeaklyLtr = true;
-    } else if (goog.i18n.bidi.hasAnyLtr(token)) {
-      totalCount++;
-    } else if (goog.i18n.bidi.hasNumeralsRe_.test(token)) {
-      hasWeaklyLtr = true;
-    }
-  }
-
-  return totalCount == 0 ?
-      (hasWeaklyLtr ? goog.i18n.bidi.Dir.LTR : goog.i18n.bidi.Dir.UNKNOWN) :
-      (rtlCount / totalCount > goog.i18n.bidi.rtlDetectionThreshold_ ?
-          goog.i18n.bidi.Dir.RTL : goog.i18n.bidi.Dir.LTR);
-};
-
-
-/**
- * Check the directionality of a piece of text, return true if the piece of
- * text should be laid out in RTL direction.
- * @param {string} str The piece of text that need to be detected.
- * @param {boolean=} opt_isHtml Whether str is HTML / HTML-escaped.
- *     Default: false.
- * @return {boolean} Whether this piece of text should be laid out in RTL.
- */
-goog.i18n.bidi.detectRtlDirectionality = function(str, opt_isHtml) {
-  return goog.i18n.bidi.estimateDirection(str, opt_isHtml) ==
-      goog.i18n.bidi.Dir.RTL;
-};
-
-
-/**
- * Sets text input element's directionality and text alignment based on a
- * given directionality.
- * @param {Element} element Input field element to set directionality to.
- * @param {goog.i18n.bidi.Dir|number|boolean} dir Desired directionality, given
- *     in one of the following formats:
- *     1. A goog.i18n.bidi.Dir constant.
- *     2. A number (positive = LRT, negative = RTL, 0 = unknown).
- *     3. A boolean (true = RTL, false = LTR).
- */
-goog.i18n.bidi.setElementDirAndAlign = function(element, dir) {
-  if (element &&
-      (dir = goog.i18n.bidi.toDir(dir)) != goog.i18n.bidi.Dir.UNKNOWN) {
-    element.style.textAlign = dir == goog.i18n.bidi.Dir.RTL ? 'right' : 'left';
-    element.dir = dir == goog.i18n.bidi.Dir.RTL ? 'rtl' : 'ltr';
-  }
-};
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Utility for formatting text for display in a potentially
- * opposite-directionality context without garbling.
- * Mostly a port of http://go/formatter.cc.
- */
-
-
-goog.provide('goog.i18n.BidiFormatter');
-
-goog.require('goog.i18n.bidi');
-goog.require('goog.string');
-
-
-
-/**
- * Utility class for formatting text for display in a potentially
- * opposite-directionality context without garbling. Provides the following
- * functionality:
- *
- * 1. BiDi Wrapping
- * When text in one language is mixed into a document in another, opposite-
- * directionality language, e.g. when an English business name is embedded in a
- * Hebrew web page, both the inserted string and the text following it may be
- * displayed incorrectly unless the inserted string is explicitly separated
- * from the surrounding text in a "wrapper" that declares its directionality at
- * the start and then resets it back at the end. This wrapping can be done in
- * HTML mark-up (e.g. a 'span dir=rtl' tag) or - only in contexts where mark-up
- * can not be used - in Unicode BiDi formatting codes (LRE|RLE and PDF).
- * Providing such wrapping services is the basic purpose of the BiDi formatter.
- *
- * 2. Directionality estimation
- * How does one know whether a string about to be inserted into surrounding
- * text has the same directionality? Well, in many cases, one knows that this
- * must be the case when writing the code doing the insertion, e.g. when a
- * localized message is inserted into a localized page. In such cases there is
- * no need to involve the BiDi formatter at all. In the remaining cases, e.g.
- * when the string is user-entered or comes from a database, the language of
- * the string (and thus its directionality) is not known a priori, and must be
- * estimated at run-time. The BiDi formatter does this automatically.
- *
- * 3. Escaping
- * When wrapping plain text - i.e. text that is not already HTML or HTML-
- * escaped - in HTML mark-up, the text must first be HTML-escaped to prevent XSS
- * attacks and other nasty business. This of course is always true, but the
- * escaping can not be done after the string has already been wrapped in
- * mark-up, so the BiDi formatter also serves as a last chance and includes
- * escaping services.
- *
- * Thus, in a single call, the formatter will escape the input string as
- * specified, determine its directionality, and wrap it as necessary. It is
- * then up to the caller to insert the return value in the output.
- *
- * See http://wiki/Main/TemplatesAndBiDi for more information.
- *
- * @param {goog.i18n.bidi.Dir|number|boolean} contextDir The context
- *     directionality. May be supplied either as a goog.i18n.bidi.Dir constant,
- *     as a number (positive = LRT, negative = RTL, 0 = unknown) or as a boolean
- *     (true = RTL, false = LTR).
- * @param {boolean=} opt_alwaysSpan Whether {@link #spanWrap} should always
- *     use a 'span' tag, even when the input directionality is neutral or
- *     matches the context, so that the DOM structure of the output does not
- *     depend on the combination of directionalities. Default: false.
- * @constructor
- */
-goog.i18n.BidiFormatter = function(contextDir, opt_alwaysSpan) {
-  /**
-   * The overall directionality of the context in which the formatter is being
-   * used.
-   * @type {goog.i18n.bidi.Dir}
-   * @private
-   */
-  this.contextDir_ = goog.i18n.bidi.toDir(contextDir);
-
-  /**
-   * Whether {@link #spanWrap} and similar methods should always use the same
-   * span structure, regardless of the combination of directionalities, for a
-   * stable DOM structure.
-   * @type {boolean}
-   * @private
-   */
-  this.alwaysSpan_ = !!opt_alwaysSpan;
-};
-
-
-/**
- * @return {goog.i18n.bidi.Dir} The context directionality.
- */
-goog.i18n.BidiFormatter.prototype.getContextDir = function() {
-  return this.contextDir_;
-};
-
-
-/**
- * @return {boolean} Whether alwaysSpan is set.
- */
-goog.i18n.BidiFormatter.prototype.getAlwaysSpan = function() {
-  return this.alwaysSpan_;
-};
-
-
-/**
- * @param {goog.i18n.bidi.Dir|number|boolean} contextDir The context
- *     directionality. May be supplied either as a goog.i18n.bidi.Dir constant,
- *     as a number (positive = LRT, negative = RTL, 0 = unknown) or as a boolean
- *     (true = RTL, false = LTR).
- */
-goog.i18n.BidiFormatter.prototype.setContextDir = function(contextDir) {
-  this.contextDir_ = goog.i18n.bidi.toDir(contextDir);
-};
-
-
-/**
- * @param {boolean} alwaysSpan Whether {@link #spanWrap} should always use a
- *     'span' tag, even when the input directionality is neutral or matches the
- *     context, so that the DOM structure of the output does not depend on the
- *     combination of directionalities.
- */
-goog.i18n.BidiFormatter.prototype.setAlwaysSpan = function(alwaysSpan) {
-  this.alwaysSpan_ = alwaysSpan;
-};
-
-
-/**
- * Returns the directionality of input argument {@code str}.
- * Identical to {@link goog.i18n.bidi.estimateDirection}.
- *
- * @param {string} str The input text.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @return {goog.i18n.bidi.Dir} Estimated overall directionality of {@code str}.
- */
-goog.i18n.BidiFormatter.prototype.estimateDirection =
-    goog.i18n.bidi.estimateDirection;
-
-
-/**
- * Returns true if two given directionalities are opposite.
- * Note: the implementation is based on the numeric values of the Dir enum.
- *
- * @param {goog.i18n.bidi.Dir} dir1 1st directionality.
- * @param {goog.i18n.bidi.Dir} dir2 2nd directionality.
- * @return {boolean} Whether the directionalities are opposite.
- * @private
- */
-goog.i18n.BidiFormatter.prototype.areDirectionalitiesOpposite_ = function(dir1,
-    dir2) {
-  return dir1 * dir2 < 0;
-};
-
-
-/**
- * Returns a unicode BiDi mark matching the context directionality (LRM or
- * RLM) if {@code opt_dirReset}, and if either the directionality or the exit
- * directionality of {@code str} is opposite to the context directionality.
- * Otherwise returns the empty string.
- *
- * @param {string} str The input text.
- * @param {goog.i18n.bidi.Dir} dir {@code str}'s overall directionality.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @param {boolean=} opt_dirReset Whether to perform the reset. Default: false.
- * @return {string} A unicode BiDi mark or the empty string.
- * @private
- */
-goog.i18n.BidiFormatter.prototype.dirResetIfNeeded_ = function(str, dir,
-    opt_isHtml, opt_dirReset) {
-  // endsWithRtl and endsWithLtr are called only if needed (short-circuit).
-  if (opt_dirReset &&
-      (this.areDirectionalitiesOpposite_(dir, this.contextDir_) ||
-       (this.contextDir_ == goog.i18n.bidi.Dir.LTR &&
-        goog.i18n.bidi.endsWithRtl(str, opt_isHtml)) ||
-       (this.contextDir_ == goog.i18n.bidi.Dir.RTL &&
-        goog.i18n.bidi.endsWithLtr(str, opt_isHtml)))) {
-   return this.contextDir_ == goog.i18n.bidi.Dir.LTR ?
-       goog.i18n.bidi.Format.LRM : goog.i18n.bidi.Format.RLM;
-  } else {
-    return '';
-  }
-};
-
-
-/**
- * Returns "rtl" if {@code str}'s estimated directionality is RTL, and "ltr" if
- * it is LTR. In case it's UNKNOWN, returns "rtl" if the context directionality
- * is RTL, and "ltr" otherwise.
- * Needed for GXP, which can't handle dirAttr.
- * Example use case:
- * <td expr:dir='bidiFormatter.dirAttrValue(foo)'><gxp:eval expr='foo'></td>
- *
- * @param {string} str Text whose directionality is to be estimated.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @return {string} "rtl" or "ltr", according to the logic described above.
- */
-goog.i18n.BidiFormatter.prototype.dirAttrValue = function(str, opt_isHtml) {
-  return this.knownDirAttrValue(this.estimateDirection(str, opt_isHtml));
-};
-
-
-/**
- * Returns "rtl" if the given directionality is RTL, and "ltr" if it is LTR. In
- * case it's UNKNOWN, returns "rtl" if the context directionality is RTL, and
- * "ltr" otherwise.
- *
- * @param {goog.i18n.bidi.Dir} dir A directionality.
- * @return {string} "rtl" or "ltr", according to the logic described above.
- */
-goog.i18n.BidiFormatter.prototype.knownDirAttrValue = function(dir) {
-  if (dir == goog.i18n.bidi.Dir.UNKNOWN) {
-    dir = this.contextDir_;
-  }
-
-  return dir == goog.i18n.bidi.Dir.RTL ? 'rtl' : 'ltr';
-};
-
-
-/**
- * Returns "dir=ltr" or "dir=rtl", depending on {@code str}'s estimated
- * directionality, if it is not the same as the context directionality.
- * Otherwise, returns the empty string.
- *
- * @param {string} str Text whose directionality is to be estimated.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @return {string} "dir=rtl" for RTL text in non-RTL context; "dir=ltr" for LTR
- *     text in non-LTR context; else, the empty string.
- */
-goog.i18n.BidiFormatter.prototype.dirAttr = function(str, opt_isHtml) {
-  return this.knownDirAttr(this.estimateDirection(str, opt_isHtml));
-};
-
-
-/**
- * Returns "dir=ltr" or "dir=rtl", depending on the given directionality, if it
- * is not the same as the context directionality. Otherwise, returns the empty
- * string.
- *
- * @param {goog.i18n.bidi.Dir} dir A directionality.
- * @return {string} "dir=rtl" for RTL text in non-RTL context; "dir=ltr" for LTR
- *     text in non-LTR context; else, the empty string.
- */
-goog.i18n.BidiFormatter.prototype.knownDirAttr = function(dir) {
-  if (dir != this.contextDir_) {
-    return dir == goog.i18n.bidi.Dir.RTL ? 'dir=rtl' :
-        dir == goog.i18n.bidi.Dir.LTR ? 'dir=ltr' : '';
-  }
-  return '';
-};
-
-
-/**
- * Formats a string of unknown directionality for use in HTML output of the
- * context directionality, so an opposite-directionality string is neither
- * garbled nor garbles what follows it.
- * The algorithm: estimates the directionality of input argument {@code str}. In
- * case its directionality doesn't match the context directionality, wraps it
- * with a 'span' tag and adds a "dir" attribute (either 'dir=rtl' or 'dir=ltr').
- * If setAlwaysSpan(true) was used, the input is always wrapped with 'span',
- * skipping just the dir attribute when it's not needed.
- *
- * If {@code opt_dirReset}, and if the overall directionality or the exit
- * directionality of {@code str} are opposite to the context directionality, a
- * trailing unicode BiDi mark matching the context directionality is appened
- * (LRM or RLM).
- *
- * If !{@code opt_isHtml}, HTML-escapes {@code str} regardless of wrapping.
- *
- * @param {string} str The input text.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
- *     matching the context directionality, when needed, to prevent the possible
- *     garbling of whatever may follow {@code str}. Default: true.
- * @return {string} Input text after applying the above processing.
- */
-goog.i18n.BidiFormatter.prototype.spanWrap = function(str, opt_isHtml,
-    opt_dirReset) {
-  var dir = this.estimateDirection(str, opt_isHtml);
-  return this.spanWrapWithKnownDir(dir, str, opt_isHtml, opt_dirReset);
-};
-
-
-/**
- * Formats a string of given directionality for use in HTML output of the
- * context directionality, so an opposite-directionality string is neither
- * garbled nor garbles what follows it.
- * The algorithm: If {@code dir} doesn't match the context directionality, wraps
- * {@code str} with a 'span' tag and adds a "dir" attribute (either 'dir=rtl' or
- * 'dir=ltr'). If setAlwaysSpan(true) was used, the input is always wrapped with
- * 'span', skipping just the dir attribute when it's not needed.
- *
- * If {@code opt_dirReset}, and if {@code dir} or the exit directionality of
- * {@code str} are opposite to the context directionality, a trailing unicode
- * BiDi mark matching the context directionality is appened (LRM or RLM).
- *
- * If !{@code opt_isHtml}, HTML-escapes {@code str} regardless of wrapping.
- *
- * @param {goog.i18n.bidi.Dir} dir {@code str}'s overall directionality.
- * @param {string} str The input text.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
- *     matching the context directionality, when needed, to prevent the possible
- *     garbling of whatever may follow {@code str}. Default: true.
- * @return {string} Input text after applying the above processing.
- */
-goog.i18n.BidiFormatter.prototype.spanWrapWithKnownDir = function(dir, str,
-    opt_isHtml, opt_dirReset) {
-  opt_dirReset = opt_dirReset || (opt_dirReset == undefined);
-  // Whether to add the "dir" attribute.
-  var dirCondition = dir != goog.i18n.bidi.Dir.UNKNOWN && dir !=
-      this.contextDir_;
-  if (!opt_isHtml) {
-    str = goog.string.htmlEscape(str);
-  }
-
-  var result = [];
-  if (this.alwaysSpan_ || dirCondition) {  // Wrap is needed
-    result.push('<span');
-    if (dirCondition) {
-      result.push(dir == goog.i18n.bidi.Dir.RTL ? ' dir=rtl' : ' dir=ltr');
-    }
-    result.push('>' + str + '</span>');
-  } else {
-    result.push(str);
-  }
-
-  result.push(this.dirResetIfNeeded_(str, dir, true, opt_dirReset));
-  return result.join('');
-};
-
-
-/**
- * Formats a string of unknown directionality for use in plain-text output of
- * the context directionality, so an opposite-directionality string is neither
- * garbled nor garbles what follows it.
- * As opposed to {@link #spanWrap}, this makes use of unicode BiDi formatting
- * characters. In HTML, its *only* valid use is inside of elements that do not
- * allow mark-up, e.g. an 'option' tag.
- * The algorithm: estimates the directionality of input argument {@code str}.
- * In case it doesn't match  the context directionality, wraps it with Unicode
- * BiDi formatting characters: RLE{@code str}PDF for RTL text, and
- * LRE{@code str}PDF for LTR text.
- *
- * If {@code opt_dirReset}, and if the overall directionality or the exit
- * directionality of {@code str} are opposite to the context directionality, a
- * trailing unicode BiDi mark matching the context directionality is appended
- * (LRM or RLM).
- *
- * Does *not* do HTML-escaping regardless of the value of {@code opt_isHtml}.
- * The return value can be HTML-escaped as necessary.
- *
- * @param {string} str The input text.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
- *     matching the context directionality, when needed, to prevent the possible
- *     garbling of whatever may follow {@code str}. Default: true.
- * @return {string} Input text after applying the above processing.
- */
-goog.i18n.BidiFormatter.prototype.unicodeWrap = function(str, opt_isHtml,
-    opt_dirReset) {
-  var dir = this.estimateDirection(str, opt_isHtml);
-  return this.unicodeWrapWithKnownDir(dir, str, opt_isHtml, opt_dirReset);
-};
-
-
-/**
- * Formats a string of given directionality for use in plain-text output of the
- * context directionality, so an opposite-directionality string is neither
- * garbled nor garbles what follows it.
- * As opposed to {@link #spanWrapWithKnownDir}, makes use of unicode BiDi
- * formatting characters. In HTML, its *only* valid use is inside of elements
- * that do not allow mark-up, e.g. an 'option' tag.
- * The algorithm: If {@code dir} doesn't match the context directionality, wraps
- * {@code str} with Unicode BiDi formatting characters: RLE{@code str}PDF for
- * RTL text, and LRE{@code str}PDF for LTR text.
- *
- * If {@code opt_dirReset}, and if the overall directionality or the exit
- * directionality of {@code str} are opposite to the context directionality, a
- * trailing unicode BiDi mark matching the context directionality is appended
- * (LRM or RLM).
- *
- * Does *not* do HTML-escaping regardless of the value of {@code opt_isHtml}.
- * The return value can be HTML-escaped as necessary.
- *
- * @param {goog.i18n.bidi.Dir} dir {@code str}'s overall directionality.
- * @param {string} str The input text.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @param {boolean=} opt_dirReset Whether to append a trailing unicode bidi mark
- *     matching the context directionality, when needed, to prevent the possible
- *     garbling of whatever may follow {@code str}. Default: true.
- * @return {string} Input text after applying the above processing.
- */
-goog.i18n.BidiFormatter.prototype.unicodeWrapWithKnownDir = function(dir, str,
-    opt_isHtml, opt_dirReset) {
-  opt_dirReset = opt_dirReset || (opt_dirReset == undefined);
-  var result = [];
-  if (dir != goog.i18n.bidi.Dir.UNKNOWN && dir != this.contextDir_) {
-    result.push(dir == goog.i18n.bidi.Dir.RTL ? goog.i18n.bidi.Format.RLE :
-                                                goog.i18n.bidi.Format.LRE);
-    result.push(str);
-    result.push(goog.i18n.bidi.Format.PDF);
-  } else {
-    result.push(str);
-  }
-
-  result.push(this.dirResetIfNeeded_(str, dir, opt_isHtml, opt_dirReset));
-  return result.join('');
-};
-
-
-/**
- * Returns a Unicode BiDi mark matching the context directionality (LRM or RLM)
- * if the directionality or the exit directionality of {@code str} are opposite
- * to the context directionality. Otherwise returns the empty string.
- *
- * @param {string} str The input text.
- * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
- *     Default: false.
- * @return {string} A Unicode bidi mark matching the global directionality or
- *     the empty string.
- */
-goog.i18n.BidiFormatter.prototype.markAfter = function(str, opt_isHtml) {
-  return this.dirResetIfNeeded_(str,
-      this.estimateDirection(str, opt_isHtml), opt_isHtml, true);
-};
-
-
-/**
- * Returns the Unicode BiDi mark matching the context directionality (LRM for
- * LTR context directionality, RLM for RTL context directionality), or the
- * empty string for neutral / unknown context directionality.
- *
- * @return {string} LRM for LTR context directionality and RLM for RTL context
- *     directionality.
- */
-goog.i18n.BidiFormatter.prototype.mark = function() {
-  switch (this.contextDir_) {
-  case (goog.i18n.bidi.Dir.LTR):
-      return goog.i18n.bidi.Format.LRM;
-  case (goog.i18n.bidi.Dir.RTL):
-      return goog.i18n.bidi.Format.RLM;
-  default:
-      return '';
-  }
-};
-
-
-/**
- * Returns 'right' for RTL context directionality. Otherwise (LTR or neutral /
- * unknown context directionality) returns 'left'.
- *
- * @return {string} 'right' for RTL context directionality and 'left' for other
- *     context directionality.
- */
-goog.i18n.BidiFormatter.prototype.startEdge = function() {
-  return this.contextDir_ == goog.i18n.bidi.Dir.RTL ?
-      goog.i18n.bidi.RIGHT : goog.i18n.bidi.LEFT;
-};
-
-
-/**
- * Returns 'left' for RTL context directionality. Otherwise (LTR or neutral /
- * unknown context directionality) returns 'right'.
- *
- * @return {string} 'left' for RTL context directionality and 'right' for other
- *     context directionality.
- */
-goog.i18n.BidiFormatter.prototype.endEdge = function() {
-  return this.contextDir_ == goog.i18n.bidi.Dir.RTL ?
-      goog.i18n.bidi.LEFT : goog.i18n.bidi.RIGHT;
-};
-/*
- * Copyright 2008 Google Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
- * @fileoverview
- * Utility functions and classes for Soy.
- *
- * <p>
- * The top portion of this file contains utilities for Soy users:<ul>
- *   <li> soy.StringBuilder: Compatible with the 'stringbuilder' code style.
- *   <li> soy.renderElement: Render template and set as innerHTML of an element.
- *   <li> soy.renderAsFragment: Render template and return as HTML fragment.
- * </ul>
- *
- * <p>
- * The bottom portion of this file contains utilities that should only be called
- * by Soy-generated JS code. Please do not use these functions directly from
- * your hand-writen code. Their names all start with '$$'.
- *
- */
-
-goog.provide('soy');
-goog.provide('soy.StringBuilder');
-goog.provide('soy.esc');
-goog.provide('soydata');
-goog.provide('soydata.SanitizedHtml');
-goog.provide('soydata.SanitizedHtmlAttribute');
-goog.provide('soydata.SanitizedJsStrChars');
-goog.provide('soydata.SanitizedUri');
-
-goog.require('goog.asserts');
-goog.require('goog.dom.DomHelper');
-goog.require('goog.format');
-goog.require('goog.i18n.BidiFormatter');
-goog.require('goog.i18n.bidi');
-goog.require('goog.soy');
-goog.require('goog.string');
-goog.require('goog.string.StringBuffer');
-
-
-// -----------------------------------------------------------------------------
-// StringBuilder (compatible with the 'stringbuilder' code style).
-
-
-/**
- * Utility class to facilitate much faster string concatenation in IE,
- * using Array.join() rather than the '+' operator.  For other browsers
- * we simply use the '+' operator.
- *
- * @param {Object} var_args Initial items to append,
- *     e.g., new soy.StringBuilder('foo', 'bar').
- * @constructor
- */
-soy.StringBuilder = goog.string.StringBuffer;
-
-
-// -----------------------------------------------------------------------------
-// soydata: Defines typed strings, e.g. an HTML string {@code "a<b>c"} is
-// semantically distinct from the plain text string {@code "a<b>c"} and smart
-// templates can take that distinction into account.
-
-/**
- * A type of textual content.
- * @enum {number}
- */
-soydata.SanitizedContentKind = {
-
-  /**
-   * A snippet of HTML that does not start or end inside a tag, comment, entity,
-   * or DOCTYPE; and that does not contain any executable code
-   * (JS, {@code <object>}s, etc.) from a different trust domain.
-   */
-  HTML: 0,
-
-  /**
-   * A sequence of code units that can appear between quotes (either kind) in a
-   * JS program without causing a parse error, and without causing any side
-   * effects.
-   * <p>
-   * The content should not contain unescaped quotes, newlines, or anything else
-   * that would cause parsing to fail or to cause a JS parser to finish the
-   * string its parsing inside the content.
-   * <p>
-   * The content must also not end inside an escape sequence ; no partial octal
-   * escape sequences or odd number of '{@code \}'s at the end.
-   */
-  JS_STR_CHARS: 1,
-
-  /** A properly encoded portion of a URI. */
-  URI: 2,
-
-  /** An attribute name and value such as {@code dir="ltr"}. */
-  HTML_ATTRIBUTE: 3
-};
-
-
-/**
- * A string-like object that carries a content-type.
- * @param {string} content
- * @constructor
- * @private
- */
-soydata.SanitizedContent = function(content) {
-  /**
-   * The textual content.
-   * @type {string}
-   */
-  this.content = content;
-};
-
-/** @type {soydata.SanitizedContentKind} */
-soydata.SanitizedContent.prototype.contentKind;
-
-/** @override */
-soydata.SanitizedContent.prototype.toString = function() {
-  return this.content;
-};
-
-
-/**
- * Content of type {@link soydata.SanitizedContentKind.HTML}.
- * @param {string} content A string of HTML that can safely be embedded in
- *     a PCDATA context in your app.  If you would be surprised to find that an
- *     HTML sanitizer produced {@code s} (e.g. it runs code or fetches bad URLs)
- *     and you wouldn't write a template that produces {@code s} on security or
- *     privacy grounds, then don't pass {@code s} here.
- * @constructor
- * @extends {soydata.SanitizedContent}
- */
-soydata.SanitizedHtml = function(content) {
-  soydata.SanitizedContent.call(this, content);
-};
-goog.inherits(soydata.SanitizedHtml, soydata.SanitizedContent);
-
-/** @override */
-soydata.SanitizedHtml.prototype.contentKind = soydata.SanitizedContentKind.HTML;
-
-
-/**
- * Content of type {@link soydata.SanitizedContentKind.JS_STR_CHARS}.
- * @param {string} content A string of JS that when evaled, produces a
- *     value that does not depend on any sensitive data and has no side effects
- *     <b>OR</b> a string of JS that does not reference any variables or have
- *     any side effects not known statically to the app authors.
- * @constructor
- * @extends {soydata.SanitizedContent}
- */
-soydata.SanitizedJsStrChars = function(content) {
-  soydata.SanitizedContent.call(this, content);
-};
-goog.inherits(soydata.SanitizedJsStrChars, soydata.SanitizedContent);
-
-/** @override */
-soydata.SanitizedJsStrChars.prototype.contentKind =
-    soydata.SanitizedContentKind.JS_STR_CHARS;
-
-
-/**
- * Content of type {@link soydata.SanitizedContentKind.URI}.
- * @param {string} content A chunk of URI that the caller knows is safe to
- *     emit in a template.
- * @constructor
- * @extends {soydata.SanitizedContent}
- */
-soydata.SanitizedUri = function(content) {
-  soydata.SanitizedContent.call(this, content);
-};
-goog.inherits(soydata.SanitizedUri, soydata.SanitizedContent);
-
-/** @override */
-soydata.SanitizedUri.prototype.contentKind = soydata.SanitizedContentKind.URI;
-
-
-/**
- * Content of type {@link soydata.SanitizedContentKind.HTML_ATTRIBUTE}.
- * @param {string} content An attribute name and value, such as
- *     {@code dir="ltr"}.
- * @constructor
- * @extends {soydata.SanitizedContent}
- */
-soydata.SanitizedHtmlAttribute = function(content) {
-  soydata.SanitizedContent.call(this, content);
-};
-goog.inherits(soydata.SanitizedHtmlAttribute, soydata.SanitizedContent);
-
-/** @override */
-soydata.SanitizedHtmlAttribute.prototype.contentKind =
-    soydata.SanitizedContentKind.HTML_ATTRIBUTE;
-
-
-// -----------------------------------------------------------------------------
-// Public utilities.
-
-
-/**
- * Helper function to render a Soy template and then set the output string as
- * the innerHTML of an element. It is recommended to use this helper function
- * instead of directly setting innerHTML in your hand-written code, so that it
- * will be easier to audit the code for cross-site scripting vulnerabilities.
- *
- * NOTE: New code should consider using goog.soy.renderElement instead.
- *
- * @param {Element} element The element whose content we are rendering.
- * @param {Function} template The Soy template defining the element's content.
- * @param {Object=} opt_templateData The data for the template.
- * @param {Object=} opt_injectedData The injected data for the template.
- */
-soy.renderElement = goog.soy.renderElement;
-
-
-/**
- * Helper function to render a Soy template into a single node or a document
- * fragment. If the rendered HTML string represents a single node, then that
- * node is returned (note that this is *not* a fragment, despite them name of
- * the method). Otherwise a document fragment is returned containing the
- * rendered nodes.
- *
- * NOTE: New code should consider using goog.soy.renderAsFragment
- * instead (note that the arguments are different).
- *
- * @param {Function} template The Soy template defining the element's content.
- * @param {Object=} opt_templateData The data for the template.
- * @param {Document=} opt_document The document used to create DOM nodes. If not
- *     specified, global document object is used.
- * @param {Object=} opt_injectedData The injected data for the template.
- * @return {!Node} The resulting node or document fragment.
- */
-soy.renderAsFragment = function(
-    template, opt_templateData, opt_document, opt_injectedData) {
-  return goog.soy.renderAsFragment(
-      template, opt_templateData, opt_injectedData,
-      new goog.dom.DomHelper(opt_document));
-};
-
-
-/**
- * Helper function to render a Soy template into a single node. If the rendered
- * HTML string represents a single node, then that node is returned. Otherwise,
- * a DIV element is returned containing the rendered nodes.
- *
- * NOTE: New code should consider using goog.soy.renderAsElement
- * instead (note that the arguments are different).
- *
- * @param {Function} template The Soy template defining the element's content.
- * @param {Object=} opt_templateData The data for the template.
- * @param {Document=} opt_document The document used to create DOM nodes. If not
- *     specified, global document object is used.
- * @param {Object=} opt_injectedData The injected data for the template.
- * @return {!Element} Rendered template contents, wrapped in a parent DIV
- *     element if necessary.
- */
-soy.renderAsElement = function(
-    template, opt_templateData, opt_document, opt_injectedData) {
-  return goog.soy.renderAsElement(
-      template, opt_templateData, opt_injectedData,
-      new goog.dom.DomHelper(opt_document));
-};
-
-
-// -----------------------------------------------------------------------------
-// Below are private utilities to be used by Soy-generated code only.
-
-
-/**
- * Builds an augmented data object to be passed when a template calls another,
- * and needs to pass both original data and additional params. The returned
- * object will contain both the original data and the additional params. If the
- * same key appears in both, then the value from the additional params will be
- * visible, while the value from the original data will be hidden. The original
- * data object will be used, but not modified.
- *
- * @param {!Object} origData The original data to pass.
- * @param {Object} additionalParams The additional params to pass.
- * @return {Object} An augmented data object containing both the original data
- *     and the additional params.
- */
-soy.$$augmentData = function(origData, additionalParams) {
-
-  // Create a new object whose '__proto__' field is set to origData.
-  /** @constructor */
-  function TempCtor() {}
-  TempCtor.prototype = origData;
-  var newData = new TempCtor();
-
-  // Add the additional params to the new object.
-  for (var key in additionalParams) {
-    newData[key] = additionalParams[key];
-  }
-
-  return newData;
-};
-
-
-/**
- * Gets the keys in a map as an array. There are no guarantees on the order.
- * @param {Object} map The map to get the keys of.
- * @return {Array.<string>} The array of keys in the given map.
- */
-soy.$$getMapKeys = function(map) {
-  var mapKeys = [];
-  for (var key in map) {
-    mapKeys.push(key);
-  }
-  return mapKeys;
-};
-
-
-/**
- * Gets a consistent unique id for the given delegate template name. Two calls
- * to this function will return the same id if and only if the input names are
- * the same.
- *
- * <p> Important: This function must always be called with a string constant.
- *
- * <p> If Closure Compiler is not being used, then this is just this identity
- * function. If Closure Compiler is being used, then each call to this function
- * will be replaced with a short string constant, which will be consistent per
- * input name.
- *
- * @param {string} delTemplateName The delegate template name for which to get a
- *     consistent unique id.
- * @return {string} A unique id that is consistent per input name.
- *
- * @consistentIdGenerator
- */
-soy.$$getDelegateId = function(delTemplateName) {
-  return delTemplateName;
-};
-
-
-/**
- * Map from registered delegate template id/name to the priority of the
- * implementation.
- * @type {Object}
- * @private
- */
-soy.$$DELEGATE_REGISTRY_PRIORITIES_ = {};
-
-/**
- * Map from registered delegate template id/name to the implementation function.
- * @type {Object}
- * @private
- */
-soy.$$DELEGATE_REGISTRY_FUNCTIONS_ = {};
-
-
-/**
- * Registers a delegate implementation. If the same delegate template id/name
- * has been registered previously, then priority values are compared and only
- * the higher priority implementation is stored (if priorities are equal, an
- * error is thrown).
- *
- * @param {string} delTemplateId The delegate template id/name to register.
- * @param {number} delPriority The implementation's priority value.
- * @param {Function} delFn The implementation function.
- */
-soy.$$registerDelegateFn = function(delTemplateId, delPriority, delFn) {
-  var mapKey = 'key_' + delTemplateId;
-  var currPriority = soy.$$DELEGATE_REGISTRY_PRIORITIES_[mapKey];
-  if (currPriority === undefined || delPriority > currPriority) {
-    // Registering new or higher-priority function: replace registry entry.
-    soy.$$DELEGATE_REGISTRY_PRIORITIES_[mapKey] = delPriority;
-    soy.$$DELEGATE_REGISTRY_FUNCTIONS_[mapKey] = delFn;
-  } else if (delPriority == currPriority) {
-    // Registering same-priority function: error.
-    throw Error(
-        'Encountered two active delegates with same priority (id/name "' +
-        delTemplateId + '").');
-  } else {
-    // Registering lower-priority function: do nothing.
-  }
-};
-
-
-/**
- * Retrieves the (highest-priority) implementation that has been registered for
- * a given delegate template id/name. If no implementation has been registered
- * for the id/name, then returns an implementation that is equivalent to an
- * empty template (i.e. rendered output would be empty string).
- *
- * @param {string} delTemplateId The delegate template id/name to get.
- * @return {Function} The retrieved implementation function.
- */
-soy.$$getDelegateFn = function(delTemplateId) {
-  var delFn = soy.$$DELEGATE_REGISTRY_FUNCTIONS_['key_' + delTemplateId];
-  return delFn ? delFn : soy.$$EMPTY_TEMPLATE_FN_;
-};
-
-
-/**
- * Private helper soy.$$getDelegateFn(). This is the empty template function
- * that is returned whenever there's no delegate implementation found.
- *
- * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
- * @param {Object.<string, *>=} opt_ijData
- * @return {string}
- * @private
- */
-soy.$$EMPTY_TEMPLATE_FN_ = function(opt_data, opt_sb, opt_ijData) {
-  return '';
-};
-
-
-// -----------------------------------------------------------------------------
-// Escape/filter/normalize.
-
-
-/**
- * Escapes HTML special characters in a string.  Escapes double quote '"' in
- * addition to '&', '<', and '>' so that a string can be included in an HTML
- * tag attribute value within double quotes.
- * Will emit known safe HTML as-is.
- *
- * @param {*} value The string-like value to be escaped.  May not be a string,
- *     but the value will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeHtml = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
-    return value.content;
-  }
-  return soy.esc.$$escapeHtmlHelper(value);
-};
-
-
-/**
- * Escapes HTML special characters in a string so that it can be embedded in
- * RCDATA.
- * <p>
- * Escapes HTML special characters so that the value will not prematurely end
- * the body of a tag like {@code <textarea>} or {@code <title>}.  RCDATA tags
- * cannot contain other HTML entities, so it is not strictly necessary to escape
- * HTML special characters except when part of that text looks like an HTML
- * entity or like a close tag : {@code </textarea>}.
- * <p>
- * Will normalize known safe HTML to make sure that sanitized HTML (which could
- * contain an innocuous {@code </textarea>} don't prematurely end an RCDATA
- * element.
- *
- * @param {*} value The string-like value to be escaped.  May not be a string,
- *     but the value will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeHtmlRcdata = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
-    return soy.esc.$$normalizeHtmlHelper(value.content);
-  }
-  return soy.esc.$$escapeHtmlHelper(value);
-};
-
-
-/**
- * Removes HTML tags from a string of known safe HTML so it can be used as an
- * attribute value.
- *
- * @param {*} value The HTML to be escaped.  May not be a string, but the
- *     value will be coerced to a string.
- * @return {string} A representation of value without tags, HTML comments, or
- *     other content.
- */
-soy.$$stripHtmlTags = function(value) {
-  return String(value).replace(soy.esc.$$HTML_TAG_REGEX_, '');
-};
-
-
-/**
- * Escapes HTML special characters in an HTML attribute value.
- *
- * @param {*} value The HTML to be escaped.  May not be a string, but the
- *     value will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeHtmlAttribute = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
-    return soy.esc.$$normalizeHtmlHelper(soy.$$stripHtmlTags(value.content));
-  }
-  return soy.esc.$$escapeHtmlHelper(value);
-};
-
-
-/**
- * Escapes HTML special characters in a string including space and other
- * characters that can end an unquoted HTML attribute value.
- *
- * @param {*} value The HTML to be escaped.  May not be a string, but the
- *     value will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeHtmlAttributeNospace = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
-    return soy.esc.$$normalizeHtmlNospaceHelper(
-        soy.$$stripHtmlTags(value.content));
-  }
-  return soy.esc.$$escapeHtmlNospaceHelper(value);
-};
-
-
-/**
- * Filters out strings that cannot be a substring of a valid HTML attribute.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} A valid HTML attribute name part or name/value pair.
- *     {@code "zSoyz"} if the input is invalid.
- */
-soy.$$filterHtmlAttribute = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML_ATTRIBUTE) {
-    return value.content.replace(/=([^"']*)$/, '="$1"');
-  }
-  return soy.esc.$$filterHtmlAttributeHelper(value);
-};
-
-
-/**
- * Filters out strings that cannot be a substring of a valid HTML element name.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} A valid HTML element name part.
- *     {@code "zSoyz"} if the input is invalid.
- */
-soy.$$filterHtmlElementName = function(value) {
-  return soy.esc.$$filterHtmlElementNameHelper(value);
-};
-
-
-/**
- * Escapes characters in the value to make it valid content for a JS string
- * literal.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} An escaped version of value.
- * @deprecated
- */
-soy.$$escapeJs = function(value) {
-  return soy.$$escapeJsString(value);
-};
-
-
-/**
- * Escapes characters in the value to make it valid content for a JS string
- * literal.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeJsString = function(value) {
-  if (typeof value === 'object' &&
-      value.contentKind === soydata.SanitizedContentKind.JS_STR_CHARS) {
-    return value.content;
-  }
-  return soy.esc.$$escapeJsStringHelper(value);
-};
-
-
-/**
- * Encodes a value as a JavaScript literal.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} A JavaScript code representation of the input.
- */
-soy.$$escapeJsValue = function(value) {
-  // We surround values with spaces so that they can't be interpolated into
-  // identifiers by accident.
-  // We could use parentheses but those might be interpreted as a function call.
-  if (value == null) {  // Intentionally matches undefined.
-    // Java returns null from maps where there is no corresponding key while
-    // JS returns undefined.
-    // We always output null for compatibility with Java which does not have a
-    // distinct undefined value.
-    return ' null ';
-  }
-  switch (typeof value) {
-    case 'boolean': case 'number':
-      return ' ' + value + ' ';
-    default:
-      return "'" + soy.esc.$$escapeJsStringHelper(String(value)) + "'";
-  }
-};
-
-
-/**
- * Escapes characters in the string to make it valid content for a JS regular
- * expression literal.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeJsRegex = function(value) {
-  return soy.esc.$$escapeJsRegexHelper(value);
-};
-
-
-/**
- * Matches all URI mark characters that conflict with HTML attribute delimiters
- * or that cannot appear in a CSS uri.
- * From <a href="http://www.w3.org/TR/CSS2/grammar.html">G.2: CSS grammar</a>
- * <pre>
- *     url        ([!#$%&*-~]|{nonascii}|{escape})*
- * </pre>
- *
- * @type {RegExp}
- * @private
- */
-soy.$$problematicUriMarks_ = /['()]/g;
-
-/**
- * @param {string} ch A single character in {@link soy.$$problematicUriMarks_}.
- * @return {string}
- * @private
- */
-soy.$$pctEncode_ = function(ch) {
-  return '%' + ch.charCodeAt(0).toString(16);
-};
-
-/**
- * Escapes a string so that it can be safely included in a URI.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeUri = function(value) {
-  if (typeof value === 'object' &&
-      value.contentKind === soydata.SanitizedContentKind.URI) {
-    return soy.$$normalizeUri(value);
-  }
-  // Apostophes and parentheses are not matched by encodeURIComponent.
-  // They are technically special in URIs, but only appear in the obsolete mark
-  // production in Appendix D.2 of RFC 3986, so can be encoded without changing
-  // semantics.
-  var encoded = soy.esc.$$escapeUriHelper(value);
-  soy.$$problematicUriMarks_.lastIndex = 0;
-  if (soy.$$problematicUriMarks_.test(encoded)) {
-    return encoded.replace(soy.$$problematicUriMarks_, soy.$$pctEncode_);
-  }
-  return encoded;
-};
-
-
-/**
- * Removes rough edges from a URI by escaping any raw HTML/JS string delimiters.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$normalizeUri = function(value) {
-  return soy.esc.$$normalizeUriHelper(value);
-};
-
-
-/**
- * Vets a URI's protocol and removes rough edges from a URI by escaping
- * any raw HTML/JS string delimiters.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$filterNormalizeUri = function(value) {
-  return soy.esc.$$filterNormalizeUriHelper(value);
-};
-
-
-/**
- * Escapes a string so it can safely be included inside a quoted CSS string.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} An escaped version of value.
- */
-soy.$$escapeCssString = function(value) {
-  return soy.esc.$$escapeCssStringHelper(value);
-};
-
-
-/**
- * Encodes a value as a CSS identifier part, keyword, or quantity.
- *
- * @param {*} value The value to escape.  May not be a string, but the value
- *     will be coerced to a string.
- * @return {string} A safe CSS identifier part, keyword, or quanitity.
- */
-soy.$$filterCssValue = function(value) {
-  // Uses == to intentionally match null and undefined for Java compatibility.
-  if (value == null) {
-    return '';
-  }
-  return soy.esc.$$filterCssValueHelper(value);
-};
-
-
-// -----------------------------------------------------------------------------
-// Basic directives/functions.
-
-
-/**
- * Converts \r\n, \r, and \n to <br>s
- * @param {*} str The string in which to convert newlines.
- * @return {string} A copy of {@code str} with converted newlines.
- */
-soy.$$changeNewlineToBr = function(str) {
-  return goog.string.newLineToBr(String(str), false);
-};
-
-
-/**
- * Inserts word breaks ('wbr' tags) into a HTML string at a given interval. The
- * counter is reset if a space is encountered. Word breaks aren't inserted into
- * HTML tags or entities. Entites count towards the character count; HTML tags
- * do not.
- *
- * @param {*} str The HTML string to insert word breaks into. Can be other
- *     types, but the value will be coerced to a string.
- * @param {number} maxCharsBetweenWordBreaks Maximum number of non-space
- *     characters to allow before adding a word break.
- * @return {string} The string including word breaks.
- */
-soy.$$insertWordBreaks = function(str, maxCharsBetweenWordBreaks) {
-  return goog.format.insertWordBreaks(String(str), maxCharsBetweenWordBreaks);
-};
-
-
-/**
- * Truncates a string to a given max length (if it's currently longer),
- * optionally adding ellipsis at the end.
- *
- * @param {*} str The string to truncate. Can be other types, but the value will
- *     be coerced to a string.
- * @param {number} maxLen The maximum length of the string after truncation
- *     (including ellipsis, if applicable).
- * @param {boolean} doAddEllipsis Whether to add ellipsis if the string needs
- *     truncation.
- * @return {string} The string after truncation.
- */
-soy.$$truncate = function(str, maxLen, doAddEllipsis) {
-
-  str = String(str);
-  if (str.length <= maxLen) {
-    return str;  // no need to truncate
-  }
-
-  // If doAddEllipsis, either reduce maxLen to compensate, or else if maxLen is
-  // too small, just turn off doAddEllipsis.
-  if (doAddEllipsis) {
-    if (maxLen > 3) {
-      maxLen -= 3;
-    } else {
-      doAddEllipsis = false;
-    }
-  }
-
-  // Make sure truncating at maxLen doesn't cut up a unicode surrogate pair.
-  if (soy.$$isHighSurrogate_(str.charAt(maxLen - 1)) &&
-      soy.$$isLowSurrogate_(str.charAt(maxLen))) {
-    maxLen -= 1;
-  }
-
-  // Truncate.
-  str = str.substring(0, maxLen);
-
-  // Add ellipsis.
-  if (doAddEllipsis) {
-    str += '...';
-  }
-
-  return str;
-};
-
-/**
- * Private helper for $$truncate() to check whether a char is a high surrogate.
- * @param {string} ch The char to check.
- * @return {boolean} Whether the given char is a unicode high surrogate.
- * @private
- */
-soy.$$isHighSurrogate_ = function(ch) {
-  return 0xD800 <= ch && ch <= 0xDBFF;
-};
-
-/**
- * Private helper for $$truncate() to check whether a char is a low surrogate.
- * @param {string} ch The char to check.
- * @return {boolean} Whether the given char is a unicode low surrogate.
- * @private
- */
-soy.$$isLowSurrogate_ = function(ch) {
-  return 0xDC00 <= ch && ch <= 0xDFFF;
-};
-
-
-// -----------------------------------------------------------------------------
-// Bidi directives/functions.
-
-
-/**
- * Cache of bidi formatter by context directionality, so we don't keep on
- * creating new objects.
- * @type {!Object.<!goog.i18n.BidiFormatter>}
- * @private
- */
-soy.$$bidiFormatterCache_ = {};
-
-
-/**
- * Returns cached bidi formatter for bidiGlobalDir, or creates a new one.
- * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
- *     if rtl, 0 if unknown.
- * @return {goog.i18n.BidiFormatter} A formatter for bidiGlobalDir.
- * @private
- */
-soy.$$getBidiFormatterInstance_ = function(bidiGlobalDir) {
-  return soy.$$bidiFormatterCache_[bidiGlobalDir] ||
-         (soy.$$bidiFormatterCache_[bidiGlobalDir] =
-             new goog.i18n.BidiFormatter(bidiGlobalDir));
-};
-
-
-/**
- * Estimate the overall directionality of text. If opt_isHtml, makes sure to
- * ignore the LTR nature of the mark-up and escapes in text, making the logic
- * suitable for HTML and HTML-escaped text.
- * @param {string} text The text whose directionality is to be estimated.
- * @param {boolean=} opt_isHtml Whether text is HTML/HTML-escaped.
- *     Default: false.
- * @return {number} 1 if text is LTR, -1 if it is RTL, and 0 if it is neutral.
- */
-soy.$$bidiTextDir = function(text, opt_isHtml) {
-  if (!text) {
-    return 0;
-  }
-  return goog.i18n.bidi.detectRtlDirectionality(text, opt_isHtml) ? -1 : 1;
-};
-
-
-/**
- * Returns "dir=ltr" or "dir=rtl", depending on text's estimated
- * directionality, if it is not the same as bidiGlobalDir.
- * Otherwise, returns the empty string.
- * If opt_isHtml, makes sure to ignore the LTR nature of the mark-up and escapes
- * in text, making the logic suitable for HTML and HTML-escaped text.
- * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
- *     if rtl, 0 if unknown.
- * @param {string} text The text whose directionality is to be estimated.
- * @param {boolean=} opt_isHtml Whether text is HTML/HTML-escaped.
- *     Default: false.
- * @return {soydata.SanitizedHtmlAttribute} "dir=rtl" for RTL text in non-RTL
- *     context; "dir=ltr" for LTR text in non-LTR context;
- *     else, the empty string.
- */
-soy.$$bidiDirAttr = function(bidiGlobalDir, text, opt_isHtml) {
-  return new soydata.SanitizedHtmlAttribute(
-      soy.$$getBidiFormatterInstance_(bidiGlobalDir).dirAttr(text, opt_isHtml));
-};
-
-
-/**
- * Returns a Unicode BiDi mark matching bidiGlobalDir (LRM or RLM) if the
- * directionality or the exit directionality of text are opposite to
- * bidiGlobalDir. Otherwise returns the empty string.
- * If opt_isHtml, makes sure to ignore the LTR nature of the mark-up and escapes
- * in text, making the logic suitable for HTML and HTML-escaped text.
- * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
- *     if rtl, 0 if unknown.
- * @param {string} text The text whose directionality is to be estimated.
- * @param {boolean=} opt_isHtml Whether text is HTML/HTML-escaped.
- *     Default: false.
- * @return {string} A Unicode bidi mark matching bidiGlobalDir, or the empty
- *     string when text's overall and exit directionalities both match
- *     bidiGlobalDir, or bidiGlobalDir is 0 (unknown).
- */
-soy.$$bidiMarkAfter = function(bidiGlobalDir, text, opt_isHtml) {
-  var formatter = soy.$$getBidiFormatterInstance_(bidiGlobalDir);
-  return formatter.markAfter(text, opt_isHtml);
-};
-
-
-/**
- * Returns str wrapped in a <span dir=ltr|rtl> according to its directionality -
- * but only if that is neither neutral nor the same as the global context.
- * Otherwise, returns str unchanged.
- * Always treats str as HTML/HTML-escaped, i.e. ignores mark-up and escapes when
- * estimating str's directionality.
- * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
- *     if rtl, 0 if unknown.
- * @param {*} str The string to be wrapped. Can be other types, but the value
- *     will be coerced to a string.
- * @return {string} The wrapped string.
- */
-soy.$$bidiSpanWrap = function(bidiGlobalDir, str) {
-  var formatter = soy.$$getBidiFormatterInstance_(bidiGlobalDir);
-  return formatter.spanWrap(str + '', true);
-};
-
-
-/**
- * Returns str wrapped in Unicode BiDi formatting characters according to its
- * directionality, i.e. either LRE or RLE at the beginning and PDF at the end -
- * but only if str's directionality is neither neutral nor the same as the
- * global context. Otherwise, returns str unchanged.
- * Always treats str as HTML/HTML-escaped, i.e. ignores mark-up and escapes when
- * estimating str's directionality.
- * @param {number} bidiGlobalDir The global directionality context: 1 if ltr, -1
- *     if rtl, 0 if unknown.
- * @param {*} str The string to be wrapped. Can be other types, but the value
- *     will be coerced to a string.
- * @return {string} The wrapped string.
- */
-soy.$$bidiUnicodeWrap = function(bidiGlobalDir, str) {
-  var formatter = soy.$$getBidiFormatterInstance_(bidiGlobalDir);
-  return formatter.unicodeWrap(str + '', true);
-};
-
-
-// -----------------------------------------------------------------------------
-// Generated code.
-
-
-
-
-// START GENERATED CODE FOR ESCAPERS.
-
-/**
- * @type {function (*) : string}
- */
-soy.esc.$$escapeUriHelper = function(v) {
-  return goog.string.urlEncode(String(v));
-};
-
-/**
- * Maps charcters to the escaped versions for the named escape directives.
- * @type {Object.<string, string>}
- * @private
- */
-soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_ = {
-  '\x00': '\x26#0;',
-  '\x22': '\x26quot;',
-  '\x26': '\x26amp;',
-  '\x27': '\x26#39;',
-  '\x3c': '\x26lt;',
-  '\x3e': '\x26gt;',
-  '\x09': '\x26#9;',
-  '\x0a': '\x26#10;',
-  '\x0b': '\x26#11;',
-  '\x0c': '\x26#12;',
-  '\x0d': '\x26#13;',
-  ' ': '\x26#32;',
-  '-': '\x26#45;',
-  '\/': '\x26#47;',
-  '\x3d': '\x26#61;',
-  '`': '\x26#96;',
-  '\x85': '\x26#133;',
-  '\xa0': '\x26#160;',
-  '\u2028': '\x26#8232;',
-  '\u2029': '\x26#8233;'
-};
-
-/**
- * A function that can be used with String.replace..
- * @param {string} ch A single character matched by a compatible matcher.
- * @return {string} A token in the output language.
- * @private
- */
-soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_ = function(ch) {
-  return soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_[ch];
-};
-
-/**
- * Maps charcters to the escaped versions for the named escape directives.
- * @type {Object.<string, string>}
- * @private
- */
-soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_ = {
-  '\x00': '\\x00',
-  '\x08': '\\x08',
-  '\x09': '\\t',
-  '\x0a': '\\n',
-  '\x0b': '\\x0b',
-  '\x0c': '\\f',
-  '\x0d': '\\r',
-  '\x22': '\\x22',
-  '\x26': '\\x26',
-  '\x27': '\\x27',
-  '\/': '\\\/',
-  '\x3c': '\\x3c',
-  '\x3d': '\\x3d',
-  '\x3e': '\\x3e',
-  '\\': '\\\\',
-  '\x85': '\\x85',
-  '\u2028': '\\u2028',
-  '\u2029': '\\u2029',
-  '$': '\\x24',
-  '(': '\\x28',
-  ')': '\\x29',
-  '*': '\\x2a',
-  '+': '\\x2b',
-  ',': '\\x2c',
-  '-': '\\x2d',
-  '.': '\\x2e',
-  ':': '\\x3a',
-  '?': '\\x3f',
-  '[': '\\x5b',
-  ']': '\\x5d',
-  '^': '\\x5e',
-  '{': '\\x7b',
-  '|': '\\x7c',
-  '}': '\\x7d'
-};
-
-/**
- * A function that can be used with String.replace..
- * @param {string} ch A single character matched by a compatible matcher.
- * @return {string} A token in the output language.
- * @private
- */
-soy.esc.$$REPLACER_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_ = function(ch) {
-  return soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_[ch];
-};
-
-/**
- * Maps charcters to the escaped versions for the named escape directives.
- * @type {Object.<string, string>}
- * @private
- */
-soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_CSS_STRING_ = {
-  '\x00': '\\0 ',
-  '\x08': '\\8 ',
-  '\x09': '\\9 ',
-  '\x0a': '\\a ',
-  '\x0b': '\\b ',
-  '\x0c': '\\c ',
-  '\x0d': '\\d ',
-  '\x22': '\\22 ',
-  '\x26': '\\26 ',
-  '\x27': '\\27 ',
-  '(': '\\28 ',
-  ')': '\\29 ',
-  '*': '\\2a ',
-  '\/': '\\2f ',
-  ':': '\\3a ',
-  ';': '\\3b ',
-  '\x3c': '\\3c ',
-  '\x3d': '\\3d ',
-  '\x3e': '\\3e ',
-  '@': '\\40 ',
-  '\\': '\\5c ',
-  '{': '\\7b ',
-  '}': '\\7d ',
-  '\x85': '\\85 ',
-  '\xa0': '\\a0 ',
-  '\u2028': '\\2028 ',
-  '\u2029': '\\2029 '
-};
-
-/**
- * A function that can be used with String.replace..
- * @param {string} ch A single character matched by a compatible matcher.
- * @return {string} A token in the output language.
- * @private
- */
-soy.esc.$$REPLACER_FOR_ESCAPE_CSS_STRING_ = function(ch) {
-  return soy.esc.$$ESCAPE_MAP_FOR_ESCAPE_CSS_STRING_[ch];
-};
-
-/**
- * Maps charcters to the escaped versions for the named escape directives.
- * @type {Object.<string, string>}
- * @private
- */
-soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = {
-  '\x00': '%00',
-  '\x01': '%01',
-  '\x02': '%02',
-  '\x03': '%03',
-  '\x04': '%04',
-  '\x05': '%05',
-  '\x06': '%06',
-  '\x07': '%07',
-  '\x08': '%08',
-  '\x09': '%09',
-  '\x0a': '%0A',
-  '\x0b': '%0B',
-  '\x0c': '%0C',
-  '\x0d': '%0D',
-  '\x0e': '%0E',
-  '\x0f': '%0F',
-  '\x10': '%10',
-  '\x11': '%11',
-  '\x12': '%12',
-  '\x13': '%13',
-  '\x14': '%14',
-  '\x15': '%15',
-  '\x16': '%16',
-  '\x17': '%17',
-  '\x18': '%18',
-  '\x19': '%19',
-  '\x1a': '%1A',
-  '\x1b': '%1B',
-  '\x1c': '%1C',
-  '\x1d': '%1D',
-  '\x1e': '%1E',
-  '\x1f': '%1F',
-  ' ': '%20',
-  '\x22': '%22',
-  '\x27': '%27',
-  '(': '%28',
-  ')': '%29',
-  '\x3c': '%3C',
-  '\x3e': '%3E',
-  '\\': '%5C',
-  '{': '%7B',
-  '}': '%7D',
-  '\x7f': '%7F',
-  '\x85': '%C2%85',
-  '\xa0': '%C2%A0',
-  '\u2028': '%E2%80%A8',
-  '\u2029': '%E2%80%A9',
-  '\uff01': '%EF%BC%81',
-  '\uff03': '%EF%BC%83',
-  '\uff04': '%EF%BC%84',
-  '\uff06': '%EF%BC%86',
-  '\uff07': '%EF%BC%87',
-  '\uff08': '%EF%BC%88',
-  '\uff09': '%EF%BC%89',
-  '\uff0a': '%EF%BC%8A',
-  '\uff0b': '%EF%BC%8B',
-  '\uff0c': '%EF%BC%8C',
-  '\uff0f': '%EF%BC%8F',
-  '\uff1a': '%EF%BC%9A',
-  '\uff1b': '%EF%BC%9B',
-  '\uff1d': '%EF%BC%9D',
-  '\uff1f': '%EF%BC%9F',
-  '\uff20': '%EF%BC%A0',
-  '\uff3b': '%EF%BC%BB',
-  '\uff3d': '%EF%BC%BD'
-};
-
-/**
- * A function that can be used with String.replace..
- * @param {string} ch A single character matched by a compatible matcher.
- * @return {string} A token in the output language.
- * @private
- */
-soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = function(ch) {
-  return soy.esc.$$ESCAPE_MAP_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_[ch];
-};
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_ESCAPE_HTML_ = /[\x00\x22\x26\x27\x3c\x3e]/g;
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_ = /[\x00\x22\x27\x3c\x3e]/g;
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_ESCAPE_HTML_NOSPACE_ = /[\x00\x09-\x0d \x22\x26\x27\x2d\/\x3c-\x3e`\x85\xa0\u2028\u2029]/g;
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_NOSPACE_ = /[\x00\x09-\x0d \x22\x27\x2d\/\x3c-\x3e`\x85\xa0\u2028\u2029]/g;
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_ESCAPE_JS_STRING_ = /[\x00\x08-\x0d\x22\x26\x27\/\x3c-\x3e\\\x85\u2028\u2029]/g;
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_ESCAPE_JS_REGEX_ = /[\x00\x08-\x0d\x22\x24\x26-\/\x3a\x3c-\x3f\x5b-\x5e\x7b-\x7d\x85\u2028\u2029]/g;
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_ESCAPE_CSS_STRING_ = /[\x00\x08-\x0d\x22\x26-\x2a\/\x3a-\x3e@\\\x7b\x7d\x85\xa0\u2028\u2029]/g;
-
-/**
- * Matches characters that need to be escaped for the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_ = /[\x00- \x22\x27-\x29\x3c\x3e\\\x7b\x7d\x7f\x85\xa0\u2028\u2029\uff01\uff03\uff04\uff06-\uff0c\uff0f\uff1a\uff1b\uff1d\uff1f\uff20\uff3b\uff3d]/g;
-
-/**
- * A pattern that vets values produced by the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$FILTER_FOR_FILTER_CSS_VALUE_ = /^(?!-*(?:expression|(?:moz-)?binding))(?:[.#]?-?(?:[_a-z0-9-]+)(?:-[_a-z0-9-]+)*-?|-?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[a-z]{1,2}|%)?|!important|)$/i;
-
-/**
- * A pattern that vets values produced by the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_URI_ = /^(?:(?:https?|mailto):|[^&:\/?#]*(?:[\/?#]|$))/i;
-
-/**
- * A pattern that vets values produced by the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTE_ = /^(?!style|on|action|archive|background|cite|classid|codebase|data|dsync|href|longdesc|src|usemap)(?:[a-z0-9_$:-]*)$/i;
-
-/**
- * A pattern that vets values produced by the named directives.
- * @type RegExp
- * @private
- */
-soy.esc.$$FILTER_FOR_FILTER_HTML_ELEMENT_NAME_ = /^(?!script|style|title|textarea|xmp|no)[a-z0-9_$:-]*$/i;
-
-/**
- * A helper for the Soy directive |escapeHtml
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$escapeHtmlHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_ESCAPE_HTML_,
-      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
-};
-
-/**
- * A helper for the Soy directive |normalizeHtml
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$normalizeHtmlHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_,
-      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
-};
-
-/**
- * A helper for the Soy directive |escapeHtmlNospace
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$escapeHtmlNospaceHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_ESCAPE_HTML_NOSPACE_,
-      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
-};
-
-/**
- * A helper for the Soy directive |normalizeHtmlNospace
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$normalizeHtmlNospaceHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_NORMALIZE_HTML_NOSPACE_,
-      soy.esc.$$REPLACER_FOR_ESCAPE_HTML__AND__NORMALIZE_HTML__AND__ESCAPE_HTML_NOSPACE__AND__NORMALIZE_HTML_NOSPACE_);
-};
-
-/**
- * A helper for the Soy directive |escapeJsString
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$escapeJsStringHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_ESCAPE_JS_STRING_,
-      soy.esc.$$REPLACER_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_);
-};
-
-/**
- * A helper for the Soy directive |escapeJsRegex
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$escapeJsRegexHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_ESCAPE_JS_REGEX_,
-      soy.esc.$$REPLACER_FOR_ESCAPE_JS_STRING__AND__ESCAPE_JS_REGEX_);
-};
-
-/**
- * A helper for the Soy directive |escapeCssString
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$escapeCssStringHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_ESCAPE_CSS_STRING_,
-      soy.esc.$$REPLACER_FOR_ESCAPE_CSS_STRING_);
-};
-
-/**
- * A helper for the Soy directive |filterCssValue
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$filterCssValueHelper = function(value) {
-  var str = String(value);
-  if (!soy.esc.$$FILTER_FOR_FILTER_CSS_VALUE_.test(str)) {
-    goog.asserts.fail('Bad value `%s` for |filterCssValue', [str]);
-    return 'zSoyz';
-  }
-  return str;
-};
-
-/**
- * A helper for the Soy directive |normalizeUri
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$normalizeUriHelper = function(value) {
-  var str = String(value);
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_,
-      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_);
-};
-
-/**
- * A helper for the Soy directive |filterNormalizeUri
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$filterNormalizeUriHelper = function(value) {
-  var str = String(value);
-  if (!soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_URI_.test(str)) {
-    goog.asserts.fail('Bad value `%s` for |filterNormalizeUri', [str]);
-    return 'zSoyz';
-  }
-  return str.replace(
-      soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_,
-      soy.esc.$$REPLACER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_);
-};
-
-/**
- * A helper for the Soy directive |filterHtmlAttribute
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$filterHtmlAttributeHelper = function(value) {
-  var str = String(value);
-  if (!soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTE_.test(str)) {
-    goog.asserts.fail('Bad value `%s` for |filterHtmlAttribute', [str]);
-    return 'zSoyz';
-  }
-  return str;
-};
-
-/**
- * A helper for the Soy directive |filterHtmlElementName
- * @param {*} value Can be of any type but will be coerced to a string.
- * @return {string} The escaped text.
- */
-soy.esc.$$filterHtmlElementNameHelper = function(value) {
-  var str = String(value);
-  if (!soy.esc.$$FILTER_FOR_FILTER_HTML_ELEMENT_NAME_.test(str)) {
-    goog.asserts.fail('Bad value `%s` for |filterHtmlElementName', [str]);
-    return 'zSoyz';
-  }
-  return str;
-};
-
-/**
- * Matches all tags, HTML comments, and DOCTYPEs in tag soup HTML.
- *
- * @type {RegExp}
- * @private
- */
-soy.esc.$$HTML_TAG_REGEX_ = /<(?:!|\/?[a-zA-Z])(?:[^>'"]|"[^"]*"|'[^']*')*>/g;
-
-// END GENERATED CODE
-// This file was automatically generated from calendareventpicker.soy.
-// Please don't edit this file by hand.
-
-goog.provide('calendarmailer.soy.calendar');
-
-goog.require('soy');
-goog.require('soy.StringBuilder');
-
-
-/**
- * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
- * @return {string}
- * @notypecheck
- */
-calendarmailer.soy.calendar.all = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<button id="event-picker-select-all-', soy.$$escapeHtml(opt_data.calendarId), '" class="event-picker-select">Select all</button><button id="event-picker-select-none-', soy.$$escapeHtml(opt_data.calendarId), '" class="event-picker-select">Select none</button><div class="event-picker-base">');
-  var eventList8 = opt_data.events;
-  var eventListLen8 = eventList8.length;
-  for (var eventIndex8 = 0; eventIndex8 < eventListLen8; eventIndex8++) {
-    var eventData8 = eventList8[eventIndex8];
-    calendarmailer.soy.calendar.eventRow({event: eventData8}, output);
-  }
-  output.append('</div><button id="event-picker-submit-', soy.$$escapeHtml(opt_data.calendarId), '">Select to mail!</button>');
-  return opt_sb ? '' : output.toString();
-};
-
-
-/**
- * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
- * @return {string}
- * @notypecheck
- */
-calendarmailer.soy.calendar.eventRow = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="event-picker-row"><div id="', soy.$$escapeHtml(opt_data.event.id), '" value="', soy.$$escapeHtml(opt_data.event.id), '" class="goog-checkbox"></div><label id="', soy.$$escapeHtml(opt_data.event.id), '-label" for="', soy.$$escapeHtml(opt_data.event.id), '">', soy.$$escapeHtml(opt_data.event.summary), '</label></div>');
-  return opt_sb ? '' : output.toString();
-};
-// Copyright 2012 Edwina Mead. All rights reserved.
-
-/**
- * @fileoverview A renderer for a calendar object.
- */
-
-goog.provide('calendarmailer.ui.Calendar');
-
-goog.require('calendarmailer.soy.calendar');
-goog.require('goog.ui.Component');
-
-
-
-/**
- * A ui object for a calendar object.
- * @param {string} id The id of the calendar this represents.
- * @constructor
- * @extends {goog.ui.Component}
- */
-calendarmailer.ui.Calendar = function(id) {
-  goog.base(this);
-
-  this.setId(id);
-
-  /**
-   * The events this calendar contains.
-   * @type {!Object}
-   * @private
-   */
-  this.events_ = [];
-
-    /**
-   * Checkboxes for each event in the list.
-   * @type {!Array.<!goog.ui.Checkbox>}
-   * @private
-   */
-  this.checkboxes_ = [];
-
-  /**
-   * An array of the ids of the selected events.
-   * @type {!Array.<string>}
-   * @private
-   */
-  this.selectedEvents_ = [];
-
-  /**
-   * The select all button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
-  this.selectAllButton_ = new goog.ui.Button(null /* content */);
-  this.addChild(this.selectAllButton_);
-
-  /**
-   * The select all button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
-  this.selectNoneButton_ = new goog.ui.Button(null /* content */);
-  this.addChild(this.selectNoneButton_);
-
-  /**
-   * The submit button
-   * @type {!goog.ui.Button}
-   * @private
-   */
-  this.submitButton_ = new goog.ui.Button(null /* content */);
-  this.addChild(this.submitButton_);
-};
-goog.inherits(calendarmailer.ui.Calendar, goog.ui.Component);
-
-
-/**
- * Sets the event list object.
- * @param {!Object} obj The object.
- */
-calendarmailer.ui.Calendar.prototype.setListObject = function(obj) {
-  this.events_ = obj.items;
-};
-
-
-/** @override */
-calendarmailer.ui.Calendar.prototype.createDom = function() {
-  this.setElementInternal(soy.renderAsElement(
-      calendarmailer.soy.calendar.all, {
-        calendarId: this.getId(),
-        events: this.events_
-      }));
-};
-
-
-/** @override */
-calendarmailer.ui.Calendar.prototype.enterDocument = function() {
-  var dom = this.getDomHelper();
-  var handler = this.getHandler();
-
-  for (var i = 0; i < this.events_.length; ++i) {
-    var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
-    checkbox.setId(this.events_[i].id);
-    checkbox.setLabel(dom.getElement(this.events_[i].id + '-label'));
-    this.addChild(checkbox);
-    this.checkboxes_.push(checkbox);
-    checkbox.decorate(dom.getElement(this.events_[i].id));
-  }
-
-  this.selectAllButton_.decorate(
-      dom.getElement('event-picker-select-all-' + this.getId()));
-  handler.listen(this.selectAllButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSelectAll_);
-
-  this.selectNoneButton_.decorate(
-      dom.getElement('event-picker-select-none-' + this.getId()));
-  handler.listen(this.selectNoneButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSelectNone_);
-
-  this.submitButton_.decorate(
-      dom.getElement('event-picker-submit-' + this.getId()));
-  handler.listen(this.submitButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSubmit_);
-};
-// This file was automatically generated from calendarpicker.soy.
-// Please don't edit this file by hand.
-
-goog.provide('calendarmailer.soy.calendarlist');
-
-goog.require('soy');
-goog.require('soy.StringBuilder');
-
-
-/**
- * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
- * @return {string}
- * @notypecheck
- */
-calendarmailer.soy.calendarlist.all = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<button id="calendar-picker-select-all" class="calendar-picker-select">Select all</button><button id="calendar-picker-select-none" class="calendar-picker-select">Select none</button><div class="calendar-picker-base">');
-  var calendarList30 = opt_data.calendars;
-  var calendarListLen30 = calendarList30.length;
-  for (var calendarIndex30 = 0; calendarIndex30 < calendarListLen30; calendarIndex30++) {
-    var calendarData30 = calendarList30[calendarIndex30];
-    calendarmailer.soy.calendarlist.calendarRow_({calendar: calendarData30}, output);
-  }
-  output.append('</div><button id="calendar-picker-submit">Get events!</button>');
-  return opt_sb ? '' : output.toString();
-};
-
-
-/**
- * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
- * @return {string}
- * @notypecheck
- */
-calendarmailer.soy.calendarlist.calendarRow_ = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="calendar-picker-row"><div id="', soy.$$escapeHtml(opt_data.calendar.id), '" value="', soy.$$escapeHtml(opt_data.calendar.id), '" class="goog-checkbox"></div><label id="', soy.$$escapeHtml(opt_data.calendar.id), '-label" for="', soy.$$escapeHtml(opt_data.calendar.id), '">', soy.$$escapeHtml(opt_data.calendar.summary), '</label></div>');
-  return opt_sb ? '' : output.toString();
 };
 // Copyright 2009 The Closure Library Authors. All Rights Reserved.
 //
@@ -25818,6 +25638,46 @@ goog.ui.registry.setDecoratorByClassName(goog.ui.ButtonRenderer.CSS_CLASS,
     function() {
       return new goog.ui.Button(null);
     });
+// This file was automatically generated from picker.soy.
+// Please don't edit this file by hand.
+
+goog.provide('calendarmailer.soy.picker');
+
+goog.require('soy');
+goog.require('soy.StringBuilder');
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all">Select all</button><button class="picker-select picker-select-none">Select none</button><div class="picker-boxes">');
+  var itemList16 = opt_data.items;
+  var itemListLen16 = itemList16.length;
+  for (var itemIndex16 = 0; itemIndex16 < itemListLen16; itemIndex16++) {
+    var itemData16 = itemList16[itemIndex16];
+    calendarmailer.soy.picker.row({idprefix: opt_data.idprefix, item: itemData16}, output);
+  }
+  output.append('</div><button class="picker-submit">Go!</button></div>');
+  return opt_sb ? '' : output.toString();
+};
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.picker.row = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<div class="picker-row"><div id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" value="', soy.$$escapeHtml(opt_data.item.id), '" name="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="goog-checkbox goog-checkbox-unchecked"></div><label id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '-label" for="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="picker-label checkbox-label">', soy.$$escapeHtml(opt_data.item.summary), '</label></div>');
+  return opt_sb ? '' : output.toString();
+};
 // Copyright 2011 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26251,17 +26111,17 @@ goog.ui.registry.setDecoratorByClassName(
     function() {
       return new goog.ui.Checkbox();
     });
-// Copyright 2012 Edwina Mead. All rights reserved.
 
 /**
  * @fileoverview A renderer for a list of calendars.
  */
 
-goog.provide('calendarmailer.ui.CalendarList');
-goog.provide('calendarmailer.ui.CalendarList.Event');
-goog.provide('calendarmailer.ui.CalendarList.EventType');
+goog.provide('calendarmailer.ui.Picker');
+goog.provide('calendarmailer.ui.Picker.Event');
+goog.provide('calendarmailer.ui.Picker.EventType');
 
-goog.require('calendarmailer.soy.calendarlist');
+goog.require('calendarmailer.soy.picker');
+goog.require('goog.dom.classes');
 goog.require('goog.events.Event');
 goog.require('goog.ui.Button');
 goog.require('goog.ui.Checkbox');
@@ -26276,29 +26136,22 @@ goog.require('soy');
  * @constructor
  * @extends {goog.ui.Control}
  */
-calendarmailer.ui.CalendarList = function() {
+calendarmailer.ui.Picker = function() {
   goog.base(this);
-
-  /**
-   * The calendar feed entry array.
-   * @type {!Array.<!Object>}
-   * @private
-   */
-  this.calendarFeedEntries_ = [];
 
   /**
    * Checkboxes for each calendar in the list.
    * @type {!Array.<!goog.ui.Checkbox>}
-   * @private
+   * @protected
    */
-  this.checkboxes_ = [];
+  this.checkboxes = [];
 
   /**
    * An array of the ids of the selected calendars.
    * @type {!Array.<string>}
    * @private
    */
-  this.selectedCalendars_ = [];
+  this.selectedItems_ = [];
 
   /**
    * The select all button.
@@ -26309,7 +26162,7 @@ calendarmailer.ui.CalendarList = function() {
   this.addChild(this.selectAllButton_);
 
   /**
-   * The select all button.
+   * The select none button.
    * @type {!goog.ui.Button}
    * @private
    */
@@ -26324,16 +26177,1699 @@ calendarmailer.ui.CalendarList = function() {
   this.submitButton_ = new goog.ui.Button(null /* content */);
   this.addChild(this.submitButton_);
 };
-goog.inherits(calendarmailer.ui.CalendarList, goog.ui.Control);
+goog.inherits(calendarmailer.ui.Picker, goog.ui.Control);
 
 
 /**
  * The calendar list submit event type.
  * @enum {string}
  */
-calendarmailer.ui.CalendarList.EventType = {
-  SUBMIT: 'cse'
+calendarmailer.ui.Picker.EventType = {
+  SUBMIT: 's'
 };
+
+
+/**
+ * The element for the select all button to decorate.
+ * @type {!Element}
+ * @protected
+ */
+calendarmailer.ui.Picker.prototype.selectAllEl;
+
+
+/**
+ * The element for the select none button to decorate.
+ * @type {!Element}
+ * @protected
+ */
+calendarmailer.ui.Picker.prototype.selectNoneEl;
+
+
+/**
+ * The element for the submit button to decorate.
+ * @type {!Element}
+ * @protected
+ */
+calendarmailer.ui.Picker.prototype.submitEl;
+
+
+/** @override */
+calendarmailer.ui.Picker.prototype.createDom = function() {
+  var dom = this.getDomHelper();
+  var items = this.getItems();
+
+  var el = soy.renderAsElement(calendarmailer.soy.picker.all, {
+    idprefix: this.getId(),
+    items: items,
+    title: this.getId()
+  });
+  this.setElementInternal(el);
+
+  this.selectAllEl = dom.getElementByClass('picker-select-all', el);
+  this.selectNoneEl = dom.getElementByClass('picker-select-none', el);
+  this.submitEl = dom.getElementByClass('picker-submit', el);
+};
+
+
+/** @override */
+calendarmailer.ui.Picker.prototype.enterDocument = function() {
+  goog.base(this, 'enterDocument');
+
+  var dom = this.getDomHelper();
+  var handler = this.getHandler();
+  var items = this.getItems();
+
+  for (var i = 0; i < items.length; ++i) {
+    var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
+    checkbox.setLabel(dom.getElement(
+        this.getId() + '-' + items[i].id + '-label'));
+    this.addChild(checkbox);
+    this.checkboxes.push(checkbox);
+    checkbox.decorate(dom.getElement(this.getId() + '-' + items[i].id));
+    checkbox.setId(items[i].id);
+    handler.listen(checkbox, goog.ui.Component.EventType.CHANGE,
+        this.handleClick_);
+  }
+
+  this.selectAllButton_.decorate(this.selectAllEl);
+  this.selectNoneButton_.decorate(this.selectNoneEl);
+  this.submitButton_.decorate(this.submitEl);
+
+  handler.
+      listen(this.selectAllButton_, goog.ui.Component.EventType.ACTION,
+          this.handleSelectAll_).
+      listen(this.selectNoneButton_, goog.ui.Component.EventType.ACTION,
+          this.handleSelectNone_).
+      listen(this.submitButton_, goog.ui.Component.EventType.ACTION,
+          this.handleSubmit_);
+};
+
+
+/**
+ * Adds an item to the picker. Subclasses should override this function.
+ * @param {{id: string, summary: string}} item The item.
+ */
+calendarmailer.ui.Picker.prototype.addItem = function(item) {
+  var dom = this.getDomHelper();
+
+  var pickerBoxes = dom.getElementByClass('picker-boxes', this.getElement());
+  var row = soy.renderAsElement(calendarmailer.soy.picker.row, {
+    idprefix: this.getId(),
+    item: item
+  });
+  pickerBoxes.appendChild(row);
+
+  var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
+  this.addChild(checkbox);
+  checkbox.setLabel(dom.getElement(
+        this.getId() + '-' + item.id + '-label'));
+  checkbox.decorate(row.firstChild);
+
+  checkbox.setId(item.id);
+  this.getHandler().listen(checkbox, goog.ui.Component.EventType.CHANGE,
+      this.handleClick_);
+};
+
+
+/**
+ * Sets the caption on the submit button. Only works after rendering.
+ * @param {string} caption The caption.
+ */
+calendarmailer.ui.Picker.prototype.setSubmitCaption = function(caption) {
+  this.submitButton_.setContent(caption);
+};
+
+
+/**
+ * Handles clicks on the select all button.
+ * @private
+ */
+calendarmailer.ui.Picker.prototype.handleSelectAll_ = function() {
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    this.checkboxes[i].setChecked(true);
+  }
+  goog.dom.classes.enable(this.getElement(), 'picker-selected',
+      this.checkboxes.length > 0);
+};
+
+
+/**
+ * Handles clicks on the select none button.
+ * @private
+ */
+calendarmailer.ui.Picker.prototype.handleSelectNone_ = function() {
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    this.checkboxes[i].setChecked(false);
+  }
+  goog.dom.classes.enable(this.getElement(), 'picker-selected',
+      false);
+};
+
+
+/**
+ * Handles clicks on the submit button.
+ * @private
+ */
+calendarmailer.ui.Picker.prototype.handleSubmit_ = function() {
+  this.dispatchEvent(new calendarmailer.ui.Picker.Event(
+      this.getSelectedItems()));
+};
+
+
+/**
+ * Handles clicks on anything in the picker.
+ * @private
+ */
+calendarmailer.ui.Picker.prototype.handleClick_ = function() {
+  var selectedItems = this.getSelectedItems();
+  goog.dom.classes.enable(this.getElement(), 'picker-selected',
+      selectedItems.length > 0);
+};
+
+
+/**
+ * Gets the selected items.
+ * @return {!Array.<string>} The array of item ids.
+ */
+calendarmailer.ui.Picker.prototype.getSelectedItems = function() {
+  var ids = [];
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    if (this.checkboxes[i].isChecked()) {
+      ids.push(this.checkboxes[i].getId());
+    }
+  }
+  return ids;
+};
+
+
+/**
+ * Gets the items object for the soy template. Subclasses should override this
+ * method.
+ * @return {!Array.<!Object>} An array of items; {id: string, summary: string}.
+ * @protected
+ */
+calendarmailer.ui.Picker.prototype.getItems = goog.abstractMethod;
+
+
+/** @override */
+calendarmailer.ui.Picker.prototype.setEnabled = function(enabled) {
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    this.checkboxes[i].setEnabled(enabled);
+  }
+
+  this.selectAllButton_.setEnabled(enabled);
+  this.selectNoneButton_.setEnabled(enabled);
+  this.submitButton_.setEnabled(enabled);
+
+  goog.base(this, 'setEnabled', enabled);
+};
+
+
+/**
+ * Sets the visibility of the given checkbox.
+ * @param {!goog.ui.Checkbox} box The checkbox.
+ * @param {boolean} show Whether to show the box.
+ * @protected
+ */
+calendarmailer.ui.Picker.prototype.showBox = function(box, show) {
+    box.setVisible(show);
+    var label = this.getDomHelper().getElement(
+        this.getId() + '-' + box.getId() + '-label');
+    goog.dom.classes.enable(label, 'picker-label-disabled', !show);
+
+    if (!show && box.isChecked()) {
+      box.setChecked(false);
+      // Sets the background colour.
+      this.handleClick_(); // TODO: rename
+    }
+};
+
+
+
+/**
+ * The event type which carries information on submit.
+ * @param {!Array.<string>} items The item ids.
+ * @constructor
+ * @extends {goog.events.Event}
+ */
+calendarmailer.ui.Picker.Event = function(items) {
+  goog.base(this, calendarmailer.ui.Picker.EventType.SUBMIT);
+
+  /**
+   * The ids of the items which were picked.
+   * @type {!Array.<string>}
+   */
+  this.items = items;
+};
+goog.inherits(calendarmailer.ui.Picker.Event, goog.events.Event);
+
+// This file was automatically generated from filteringwidget.soy.
+// Please don't edit this file by hand.
+
+goog.provide('calendarmailer.soy.filteringwidget');
+
+goog.require('soy');
+goog.require('soy.StringBuilder');
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.filteringwidget.all = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<div class="filter-base"><div class="filter-section"><div class="filter-title">Filter calendars</div><textarea class="filter-textbox" rows="1"></textarea></div><div class="filter-section"><div class="filter-title">Filter events</div><div id="repeatingfilter" name="repeatingfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div><label id="repeatingfilter-label" for="repeatingfilter" class="checkbox-label">Show repeating events only.</label></div><div class="filter-section"><div class="filter-title">Event selection global control</div><button class="filter-selectall">Select all visible events</button><button class="filter-selectnone">Deselect all visible events</button><button class="filter-submit">Add owners of all selected events to be mailed.</button></div></div>');
+  return opt_sb ? '' : output.toString();
+};
+// Copyright 2008 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Detects the specific browser and not just the rendering engine.
+ *
+ */
+
+goog.provide('goog.userAgent.product');
+
+goog.require('goog.userAgent');
+
+
+/**
+ * @define {boolean} Whether the code is running on the Firefox web browser.
+ */
+goog.userAgent.product.ASSUME_FIREFOX = false;
+
+
+/**
+ * @define {boolean} Whether the code is running on the Camino web browser.
+ */
+goog.userAgent.product.ASSUME_CAMINO = false;
+
+
+/**
+ * @define {boolean} Whether we know at compile-time that the product is an
+ *     iPhone.
+ */
+goog.userAgent.product.ASSUME_IPHONE = false;
+
+
+/**
+ * @define {boolean} Whether we know at compile-time that the product is an
+ *     iPad.
+ */
+goog.userAgent.product.ASSUME_IPAD = false;
+
+
+/**
+ * @define {boolean} Whether we know at compile-time that the product is an
+ *     Android phone.
+ */
+goog.userAgent.product.ASSUME_ANDROID = false;
+
+
+/**
+ * @define {boolean} Whether the code is running on the Chrome web browser.
+ */
+goog.userAgent.product.ASSUME_CHROME = false;
+
+
+/**
+ * @define {boolean} Whether the code is running on the Safari web browser.
+ */
+goog.userAgent.product.ASSUME_SAFARI = false;
+
+
+/**
+ * Whether we know the product type at compile-time.
+ * @type {boolean}
+ * @private
+ */
+goog.userAgent.product.PRODUCT_KNOWN_ =
+    goog.userAgent.ASSUME_IE ||
+    goog.userAgent.ASSUME_OPERA ||
+    goog.userAgent.product.ASSUME_FIREFOX ||
+    goog.userAgent.product.ASSUME_CAMINO ||
+    goog.userAgent.product.ASSUME_IPHONE ||
+    goog.userAgent.product.ASSUME_IPAD ||
+    goog.userAgent.product.ASSUME_ANDROID ||
+    goog.userAgent.product.ASSUME_CHROME ||
+    goog.userAgent.product.ASSUME_SAFARI;
+
+
+/**
+ * Right now we just focus on Tier 1-3 browsers at:
+ * http://wiki/Nonconf/ProductPlatformGuidelines
+ * As well as the YUI grade A browsers at:
+ * http://developer.yahoo.com/yui/articles/gbs/
+ *
+ * @private
+ */
+goog.userAgent.product.init_ = function() {
+
+  /**
+   * Whether the code is running on the Firefox web browser.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.product.detectedFirefox_ = false;
+
+  /**
+   * Whether the code is running on the Camino web browser.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.product.detectedCamino_ = false;
+
+  /**
+   * Whether the code is running on an iPhone or iPod touch.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.product.detectedIphone_ = false;
+
+  /**
+   * Whether the code is running on an iPad
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.product.detectedIpad_ = false;
+
+  /**
+   * Whether the code is running on the default browser on an Android phone.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.product.detectedAndroid_ = false;
+
+  /**
+   * Whether the code is running on the Chrome web browser.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.product.detectedChrome_ = false;
+
+  /**
+   * Whether the code is running on the Safari web browser.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.product.detectedSafari_ = false;
+
+  var ua = goog.userAgent.getUserAgentString();
+  if (!ua) {
+    return;
+  }
+
+  // The order of the if-statements in the following code is important.
+  // For example, in the WebKit section, we put Chrome in front of Safari
+  // because the string 'Safari' is present on both of those browsers'
+  // userAgent strings as well as the string we are looking for.
+  // The idea is to prevent accidental detection of more than one client.
+
+  if (ua.indexOf('Firefox') != -1) {
+    goog.userAgent.product.detectedFirefox_ = true;
+  } else if (ua.indexOf('Camino') != -1) {
+    goog.userAgent.product.detectedCamino_ = true;
+  } else if (ua.indexOf('iPhone') != -1 || ua.indexOf('iPod') != -1) {
+    goog.userAgent.product.detectedIphone_ = true;
+  } else if (ua.indexOf('iPad') != -1) {
+    goog.userAgent.product.detectedIpad_ = true;
+  } else if (ua.indexOf('Android') != -1) {
+    goog.userAgent.product.detectedAndroid_ = true;
+  } else if (ua.indexOf('Chrome') != -1) {
+    goog.userAgent.product.detectedChrome_ = true;
+  } else if (ua.indexOf('Safari') != -1) {
+    goog.userAgent.product.detectedSafari_ = true;
+  }
+};
+
+if (!goog.userAgent.product.PRODUCT_KNOWN_) {
+  goog.userAgent.product.init_();
+}
+
+
+/**
+ * Whether the code is running on the Opera web browser.
+ * @type {boolean}
+ */
+goog.userAgent.product.OPERA = goog.userAgent.OPERA;
+
+
+/**
+ * Whether the code is running on an IE web browser.
+ * @type {boolean}
+ */
+goog.userAgent.product.IE = goog.userAgent.IE;
+
+
+/**
+ * Whether the code is running on the Firefox web browser.
+ * @type {boolean}
+ */
+goog.userAgent.product.FIREFOX = goog.userAgent.product.PRODUCT_KNOWN_ ?
+    goog.userAgent.product.ASSUME_FIREFOX :
+    goog.userAgent.product.detectedFirefox_;
+
+
+/**
+ * Whether the code is running on the Camino web browser.
+ * @type {boolean}
+ */
+goog.userAgent.product.CAMINO = goog.userAgent.product.PRODUCT_KNOWN_ ?
+    goog.userAgent.product.ASSUME_CAMINO :
+    goog.userAgent.product.detectedCamino_;
+
+
+/**
+ * Whether the code is running on an iPhone or iPod touch.
+ * @type {boolean}
+ */
+goog.userAgent.product.IPHONE = goog.userAgent.product.PRODUCT_KNOWN_ ?
+    goog.userAgent.product.ASSUME_IPHONE :
+    goog.userAgent.product.detectedIphone_;
+
+
+/**
+ * Whether the code is running on an iPad.
+ * @type {boolean}
+ */
+goog.userAgent.product.IPAD = goog.userAgent.product.PRODUCT_KNOWN_ ?
+    goog.userAgent.product.ASSUME_IPAD :
+    goog.userAgent.product.detectedIpad_;
+
+
+/**
+ * Whether the code is running on the default browser on an Android phone.
+ * @type {boolean}
+ */
+goog.userAgent.product.ANDROID = goog.userAgent.product.PRODUCT_KNOWN_ ?
+    goog.userAgent.product.ASSUME_ANDROID :
+    goog.userAgent.product.detectedAndroid_;
+
+
+/**
+ * Whether the code is running on the Chrome web browser.
+ * @type {boolean}
+ */
+goog.userAgent.product.CHROME = goog.userAgent.product.PRODUCT_KNOWN_ ?
+    goog.userAgent.product.ASSUME_CHROME :
+    goog.userAgent.product.detectedChrome_;
+
+
+/**
+ * Whether the code is running on the Safari web browser.
+ * @type {boolean}
+ */
+goog.userAgent.product.SAFARI = goog.userAgent.product.PRODUCT_KNOWN_ ?
+    goog.userAgent.product.ASSUME_SAFARI :
+    goog.userAgent.product.detectedSafari_;
+// Copyright 2010 The Closure Library Authors. All Rights Reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Native browser textarea renderer for {@link goog.ui.Textarea}s.
+ */
+
+goog.provide('goog.ui.TextareaRenderer');
+
+goog.require('goog.ui.Component.State');
+goog.require('goog.ui.ControlRenderer');
+
+
+
+/**
+ * Renderer for {@link goog.ui.Textarea}s.  Renders and decorates native HTML
+ * textarea elements.  Since native HTML textareas have built-in support for
+ * many features, overrides many expensive (and redundant) superclass methods to
+ * be no-ops.
+ * @constructor
+ * @extends {goog.ui.ControlRenderer}
+ */
+goog.ui.TextareaRenderer = function() {
+  goog.ui.ControlRenderer.call(this);
+};
+goog.inherits(goog.ui.TextareaRenderer, goog.ui.ControlRenderer);
+goog.addSingletonGetter(goog.ui.TextareaRenderer);
+
+
+/**
+ * Default CSS class to be applied to the root element of components rendered
+ * by this renderer.
+ * @type {string}
+ */
+goog.ui.TextareaRenderer.CSS_CLASS = goog.getCssName('goog-textarea');
+
+
+/** @override */
+goog.ui.TextareaRenderer.prototype.getAriaRole = function() {
+  // textareas don't need ARIA roles to be recognized by screen readers.
+  return undefined;
+};
+
+
+/** @override */
+goog.ui.TextareaRenderer.prototype.decorate = function(control, element) {
+  goog.ui.TextareaRenderer.superClass_.decorate.call(this, control,
+      element);
+  control.setContent(element.value);
+  return element;
+};
+
+
+/**
+ * Returns the textarea's contents wrapped in an HTML textarea element.  Sets
+ * the textarea's disabled attribute as needed.
+ * @param {goog.ui.Control} textarea Textarea to render.
+ * @return {Element} Root element for the Textarea control (an HTML textarea
+ *     element).
+ * @override
+ */
+goog.ui.TextareaRenderer.prototype.createDom = function(textarea) {
+  this.setUpTextarea_(textarea);
+  var element = textarea.getDomHelper().createDom('textarea', {
+    'class': this.getClassNames(textarea).join(' '),
+    'disabled': !textarea.isEnabled()
+  }, textarea.getContent() || '');
+  return element;
+};
+
+
+/**
+ * Overrides {@link goog.ui.TextareaRenderer#canDecorate} by returning true only
+ * if the element is an HTML textarea.
+ * @param {Element} element Element to decorate.
+ * @return {boolean} Whether the renderer can decorate the element.
+ * @override
+ */
+goog.ui.TextareaRenderer.prototype.canDecorate = function(element) {
+  return element.tagName == goog.dom.TagName.TEXTAREA;
+};
+
+
+/**
+ * Textareas natively support right-to-left rendering.
+ * @override
+ */
+goog.ui.TextareaRenderer.prototype.setRightToLeft = goog.nullFunction;
+
+
+/**
+ * Textareas are always focusable as long as they are enabled.
+ * @override
+ */
+goog.ui.TextareaRenderer.prototype.isFocusable = function(textarea) {
+  return textarea.isEnabled();
+};
+
+
+/**
+ * Textareas natively support keyboard focus.
+ * @override
+ */
+goog.ui.TextareaRenderer.prototype.setFocusable = goog.nullFunction;
+
+
+/**
+ * Textareas also expose the DISABLED state in the HTML textarea's
+ * {@code disabled} attribute.
+ * @override
+ */
+goog.ui.TextareaRenderer.prototype.setState = function(textarea, state,
+    enable) {
+  goog.ui.TextareaRenderer.superClass_.setState.call(this, textarea, state,
+      enable);
+  var element = textarea.getElement();
+  if (element && state == goog.ui.Component.State.DISABLED) {
+    element.disabled = enable;
+  }
+};
+
+
+/**
+ * Textareas don't need ARIA states to support accessibility, so this is
+ * a no-op.
+ * @override
+ */
+goog.ui.TextareaRenderer.prototype.updateAriaState = goog.nullFunction;
+
+
+/**
+ * Sets up the textarea control such that it doesn't waste time adding
+ * functionality that is already natively supported by browser
+ * textareas.
+ * @param {goog.ui.Control} textarea Textarea control to configure.
+ * @private
+ */
+goog.ui.TextareaRenderer.prototype.setUpTextarea_ = function(textarea) {
+  textarea.setHandleMouseEvents(false);
+  textarea.setAutoStates(goog.ui.Component.State.ALL, false);
+  textarea.setSupportedState(goog.ui.Component.State.FOCUSED, false);
+};
+
+
+/** @override **/
+goog.ui.TextareaRenderer.prototype.setContent = function(element, value) {
+  if (element) {
+    element.value = value;
+  }
+};
+
+
+/** @override **/
+goog.ui.TextareaRenderer.prototype.getCssClass = function() {
+  return goog.ui.TextareaRenderer.CSS_CLASS;
+};
+// Copyright 2010 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A content-aware textarea control that grows and shrinks
+ * automatically. This implementation extends {@link goog.ui.Control}.
+ * This code is inspired by Dojo Dijit's Textarea implementation with
+ * modifications to support native (when available) textarea resizing and
+ * minHeight and maxHeight enforcement.
+ *
+ * @see ../demos/textarea.html
+ */
+
+goog.provide('goog.ui.Textarea');
+
+goog.require('goog.Timer');
+goog.require('goog.events.EventType');
+goog.require('goog.events.KeyCodes');
+goog.require('goog.style');
+goog.require('goog.ui.Control');
+goog.require('goog.ui.TextareaRenderer');
+goog.require('goog.userAgent');
+goog.require('goog.userAgent.product');
+
+
+
+/**
+ * A textarea control to handle growing/shrinking with textarea.value.
+ *
+ * @param {string} content Text to set as the textarea's value.
+ * @param {goog.ui.TextareaRenderer=} opt_renderer Renderer used to render or
+ *     decorate the textarea. Defaults to {@link goog.ui.TextareaRenderer}.
+ * @param {goog.dom.DomHelper=} opt_domHelper Optional DOM hepler, used for
+ *     document interaction.
+ * @constructor
+ * @extends {goog.ui.Control}
+ */
+goog.ui.Textarea = function(content, opt_renderer, opt_domHelper) {
+  goog.ui.Control.call(this, content, opt_renderer ||
+      goog.ui.TextareaRenderer.getInstance(), opt_domHelper);
+
+  this.setHandleMouseEvents(false);
+  this.setAllowTextSelection(true);
+  if (!content) {
+    this.setContentInternal('');
+  }
+};
+goog.inherits(goog.ui.Textarea, goog.ui.Control);
+
+
+/**
+ * Some UAs will shrink the textarea automatically, some won't.
+ * @type {boolean}
+ * @private
+ */
+goog.ui.Textarea.NEEDS_HELP_SHRINKING_ = goog.userAgent.GECKO ||
+    goog.userAgent.WEBKIT;
+
+
+/**
+ * True if the resizing function is executing, false otherwise.
+ * @type {boolean}
+ * @private
+ */
+goog.ui.Textarea.prototype.isResizing_ = false;
+
+
+/**
+ * The height of the textarea as last measured.
+ * @type {number}
+ * @private
+ */
+goog.ui.Textarea.prototype.height_ = 0;
+
+
+/**
+ * A maximum height for the textarea. When set to 0, the default, there is no
+ * enforcement of this value during resize.
+ * @type {number}
+ * @private
+ */
+goog.ui.Textarea.prototype.maxHeight_ = 0;
+
+
+/**
+ * A minimum height for the textarea. When set to 0, the default, there is no
+ * enforcement of this value during resize.
+ * @type {number}
+ * @private
+ */
+goog.ui.Textarea.prototype.minHeight_ = 0;
+
+
+/**
+ * Whether or not textarea rendering characteristics have been discovered.
+ * Specifically we determine, at runtime:
+ *    If the padding and border box is included in offsetHeight.
+ *    @see {goog.ui.Textarea.prototype.needsPaddingBorderFix_}
+ *    If the padding and border box is included in scrollHeight.
+ *    @see {goog.ui.Textarea.prototype.scrollHeightIncludesPadding_} and
+ *    @see {goog.ui.Textarea.prototype.scrollHeightIncludesBorder_}
+ * TODO(user): See if we can determine goog.ui.Textarea.NEEDS_HELP_SHRINKING_.
+ * @type {boolean}
+ * @private
+ */
+goog.ui.Textarea.prototype.hasDiscoveredTextareaCharacteristics_ = false;
+
+
+/**
+ * If a user agent doesn't correctly support the box-sizing:border-box CSS
+ * value then we'll need to adjust our height calculations.
+ * @see {goog.ui.Textarea.prototype.discoverTextareaCharacteristics_}
+ * @type {boolean}
+ * @private
+ */
+goog.ui.Textarea.prototype.needsPaddingBorderFix_ = false;
+
+
+/**
+ * Whether or not scrollHeight of a textarea includes the padding box.
+ * @type {boolean}
+ * @private
+ */
+goog.ui.Textarea.prototype.scrollHeightIncludesPadding_ = false;
+
+
+/**
+ * Whether or not scrollHeight of a textarea includes the border box.
+ * @type {boolean}
+ * @private
+ */
+goog.ui.Textarea.prototype.scrollHeightIncludesBorder_ = false;
+
+
+/**
+ * For storing the padding box size during enterDocument, to prevent possible
+ * measurement differences that can happen after text zooming.
+ * Note: runtime padding changes will cause problems with this.
+ * @type {goog.math.Box}
+ * @private
+ */
+goog.ui.Textarea.prototype.paddingBox_;
+
+
+/**
+ * For storing the border box size during enterDocument, to prevent possible
+ * measurement differences that can happen after text zooming.
+ * Note: runtime border width changes will cause problems with this.
+ * @type {goog.math.Box}
+ * @private
+ */
+goog.ui.Textarea.prototype.borderBox_;
+
+
+/**
+ * @return {number} The padding plus the border box height.
+ * @private
+ */
+goog.ui.Textarea.prototype.getPaddingBorderBoxHeight_ = function() {
+  var paddingBorderBoxHeight = this.paddingBox_.top + this.paddingBox_.bottom +
+      this.borderBox_.top + this.borderBox_.bottom;
+  return paddingBorderBoxHeight;
+};
+
+
+/**
+ * @return {number} The minHeight value.
+ */
+goog.ui.Textarea.prototype.getMinHeight = function() {
+  return this.minHeight_;
+};
+
+
+/**
+ * @return {number} The minHeight value with a potential padding fix.
+ * @private
+ */
+goog.ui.Textarea.prototype.getMinHeight_ = function() {
+  var minHeight = this.minHeight_;
+  var textarea = this.getElement();
+  if (minHeight && textarea && this.needsPaddingBorderFix_) {
+    minHeight -= this.getPaddingBorderBoxHeight_();
+  }
+  return minHeight;
+};
+
+
+/**
+ * Sets a minimum height for the textarea, and calls resize if rendered.
+ * @param {number} height New minHeight value.
+ */
+goog.ui.Textarea.prototype.setMinHeight = function(height) {
+  this.minHeight_ = height;
+  this.resize();
+};
+
+
+/**
+ * @return {number} The maxHeight value.
+ */
+goog.ui.Textarea.prototype.getMaxHeight = function() {
+  return this.maxHeight_;
+};
+
+
+/**
+ * @return {number} The maxHeight value with a potential padding fix.
+ * @private
+ */
+goog.ui.Textarea.prototype.getMaxHeight_ = function() {
+  var maxHeight = this.maxHeight_;
+  var textarea = this.getElement();
+  if (maxHeight && textarea && this.needsPaddingBorderFix_) {
+    maxHeight -= this.getPaddingBorderBoxHeight_();
+  }
+  return maxHeight;
+};
+
+
+/**
+ * Sets a minimum height for the textarea, and calls resize if rendered.
+ * @param {number} height New maxHeight value.
+ */
+goog.ui.Textarea.prototype.setMaxHeight = function(height) {
+  this.maxHeight_ = height;
+  this.resize();
+};
+
+
+/**
+ * Sets the textarea's value.
+ * @param {*} value The value property for the textarea, will be cast to a
+ *     string by the browser when setting textarea.value.
+ */
+goog.ui.Textarea.prototype.setValue = function(value) {
+  this.setContent(String(value));
+};
+
+
+/**
+ * Gets the textarea's value.
+ * @return {string} value The value of the textarea.
+ */
+goog.ui.Textarea.prototype.getValue = function() {
+  return this.getElement().value;
+};
+
+
+/** @override */
+goog.ui.Textarea.prototype.setContent = function(content) {
+  goog.ui.Textarea.superClass_.setContent.call(this, content);
+  this.resize();
+};
+
+
+/** @override **/
+goog.ui.Textarea.prototype.setEnabled = function(enable) {
+  goog.ui.Textarea.superClass_.setEnabled.call(this, enable);
+  this.getElement().disabled = !enable;
+};
+
+
+/**
+ * Resizes the textarea vertically.
+ */
+goog.ui.Textarea.prototype.resize = function() {
+  if (this.getElement()) {
+    this.grow_();
+  }
+};
+
+
+/** @override **/
+goog.ui.Textarea.prototype.enterDocument = function() {
+  var textarea = this.getElement();
+
+  // Eliminates the vertical scrollbar and changes the box-sizing mode for the
+  // textarea to the border-box (aka quirksmode) paradigm.
+  goog.style.setStyle(textarea, {
+    'overflowY': 'hidden',
+    'overflowX': 'auto',
+    'boxSizing': 'border-box',
+    'MsBoxSizing': 'border-box',
+    'WebkitBoxSizing': 'border-box',
+    'MozBoxSizing': 'border-box'});
+
+  this.paddingBox_ = goog.style.getPaddingBox(textarea);
+  this.borderBox_ = goog.style.getBorderBox(textarea);
+
+  this.getHandler().
+      listen(textarea, goog.events.EventType.SCROLL, this.grow_).
+      listen(textarea, goog.events.EventType.FOCUS, this.grow_).
+      listen(textarea, goog.events.EventType.KEYUP, this.grow_).
+      listen(textarea, goog.events.EventType.MOUSEUP, this.mouseUpListener_);
+
+  this.resize();
+};
+
+
+/**
+ * Gets the textarea's content height + padding height + border height.
+ * This is done by getting the scrollHeight and adjusting from there.
+ * In the end this result is what we want the new offsetHeight to equal.
+ * @return {number} The height of the textarea.
+ * @private
+ */
+goog.ui.Textarea.prototype.getHeight_ = function() {
+  this.discoverTextareaCharacteristics_();
+  var textarea = this.getElement();
+  // Accounts for a possible (though unlikely) horizontal scrollbar.
+  var height = this.getElement().scrollHeight +
+      this.getHorizontalScrollBarHeight_();
+  if (this.needsPaddingBorderFix_) {
+    height -= this.getPaddingBorderBoxHeight_();
+  } else {
+    if (!this.scrollHeightIncludesPadding_) {
+      var paddingBox = this.paddingBox_;
+      var paddingBoxHeight = paddingBox.top + paddingBox.bottom;
+      height += paddingBoxHeight;
+    }
+    if (!this.scrollHeightIncludesBorder_) {
+      var borderBox = goog.style.getBorderBox(textarea);
+      var borderBoxHeight = borderBox.top + borderBox.bottom;
+      height += borderBoxHeight;
+    }
+  }
+  return height;
+};
+
+
+/**
+ * Sets the textarea's height.
+ * @param {number} height The height to set.
+ * @private
+ */
+goog.ui.Textarea.prototype.setHeight_ = function(height) {
+  if (this.height_ != height) {
+    this.height_ = height;
+    this.getElement().style.height = height + 'px';
+  }
+};
+
+
+/**
+ * Sets the textarea's rows attribute to be the number of newlines + 1.
+ * This is necessary when the textarea is hidden, in which case scrollHeight
+ * is not available.
+ * @private
+ */
+goog.ui.Textarea.prototype.setHeightToEstimate_ = function() {
+  var textarea = this.getElement();
+  textarea.style.height = 'auto';
+  var newlines = textarea.value.match(/\n/g) || [];
+  textarea.rows = newlines.length + 1;
+};
+
+
+/**
+ * Gets the the height of (possibly present) horizontal scrollbar.
+ * @return {number} The height of the horizontal scrollbar.
+ * @private
+ */
+goog.ui.Textarea.prototype.getHorizontalScrollBarHeight_ =
+    function() {
+  var textarea = this.getElement();
+  var height = textarea.offsetHeight - textarea.clientHeight;
+  if (!this.scrollHeightIncludesPadding_) {
+    var paddingBox = this.paddingBox_;
+    var paddingBoxHeight = paddingBox.top + paddingBox.bottom;
+    height -= paddingBoxHeight;
+  }
+  if (!this.scrollHeightIncludesBorder_) {
+    var borderBox = goog.style.getBorderBox(textarea);
+    var borderBoxHeight = borderBox.top + borderBox.bottom;
+    height -= borderBoxHeight;
+  }
+  // Prevent negative number results, which sometimes show up.
+  return height > 0 ? height : 0;
+};
+
+
+/**
+ * In order to assess the correct height for a textarea, we need to know
+ * whether the scrollHeight (the full height of the text) property includes
+ * the values for padding and borders. We can also test whether the
+ * box-sizing: border-box setting is working and then tweak accordingly.
+ * Instead of hardcoding a list of currently known behaviors and testing
+ * for quirksmode, we do a runtime check out of the flow. The performance
+ * impact should be very small.
+ * @private
+ */
+goog.ui.Textarea.prototype.discoverTextareaCharacteristics_ = function() {
+  if (!this.hasDiscoveredTextareaCharacteristics_) {
+    var textarea = /** @type {!Element} */ (this.getElement().cloneNode(false));
+    // We need to overwrite/write box model specific styles that might
+    // affect height.
+    goog.style.setStyle(textarea, {
+      'position': 'absolute',
+      'height': 'auto',
+      'top': '-9999px',
+      'margin': '0',
+      'padding': '1px',
+      'border': '1px solid #000',
+      'overflow': 'hidden'
+    });
+    goog.dom.appendChild(this.getDomHelper().getDocument().body, textarea);
+    var initialScrollHeight = textarea.scrollHeight;
+
+    textarea.style.padding = '10px';
+    var paddingScrollHeight = textarea.scrollHeight;
+    this.scrollHeightIncludesPadding_ = paddingScrollHeight >
+        initialScrollHeight;
+
+    initialScrollHeight = paddingScrollHeight;
+    textarea.style.borderWidth = '10px';
+    var borderScrollHeight = textarea.scrollHeight;
+    this.scrollHeightIncludesBorder_ = borderScrollHeight > initialScrollHeight;
+
+    // Tests if border-box sizing is working or not.
+    textarea.style.height = '100px';
+    var offsetHeightAtHeight100 = textarea.offsetHeight;
+    if (offsetHeightAtHeight100 != 100) {
+      this.needsPaddingBorderFix_ = true;
+    }
+
+    goog.dom.removeNode(textarea);
+    this.hasDiscoveredTextareaCharacteristics_ = true;
+  }
+};
+
+
+/**
+ * Resizes the textarea to grow/shrink to match its contents.
+ * @param {goog.events.Event=} opt_e The browser event.
+ * @private
+ */
+goog.ui.Textarea.prototype.grow_ = function(opt_e) {
+  if (this.isResizing_) {
+    return;
+  }
+  var shouldCallShrink = false;
+  this.isResizing_ = true;
+  var textarea = this.getElement();
+  if (textarea.scrollHeight) {
+    var setMinHeight = false;
+    var setMaxHeight = false;
+    var newHeight = this.getHeight_();
+    var currentHeight = textarea.offsetHeight;
+    var minHeight = this.getMinHeight_();
+    var maxHeight = this.getMaxHeight_();
+    if (minHeight && newHeight < minHeight) {
+      this.setHeight_(minHeight);
+      setMinHeight = true;
+    } else if (maxHeight && newHeight > maxHeight) {
+      this.setHeight_(maxHeight);
+      // If the content is greater than the height, we'll want the vertical
+      // scrollbar back.
+      textarea.style.overflowY = '';
+      setMaxHeight = true;
+    } else if (currentHeight != newHeight) {
+      this.setHeight_(newHeight);
+    // Makes sure that height_ is at least set.
+    } else if (!this.height_) {
+      this.height_ = newHeight;
+    }
+    if (!setMinHeight && !setMaxHeight &&
+        goog.ui.Textarea.NEEDS_HELP_SHRINKING_) {
+      shouldCallShrink = true;
+    }
+  } else {
+    this.setHeightToEstimate_();
+  }
+  this.isResizing_ = false;
+
+  if (shouldCallShrink) {
+    this.shrink_();
+  }
+};
+
+
+/**
+ * Resizes the texarea to shrink to fit its contents. The way this works is
+ * by increasing the padding of the textarea by 1px (it's important here that
+ * we're in box-sizing: border-box mode). If the size of the textarea grows,
+ * then the box is filled up to the padding box with text.
+ * If it doesn't change, then we can shrink.
+ * @private
+ */
+goog.ui.Textarea.prototype.shrink_ = function() {
+  var textarea = this.getElement();
+  if (!this.isResizing_) {
+    this.isResizing_ = true;
+    var isEmpty = false;
+    if (!textarea.value) {
+      // Prevents height from becoming 0.
+      textarea.value = ' ';
+      isEmpty = true;
+    }
+    var scrollHeight = textarea.scrollHeight;
+    if (!scrollHeight) {
+      this.setHeightToEstimate_();
+    } else {
+      var currentHeight = this.getHeight_();
+      var minHeight = this.getMinHeight_();
+      var maxHeight = this.getMaxHeight_();
+      if (!(minHeight && currentHeight <= minHeight) &&
+          !(maxHeight && currentHeight >= maxHeight)) {
+        // Nudge the padding by 1px.
+        var paddingBox = this.paddingBox_;
+        textarea.style.paddingBottom = paddingBox.bottom + 1 + 'px';
+        var heightAfterNudge = this.getHeight_();
+        // If the one px of padding had no effect, then we can shrink.
+        if (heightAfterNudge == currentHeight) {
+          textarea.style.paddingBottom = paddingBox.bottom + scrollHeight +
+              'px';
+          textarea.scrollTop = 0;
+          var shrinkToHeight = this.getHeight_() - scrollHeight;
+          if (shrinkToHeight >= minHeight) {
+            this.setHeight_(shrinkToHeight);
+          } else {
+            this.setHeight_(minHeight);
+          }
+        }
+        textarea.style.paddingBottom = paddingBox.bottom + 'px';
+      }
+    }
+    if (isEmpty) {
+      textarea.value = '';
+    }
+    this.isResizing_ = false;
+  }
+};
+
+
+/**
+ * We use this listener to check if the textarea has been natively resized
+ * and if so we reset minHeight so that we don't ever shrink smaller than
+ * the user's manually set height. Note that we cannot check size on mousedown
+ * and then just compare here because we cannot capture mousedown on
+ * the textarea resizer, while mouseup fires reliably.
+ * @param {goog.events.BrowserEvent} e The mousedown event.
+ * @private
+ */
+goog.ui.Textarea.prototype.mouseUpListener_ = function(e) {
+  var textarea = this.getElement();
+  var height = textarea.offsetHeight;
+
+  // This solves for when the MSIE DropShadow filter is enabled,
+  // as it affects the offsetHeight value, even with MsBoxSizing:border-box.
+  if (textarea['filters'] && textarea['filters'].length) {
+    var dropShadow =
+        textarea['filters']['item']('DXImageTransform.Microsoft.DropShadow');
+    if (dropShadow) {
+      height -= dropShadow['offX'];
+    }
+  }
+
+  if (height != this.height_) {
+    this.minHeight_ = height;
+    this.height_ = height;
+  }
+};
+
+/**
+ * @fileoverview A widget which sets the filtering modes of all the pickers
+ * in the app.
+ */
+
+goog.provide('calendarmailer.ui.FilteringWidget');
+goog.provide('calendarmailer.ui.FilteringWidget.Event');
+goog.provide('calendarmailer.ui.FilteringWidget.EventType');
+
+goog.require('calendarmailer.soy.filteringwidget');
+goog.require('goog.dom.classes');
+goog.require('goog.events.Event');
+goog.require('goog.events.EventType');
+goog.require('goog.ui.Button');
+goog.require('goog.ui.Checkbox');
+goog.require('goog.ui.Component');
+goog.require('goog.ui.Textarea');
+goog.require('soy');
+
+
+
+/**
+ * A ui widget for setting the global filtering options for the app.
+ * @constructor
+ * @extends {goog.ui.Component}
+ */
+calendarmailer.ui.FilteringWidget = function() {
+  goog.base(this);
+
+  /**
+   * The text area widget.
+   * @type {!goog.ui.TextArea}
+   * @private
+   */
+  this.textbox_ = new goog.ui.Textarea('');
+  this.addChild(this.textbox_);
+
+  /**
+   * The checkbox widget.
+   * @type {!goog.ui.Checkbox}
+   * @private
+   */
+  this.checkbox_ = new goog.ui.Checkbox();
+  this.addChild(this.checkbox_);
+
+  /**
+   * The select all button.
+   * @type {!goog.ui.Button}
+   * @private
+   */
+  this.selectAllButton_ = new goog.ui.Button();
+  this.addChild(this.selectAllButton_);
+
+  /**
+   * The select none button.
+   * @type {!goog.ui.Button}
+   * @private
+   */
+  this.selectNoneButton_ = new goog.ui.Button();
+  this.addChild(this.selectNoneButton_);
+
+  /**
+   * The submit button
+   * @type {!goog.ui.Button}
+   * @private
+   */
+  this.addButton_ = new goog.ui.Button(null /* content */);
+  this.addChild(this.addButton_);
+};
+goog.inherits(calendarmailer.ui.FilteringWidget, goog.ui.Component);
+
+
+/**
+ * Filtering widget event types.
+ * @enum {string}
+ */
+calendarmailer.ui.FilteringWidget.EventType = {
+  FILTER_CHANGE: 'fc',
+  SELECT_ALL: 'sa',
+  SELECT_NONE: 'sn',
+  SUBMIT: 'sb'
+};
+
+
+/**
+ * The element for the textbox to decorate.
+ * @type {!Element}
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.textboxEl_;
+
+
+/**
+ * The element for the checkbox to decorate.
+ * @type {!Element}
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.checkboxEl_;
+
+/**
+ * The element for the select all button to decorate.
+ * @type {!Element}
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.selectAllButtonEl_;
+
+
+/**
+ * The element for the select none button to decorate.
+ * @type {!Element}
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.selectNoneButtonEl_;
+
+
+/**
+ * The element for the submit button to decorate.
+ * @type {!Element}
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.submitButtonEl_;
+
+
+/**
+ * Whether the text has been modified.
+ * @type {!boolean}
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.textModified_ = false;
+
+
+/** @override */
+calendarmailer.ui.FilteringWidget.prototype.createDom = function() {
+  var dom = this.getDomHelper();
+
+  var el = soy.renderAsElement(calendarmailer.soy.filteringwidget.all, {
+  });
+  this.setElementInternal(el);
+
+  this.textboxEl_ = dom.getElementByClass('filter-textbox', el);
+  this.checkboxEl_ = dom.getElementByClass('filter-checkbox', el);
+  this.selectAllButtonEl_ = dom.getElementByClass('filter-selectall', el);
+  this.selectNoneButtonEl_ = dom.getElementByClass('filter-selectnone', el);
+  this.addButtonEl_ = dom.getElementByClass('filter-submit', el);
+};
+
+
+/** @override */
+calendarmailer.ui.FilteringWidget.prototype.enterDocument = function() {
+  goog.base(this, 'enterDocument');
+
+  this.textbox_.decorate(this.textboxEl_);
+  this.checkbox_.decorate(this.checkboxEl_);
+  this.checkbox_.setLabel(
+      this.getDomHelper().getElement('repeatingfilter-label'));
+  this.selectAllButton_.decorate(this.selectAllButtonEl_);
+  this.selectNoneButton_.decorate(this.selectNoneButtonEl_);
+  this.addButton_.decorate(this.addButtonEl_);
+
+  this.textbox_.setValue('filter calendars by name');
+
+  this.getHandler().
+      listen(this.textboxEl_, goog.events.EventType.CLICK,
+          this.handleTextboxClick_).
+      listen(this.textboxEl_, goog.events.EventType.KEYUP,
+          this.handleFilterChange_).
+      listen(this.checkbox_, goog.ui.Component.EventType.CHANGE,
+          this.handleFilterChange_).
+      listen(this.selectAllButton_, goog.ui.Component.EventType.ACTION,
+          this.handleSelectAll_).
+      listen(this.selectNoneButton_, goog.ui.Component.EventType.ACTION,
+          this.handleSelectNone_).
+      listen(this.addButton_, goog.ui.Component.EventType.ACTION,
+          this.handleSubmit_);
+};
+
+
+/**
+ * Handles clicks on the textbox.
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.handleTextboxClick_ = function() {
+  if (!this.textModified_) {
+    this.textModified_ = true;
+    goog.dom.classes.enable(this.textboxEl_, 'filter-textbox-active', true);
+    this.textbox_.setValue('');
+  }
+};
+
+
+/**
+ * Handles the filter changing.
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.handleFilterChange_ = function() {
+  window.console.log('handleFilterChange_');
+  this.dispatchEvent(new calendarmailer.ui.FilteringWidget.Event(
+      calendarmailer.ui.FilteringWidget.EventType.FILTER_CHANGE,
+      this.textModified_ ? this.textbox_.getValue() : '',
+      this.checkbox_.isChecked()));
+};
+
+
+/**
+ * Handles a global select all event.
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.handleSelectAll_ = function() {
+  this.dispatchEvent(calendarmailer.ui.FilteringWidget.EventType.SELECT_ALL);
+};
+
+
+/**
+ * Handles a global select none event.
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.handleSelectNone_ = function() {
+  this.dispatchEvent(calendarmailer.ui.FilteringWidget.EventType.SELECT_NONE);
+};
+
+
+/**
+ * Handles a global submit event.
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.handleSubmit_ = function() {
+  this.dispatchEvent(calendarmailer.ui.FilteringWidget.EventType.SUBMIT);
+};
+
+
+
+/**
+ * Filter widget event.
+ * @param {string} type The event type.
+ * @param {string=} opt_strFilter Optional string for filtering by name.
+ * @param {boolean=} opt_filterRepeats Optionally indicate whether events should
+ *     be filtered by whether they are repeating.
+ * @constructor
+ * @extends {goog.events.Event}
+ */
+calendarmailer.ui.FilteringWidget.Event = function(type, opt_strFilter,
+    opt_filterRepeats) {
+  goog.base(this, type);
+
+  this.filterStr = opt_strFilter || '';
+
+  this.filterByRepeats = !!opt_filterRepeats;
+};
+goog.inherits(calendarmailer.ui.FilteringWidget.Event, goog.events.Event);
+
+/**
+ * @fileoverview A renderer for a calendar object.
+ */
+
+goog.provide('calendarmailer.ui.Calendar');
+
+goog.require('calendarmailer.ui.Picker');
+
+
+
+/**
+ * A ui object for a calendar object.
+ * @param {string} id The id of the calendar this represents.
+ * @constructor
+ * @extends {calendarmailer.ui.Picker}
+ */
+calendarmailer.ui.Calendar = function(id) {
+  goog.base(this);
+
+  this.setId(id);
+
+  /**
+   * The events in the calendar.
+   * @type {!Array.<!Object>}
+   * @private
+   */
+  this.events_ = [];
+};
+goog.inherits(calendarmailer.ui.Calendar, calendarmailer.ui.Picker);
+
+
+/**
+ * Sets the event list object.
+ * @param {!Object} obj The object.
+ */
+calendarmailer.ui.Calendar.prototype.setListObject = function(obj) {
+  this.events_ = obj.items;
+};
+
+
+/** @override */
+calendarmailer.ui.Calendar.prototype.getItems = function() {
+  return this.events_;
+};
+
+
+/**
+ * Gets an array of actual event objects for all the selected events.
+ * @return {!Array.<!Object.<string, string>>} The names and emails.
+ */
+calendarmailer.ui.Calendar.prototype.getSelectedEvents = function() {
+  var result = [];
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    if (this.checkboxes[i].isChecked()) {
+      result.push(this.events_[i]);
+    }
+  }
+  return result;
+};
+
+
+/**
+ * Programatically sets all checkboxes to the given state.
+ * @param {boolean} select The new state for all the checkboxes.
+ */
+calendarmailer.ui.Calendar.prototype.selectAll = function(select) {
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    this.checkboxes[i].setChecked(select);
+  }
+  goog.dom.classes.enable(this.getElement(), 'picker-selected',
+      select ? this.checkboxes.length > 0 : false);
+};
+
+
+/**
+ * Sets whether to filter by repeating events.
+ * @param {boolean} filter Whether to filter.
+ */
+calendarmailer.ui.Calendar.prototype.setFilterByRepeating = function(filter) {
+  var checkboxes = this.checkboxes;
+  var showAll = !filter;
+  for (var i = 0; i < checkboxes.length; ++i) {
+    var box = checkboxes[i];
+    var show = showAll ||
+        this.getUnendingRecurrence_(this.events_[i].recurrence);
+    this.showBox(box, show);
+  }
+};
+
+
+/**
+ * Checks to see if the given recurrence rule is unending.
+ * @param {Array.<string>=} recurrence The recurrence rule.
+ * @return {boolean} Whether the rule is unending. False if null or undefined.
+ * @private
+ */
+calendarmailer.ui.Calendar.prototype.getUnendingRecurrence_ =
+    function(recurrence) {
+  if (!recurrence) {
+    return false;
+  }
+  for (var i = 0; i < recurrence.length; ++i) {
+    if (!goog.string.contains(recurrence[i], 'COUNT') &&
+        !goog.string.contains(recurrence[i], 'UTNTIL')) {
+        return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * @fileoverview A renderer for an object containing a list of names.
+ */
+
+goog.provide('calendarmailer.ui.NameList');
+
+goog.require('calendarmailer.ui.Picker');
+
+
+
+/**
+ * A ui object for a calendar object.
+ * @constructor
+ * @extends {calendarmailer.ui.Picker}
+ */
+calendarmailer.ui.NameList = function() {
+  goog.base(this);
+
+  /**
+   * The items in the list.
+   * @type {!Array.<!Object>}
+   * @private
+   */
+  this.items_ = [];
+};
+goog.inherits(calendarmailer.ui.NameList, calendarmailer.ui.Picker);
+
+
+/** @override */
+calendarmailer.ui.NameList.prototype.getItems = function() {
+  return this.items_;
+};
+
+
+/** @override */
+calendarmailer.ui.NameList.prototype.addItem = function(item) {
+  if (this.getChild(item.id)) {
+    return;
+  }
+  this.items_.push(item);
+
+  goog.base(this, 'addItem', item);
+};
+// Copyright 2012 Edwina Mead. All rights reserved.
+
+/**
+ * @fileoverview A renderer for a list of calendars.
+ */
+
+goog.provide('calendarmailer.ui.CalendarList');
+
+goog.require('calendarmailer.ui.Picker');
+goog.require('goog.dom.classes');
+goog.require('goog.string');
+
+
+
+/**
+ * A ui object for a list of calendars.
+ * @constructor
+ * @extends {calendarlist.ui.Picker}
+ */
+calendarmailer.ui.CalendarList = function() {
+  goog.base(this);
+
+  /**
+   * The calendar feed entry array.
+   * @type {!Array.<!Object>}
+   * @private
+   */
+  this.calendarFeedEntries_ = [];
+};
+goog.inherits(calendarmailer.ui.CalendarList, calendarmailer.ui.Picker);
 
 
 /**
@@ -26346,112 +27882,26 @@ calendarmailer.ui.CalendarList.prototype.setListObject = function(obj) {
 
 
 /** @override */
-calendarmailer.ui.CalendarList.prototype.createDom = function() {
-  this.setElementInternal(soy.renderAsElement(
-      calendarmailer.soy.calendarlist.all, {
-        calendars: this.calendarFeedEntries_
-      }));
-};
-
-
-/** @override */
-calendarmailer.ui.CalendarList.prototype.enterDocument = function() {
-  var dom = this.getDomHelper();
-  var handler = this.getHandler();
-
-  for (var i = 0; i < this.calendarFeedEntries_.length; ++i) {
-    var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
-    checkbox.setId(this.calendarFeedEntries_[i].id);
-    checkbox.setLabel(dom.getElement(this.calendarFeedEntries_[i].id +
-        '-label'));
-    this.addChild(checkbox);
-    this.checkboxes_.push(checkbox);
-    checkbox.decorate(dom.getElement(this.calendarFeedEntries_[i].id));
-  }
-
-  this.selectAllButton_.decorate(dom.getElement('calendar-picker-select-all'));
-  handler.listen(this.selectAllButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSelectAll_);
-
-  this.selectNoneButton_.decorate(
-      dom.getElement('calendar-picker-select-none'));
-  handler.listen(this.selectNoneButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSelectNone_);
-
-  this.submitButton_.decorate(
-      dom.getElement('calendar-picker-submit'));
-  handler.listen(this.submitButton_, goog.ui.Component.EventType.ACTION,
-      this.handleSubmit_);
+calendarmailer.ui.CalendarList.prototype.getItems = function() {
+  return this.calendarFeedEntries_;
 };
 
 
 /**
- * Handles clicks on the select all button.
- * @private
+ * Sets the filter string for the name of the contained calendars.
+ * @param {string} str The string to filter by.
  */
-calendarmailer.ui.CalendarList.prototype.handleSelectAll_ = function() {
-  for (var i = 0; i < this.checkboxes_.length; ++i) {
-    this.checkboxes_[i].setChecked(true);
+calendarmailer.ui.CalendarList.prototype.setFilterStr = function(str) {
+  var checkboxes = this.checkboxes;
+  var showAll = str.length == 0;
+  for (var i = 0; i < checkboxes.length; ++i) {
+    var box = checkboxes[i];
+    var show = showAll || goog.string.contains(
+        this.calendarFeedEntries_[i].summary.toLowerCase(),
+        str.toLowerCase());
+    this.showBox(box, show);
   }
 };
-
-
-/**
- * Handles clicks on the select none button.
- * @private
- */
-calendarmailer.ui.CalendarList.prototype.handleSelectNone_ = function() {
-  for (var i = 0; i < this.checkboxes_.length; ++i) {
-    this.checkboxes_[i].setChecked(false);
-  }
-};
-
-
-/**
- * Handles clicks on the submit button.
- * @private
- */
-calendarmailer.ui.CalendarList.prototype.handleSubmit_ = function() {
-  var ids = [];
-  for (var i = 0; i < this.checkboxes_.length; ++i) {
-    if (this.checkboxes_[i].isChecked()) {
-      ids.push(this.checkboxes_[i].getId());
-    }
-  }
-  this.selectedCalendars_ = ids;
-  this.dispatchEvent(new calendarmailer.ui.CalendarList.Event(ids));
-};
-
-
-/**
- * Gets the selected calendars. This only makes sense once the submit button
- * has been clicked.
- * @return {!Array.<string>} The array of calendar ids.
- */
-calendarmailer.ui.CalendarList.prototype.getSelectedCalendars = function() {
-  return this.selectedCalendars_;
-};
-
-
-
-/**
- * The event type which carries information on submit.
- * @param {!Array.<string>} calendars The calendar ids.
- * @constructor
- * @extends {goog.events.Event}
- */
-calendarmailer.ui.CalendarList.Event = function(calendars) {
-  goog.base(this, calendarmailer.ui.CalendarList.EventType.SUBMIT);
-
-  /**
-   * The ids of the calendars to get the events for.
-   * @type {!Array.<string>}
-   */
-  this.calendars = calendars;
-};
-goog.inherits(calendarmailer.ui.CalendarList.Event, goog.events.Event);
-
-// Copyright 2012 Edwina Mead. All rights reserved.
 
 /**
  * @fileoverview The calendar api management for the mailer app.
@@ -26462,9 +27912,16 @@ goog.provide('calendarmailer.App');
 goog.require('calendarmailer.CalendarApi');
 goog.require('calendarmailer.CalendarApi.EventType');
 goog.require('calendarmailer.Config');
+goog.require('calendarmailer.soy.email');
 goog.require('calendarmailer.ui.Calendar');
 goog.require('calendarmailer.ui.CalendarList');
+goog.require('calendarmailer.ui.FilteringWidget');
+goog.require('calendarmailer.ui.NameList');
+goog.require('calendarmailer.ui.Picker.EventType');
+goog.require('goog.array');
 goog.require('goog.events.EventHandler');
+goog.require('goog.object');
+goog.require('soy');
 
 
 
@@ -26473,6 +27930,12 @@ goog.require('goog.events.EventHandler');
  * @constructor
  */
 calendarmailer.App = function() {
+  /**
+   * The selected and added events.
+   * @type {!Array.<!Object.<string, string>>}
+   * @private
+   */
+  this.selectedEvents_ = [];
 
   /**
    * The config object.
@@ -26497,6 +27960,14 @@ calendarmailer.App = function() {
   this.calendar_.startLoad();
 
   /**
+   * The filter widget.
+   * @type {!calendarmailer.ui.FilteringWidget}
+   * @private
+   */
+  this.filter_ = new calendarmailer.ui.FilteringWidget();
+  this.filter_.render(document.getElementById('filter'));
+
+  /**
    * The calendar list ui.
    * @type {!calendarmailer.ui.CalendarList}
    * @private
@@ -26504,7 +27975,14 @@ calendarmailer.App = function() {
   this.calendarListUi_ = new calendarmailer.ui.CalendarList(this.calendar_);
 
   /**
-   * The array of calendar event uis (containers of calendar events).
+   * A name list.
+   * @type {!calendarmailer.ui.NameList}
+   * @private
+   */
+  this.nameList_ = new calendarmailer.ui.NameList();
+
+  /**
+   * The map of calendar event uis (containers of calendar events).
    * @type {!Object.<string, !calendarmailer.ui.Calendar>}
    * @private
    */
@@ -26518,16 +27996,21 @@ calendarmailer.App = function() {
       listen(this.calendar_,
           calendarmailer.CalendarApi.EventType.GET_EVENTS_RESULT,
           this.handleGetEventsResult_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.FILTER_CHANGE,
+          this.handleFilterChange_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.SELECT_ALL,
+          this.handleGlobalSelectAll_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.SELECT_NONE,
+          this.handleGlobalSelectNone_).
+      listen(this.filter_,
+          calendarmailer.ui.FilteringWidget.EventType.SUBMIT,
+          this.handleGlobalAddNames_).
       listen(this.calendarListUi_,
-          calendarmailer.ui.CalendarList.EventType.SUBMIT,
+          calendarmailer.ui.Picker.EventType.SUBMIT,
           this.handleCalendarListSubmit_);
-
-  /*
-   * This element will have the contents of the app placed inside it.
-   * @type {!Element}
-   * @private
-   */
-  this.contentEl_ = document.getElementById('content');
 };
 
 
@@ -26548,7 +28031,8 @@ calendarmailer.App.prototype.handleCalendarApiReady_ = function() {
  */
 calendarmailer.App.prototype.handleGetCalendarsResult_ = function(e) {
   this.calendarListUi_.setListObject(e.result);
-  this.calendarListUi_.render(this.contentEl_);
+  this.calendarListUi_.render(document.getElementById('calendars'));
+  this.calendarListUi_.setSubmitCaption('Get events for these calendars!');
 };
 
 
@@ -26558,9 +28042,9 @@ calendarmailer.App.prototype.handleGetCalendarsResult_ = function(e) {
  * @private
  */
 calendarmailer.App.prototype.handleCalendarListSubmit_ = function(e) {
-this.calendarListUi_.setVisible(false);
+this.calendarListUi_.setEnabled(false);
   // Start loading the first calendar which is not loaded yet.
-  this.getNextEvents_(e.calendars);
+  this.getNextEvents_(e.items);
 };
 
 
@@ -26573,8 +28057,9 @@ calendarmailer.App.prototype.handleGetEventsResult_ = function(e) {
   var calendarUi = new calendarmailer.ui.Calendar(e.id);
   calendarUi.setListObject(e.result);
   this.calendarEventUis_[e.id] = calendarUi;
-  calendarUi.render();
-  this.getNextEvents_(this.calendarListUi_.getSelectedCalendars());
+  calendarUi.render(document.getElementById('eventpickers'));
+  calendarUi.setSubmitCaption('Mail the owners of these events!');
+  this.getNextEvents_(this.calendarListUi_.getSelectedItems());
 };
 
 
@@ -26591,6 +28076,76 @@ calendarmailer.App.prototype.getNextEvents_ = function(calendars) {
       break;
     }
   }
+};
+
+
+/**
+ * Handles filter change results.
+ * @param {!calendarmailer.ui.FilteringWidget.Event} e The event.
+ * @private
+ */
+calendarmailer.App.prototype.handleFilterChange_ = function(e) {
+  var filterStr = e.filterStr;
+  if (this.calendarListUi_.isEnabled()) {
+    this.calendarListUi_.setFilterStr(filterStr);
+  }
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    ui.setFilterByRepeating(e.filterByRepeats);
+  }, this);
+};
+
+
+/**
+ * Handles a global select all event.
+ * @private
+ */
+calendarmailer.App.prototype.handleGlobalSelectAll_ = function() {
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    ui.selectAll(true);
+  }, this);
+};
+
+
+/**
+ * Handles a global select none event.
+ * @private
+ */
+calendarmailer.App.prototype.handleGlobalSelectNone_ = function() {
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    ui.selectAll(false);
+  }, this);
+};
+
+
+/**
+ * Handles a global add names event.
+ * @private
+ */
+calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
+  if (this.calendarListUi_.isEnabled()) {
+    return;
+  }
+  this.nameList_.render(document.getElementById('namelist'));
+  document.getElementById('email-preview').appendChild(soy.renderAsElement(
+      calendarmailer.soy.email.all, {}));
+  goog.object.forEach(this.calendarEventUis_, function(ui) {
+    if (!ui.isEnabled()) {
+      return;
+    }
+    var events = ui.getSelectedEvents();
+    for (var i = 0; i < events.length; ++i) {
+      var event = events[i];
+      var displayName = event.creator.displayName ?
+        event.creator.displayName + ' (' + event.creator.email + ')' :
+        event.creator.email;
+      this.nameList_.addItem({
+        id: event.creator.email,
+        summary: displayName
+      });
+    }
+    goog.array.extend(this.selectedEvents_, events);
+    ui.setEnabled(false);
+  }, this);
 };
 
 
