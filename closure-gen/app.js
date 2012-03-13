@@ -25660,7 +25660,9 @@ calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
   var itemListLen16 = itemList16.length;
   for (var itemIndex16 = 0; itemIndex16 < itemListLen16; itemIndex16++) {
     var itemData16 = itemList16[itemIndex16];
-    calendarmailer.soy.picker.row({idprefix: opt_data.idprefix, item: itemData16}, output);
+    if (! (itemData16.status && itemData16.status.cancelled)) {
+      calendarmailer.soy.picker.row({idprefix: opt_data.idprefix, item: itemData16}, output);
+    }
   }
   output.append('</div><button class="picker-submit">Go!</button></div>');
   return opt_sb ? '' : output.toString();
@@ -26240,6 +26242,9 @@ calendarmailer.ui.Picker.prototype.enterDocument = function() {
   var items = this.getItems();
 
   for (var i = 0; i < items.length; ++i) {
+    if (items[i].status && items[i].status.cancelled) {
+      continue;
+    }
     var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
     checkbox.setLabel(dom.getElement(
         this.getId() + '-' + items[i].id + '-label'));

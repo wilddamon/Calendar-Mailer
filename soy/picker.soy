@@ -20,10 +20,12 @@
   </button>
   <div class="picker-boxes">
     {foreach $item in $items}
-      {call .row}
-        {param idprefix: $idprefix /}
-        {param item: $item /}
-      {/call}
+      {if not ($item.status and $item.status.cancelled)}
+        {call .row}
+          {param idprefix: $idprefix /}
+          {param item: $item /}
+        {/call}
+      {/if}
     {/foreach}
   </div>
   <button class="picker-submit">Go!</button>

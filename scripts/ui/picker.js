@@ -127,6 +127,9 @@ calendarmailer.ui.Picker.prototype.enterDocument = function() {
   var items = this.getItems();
 
   for (var i = 0; i < items.length; ++i) {
+    if (items[i].status && items[i].status.cancelled) {
+      continue;
+    }
     var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
     checkbox.setLabel(dom.getElement(
         this.getId() + '-' + items[i].id + '-label'));
