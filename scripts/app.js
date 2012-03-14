@@ -242,6 +242,7 @@ calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
     goog.array.extend(this.selectedEvents_, events);
     ui.setEnabled(false);
   }, this);
+  this.nameList_.selectAll(true);
 };
 
 

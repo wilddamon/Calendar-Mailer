@@ -195,11 +195,7 @@ calendarmailer.ui.Picker.prototype.setSubmitCaption = function(caption) {
  * @private
  */
 calendarmailer.ui.Picker.prototype.handleSelectAll_ = function() {
-  for (var i = 0; i < this.checkboxes.length; ++i) {
-    this.checkboxes[i].setChecked(true);
-  }
-  goog.dom.classes.enable(this.getElement(), 'picker-selected',
-      this.checkboxes.length > 0);
+  this.selectAll(true);
 };
 
 
@@ -208,11 +204,7 @@ calendarmailer.ui.Picker.prototype.handleSelectAll_ = function() {
  * @private
  */
 calendarmailer.ui.Picker.prototype.handleSelectNone_ = function() {
-  for (var i = 0; i < this.checkboxes.length; ++i) {
-    this.checkboxes[i].setChecked(false);
-  }
-  goog.dom.classes.enable(this.getElement(), 'picker-selected',
-      false);
+  this.selectAll(false);
 };
 
 
@@ -259,6 +251,19 @@ calendarmailer.ui.Picker.prototype.getSelectedItems = function() {
  * @protected
  */
 calendarmailer.ui.Picker.prototype.getItems = goog.abstractMethod;
+
+
+/**
+ * Programatically sets all checkboxes to the given state.
+ * @param {boolean} select The new state for all the checkboxes.
+ */
+calendarmailer.ui.Picker.prototype.selectAll = function(select) {
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    this.checkboxes[i].setChecked(select);
+  }
+  goog.dom.classes.enable(this.getElement(), 'picker-selected',
+      select ? this.checkboxes.length > 0 : false);
+};
 
 
 /** @override */

@@ -26310,11 +26310,7 @@ calendarmailer.ui.Picker.prototype.setSubmitCaption = function(caption) {
  * @private
  */
 calendarmailer.ui.Picker.prototype.handleSelectAll_ = function() {
-  for (var i = 0; i < this.checkboxes.length; ++i) {
-    this.checkboxes[i].setChecked(true);
-  }
-  goog.dom.classes.enable(this.getElement(), 'picker-selected',
-      this.checkboxes.length > 0);
+  this.selectAll(true);
 };
 
 
@@ -26323,11 +26319,7 @@ calendarmailer.ui.Picker.prototype.handleSelectAll_ = function() {
  * @private
  */
 calendarmailer.ui.Picker.prototype.handleSelectNone_ = function() {
-  for (var i = 0; i < this.checkboxes.length; ++i) {
-    this.checkboxes[i].setChecked(false);
-  }
-  goog.dom.classes.enable(this.getElement(), 'picker-selected',
-      false);
+  this.selectAll(false);
 };
 
 
@@ -26374,6 +26366,19 @@ calendarmailer.ui.Picker.prototype.getSelectedItems = function() {
  * @protected
  */
 calendarmailer.ui.Picker.prototype.getItems = goog.abstractMethod;
+
+
+/**
+ * Programatically sets all checkboxes to the given state.
+ * @param {boolean} select The new state for all the checkboxes.
+ */
+calendarmailer.ui.Picker.prototype.selectAll = function(select) {
+  for (var i = 0; i < this.checkboxes.length; ++i) {
+    this.checkboxes[i].setChecked(select);
+  }
+  goog.dom.classes.enable(this.getElement(), 'picker-selected',
+      select ? this.checkboxes.length > 0 : false);
+};
 
 
 /** @override */
@@ -26445,7 +26450,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.filteringwidget.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="filter-base"><div class="filter-section"><div class="filter-title">Filter calendars</div><textarea class="filter-textbox" rows="1"></textarea></div><div class="filter-section"><div class="filter-title">Filter events</div><div id="repeatingfilter" name="repeatingfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div><label id="repeatingfilter-label" for="repeatingfilter" class="checkbox-label">Show repeating events only.</label></div><div class="filter-section"><div class="filter-title">Event selection global control</div><button class="filter-selectall">Select all visible events</button><button class="filter-selectnone">Deselect all visible events</button><button class="filter-submit">Add owners of all selected events to be mailed.</button></div></div>');
+  output.append('<div class="filter-base"><div class="filter-section"><div class="filter-title">Filter calendars</div><textarea class="filter-textbox" rows="1"></textarea></div><div class="filter-section"><div class="filter-title">Filter events</div><div id="repeatingfilter" name="repeatingfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div><label id="repeatingfilter-label" for="repeatingfilter" class="checkbox-label">Show repeating events only.</label><div id="locationfilter" name="locationfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox filter-loc-checkbox"></div><label id="locationfilter-label" for="locationfilter" class="checkbox-label">Show events with locations only.</label></div><div class="filter-section"><div class="filter-title">Event selection global control</div><button class="filter-selectall">Select all visible events</button><button class="filter-selectnone">Deselect all visible events</button><button class="filter-submit">Add owners of all selected events to be mailed.</button></div></div>');
   return opt_sb ? '' : output.toString();
 };
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
@@ -27480,12 +27485,20 @@ calendarmailer.ui.FilteringWidget = function() {
   this.addChild(this.textbox_);
 
   /**
-   * The checkbox widget.
+   * The repeating filter checkbox.
    * @type {!goog.ui.Checkbox}
    * @private
    */
-  this.checkbox_ = new goog.ui.Checkbox();
-  this.addChild(this.checkbox_);
+  this.repeatCheckbox_ = new goog.ui.Checkbox();
+  this.addChild(this.repeatCheckbox_);
+
+  /**
+   * The location filter checkbox.
+   * @type {!goog.ui.Checkbox}
+   * @private
+   */
+  this.locationCheckbox_ = new goog.ui.Checkbox();
+  this.addChild(this.locationCheckbox_);
 
   /**
    * The select all button.
@@ -27535,11 +27548,20 @@ calendarmailer.ui.FilteringWidget.prototype.textboxEl_;
 
 
 /**
- * The element for the checkbox to decorate.
+ * The element for the repeating filter checkbox to decorate.
  * @type {!Element}
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.checkboxEl_;
+calendarmailer.ui.FilteringWidget.prototype.repeatCheckboxEl_;
+
+
+/**
+ * The element for the location filter checkbox to decorate.
+ * @type {!Element}
+ * @private
+ */
+calendarmailer.ui.FilteringWidget.prototype.locationCheckboxEl_;
+
 
 /**
  * The element for the select all button to decorate.
@@ -27582,7 +27604,8 @@ calendarmailer.ui.FilteringWidget.prototype.createDom = function() {
   this.setElementInternal(el);
 
   this.textboxEl_ = dom.getElementByClass('filter-textbox', el);
-  this.checkboxEl_ = dom.getElementByClass('filter-checkbox', el);
+  this.repeatCheckboxEl_ = dom.getElementByClass('filter-checkbox', el);
+  this.locationCheckboxEl_ = dom.getELementByClass('filter-loc-checkbox', el);
   this.selectAllButtonEl_ = dom.getElementByClass('filter-selectall', el);
   this.selectNoneButtonEl_ = dom.getElementByClass('filter-selectnone', el);
   this.addButtonEl_ = dom.getElementByClass('filter-submit', el);
@@ -27594,9 +27617,12 @@ calendarmailer.ui.FilteringWidget.prototype.enterDocument = function() {
   goog.base(this, 'enterDocument');
 
   this.textbox_.decorate(this.textboxEl_);
-  this.checkbox_.decorate(this.checkboxEl_);
-  this.checkbox_.setLabel(
+  this.repeatCheckbox_.decorate(this.repeatCheckboxEl_);
+  this.repeatCheckbox_.setLabel(
       this.getDomHelper().getElement('repeatingfilter-label'));
+  this.locationCheckbox_.decorate(this.locationCheckboxEl_);
+  this.locationCheckbox_.setLabel(
+      this.getDomHelper().getElement('locationfilter-label'));
   this.selectAllButton_.decorate(this.selectAllButtonEl_);
   this.selectNoneButton_.decorate(this.selectNoneButtonEl_);
   this.addButton_.decorate(this.addButtonEl_);
@@ -27608,7 +27634,9 @@ calendarmailer.ui.FilteringWidget.prototype.enterDocument = function() {
           this.handleTextboxClick_).
       listen(this.textboxEl_, goog.events.EventType.KEYUP,
           this.handleFilterChange_).
-      listen(this.checkbox_, goog.ui.Component.EventType.CHANGE,
+      listen(this.repeatCheckbox_, goog.ui.Component.EventType.CHANGE,
+          this.handleFilterChange_).
+      listen(this.locationCheckbox_, goog.ui.Component.EventType.CHANGE,
           this.handleFilterChange_).
       listen(this.selectAllButton_, goog.ui.Component.EventType.ACTION,
           this.handleSelectAll_).
@@ -27641,7 +27669,7 @@ calendarmailer.ui.FilteringWidget.prototype.handleFilterChange_ = function() {
   this.dispatchEvent(new calendarmailer.ui.FilteringWidget.Event(
       calendarmailer.ui.FilteringWidget.EventType.FILTER_CHANGE,
       this.textModified_ ? this.textbox_.getValue() : '',
-      this.checkbox_.isChecked()));
+      this.repeatCheckbox_.isChecked(), this.locationCheckbox_.isChecked()));
 };
 
 
@@ -27679,16 +27707,20 @@ calendarmailer.ui.FilteringWidget.prototype.handleSubmit_ = function() {
  * @param {string=} opt_strFilter Optional string for filtering by name.
  * @param {boolean=} opt_filterRepeats Optionally indicate whether events should
  *     be filtered by whether they are repeating.
+ * @param {boolean=} opt_filterLocation Optionally indicate whether events
+ *     should be filtered by whether they have a location.
  * @constructor
  * @extends {goog.events.Event}
  */
 calendarmailer.ui.FilteringWidget.Event = function(type, opt_strFilter,
-    opt_filterRepeats) {
+    opt_filterRepeats, opt_filterLocation) {
   goog.base(this, type);
 
   this.filterStr = opt_strFilter || '';
 
   this.filterByRepeats = !!opt_filterRepeats;
+
+  this.filterByLocation = !!opt_filterLocation;
 };
 goog.inherits(calendarmailer.ui.FilteringWidget.Event, goog.events.Event);
 
@@ -27750,19 +27782,6 @@ calendarmailer.ui.Calendar.prototype.getSelectedEvents = function() {
     }
   }
   return result;
-};
-
-
-/**
- * Programatically sets all checkboxes to the given state.
- * @param {boolean} select The new state for all the checkboxes.
- */
-calendarmailer.ui.Calendar.prototype.selectAll = function(select) {
-  for (var i = 0; i < this.checkboxes.length; ++i) {
-    this.checkboxes[i].setChecked(select);
-  }
-  goog.dom.classes.enable(this.getElement(), 'picker-selected',
-      select ? this.checkboxes.length > 0 : false);
 };
 
 
@@ -28151,6 +28170,7 @@ calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
     goog.array.extend(this.selectedEvents_, events);
     ui.setEnabled(false);
   }, this);
+  this.nameList_.selectAll(true);
 };
 
 

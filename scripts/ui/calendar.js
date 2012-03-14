@@ -61,19 +61,6 @@ calendarmailer.ui.Calendar.prototype.getSelectedEvents = function() {
 
 
 /**
- * Programatically sets all checkboxes to the given state.
- * @param {boolean} select The new state for all the checkboxes.
- */
-calendarmailer.ui.Calendar.prototype.selectAll = function(select) {
-  for (var i = 0; i < this.checkboxes.length; ++i) {
-    this.checkboxes[i].setChecked(select);
-  }
-  goog.dom.classes.enable(this.getElement(), 'picker-selected',
-      select ? this.checkboxes.length > 0 : false);
-};
-
-
-/**
  * Sets whether to filter by repeating events.
  * @param {boolean} filter Whether to filter.
  */
