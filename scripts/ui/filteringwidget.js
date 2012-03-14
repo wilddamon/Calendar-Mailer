@@ -45,14 +45,6 @@ calendarmailer.ui.FilteringWidget = function() {
   this.addChild(this.repeatCheckbox_);
 
   /**
-   * The location filter checkbox.
-   * @type {!goog.ui.Checkbox}
-   * @private
-   */
-  this.locationCheckbox_ = new goog.ui.Checkbox();
-  this.addChild(this.locationCheckbox_);
-
-  /**
    * The select all button.
    * @type {!goog.ui.Button}
    * @private
@@ -92,6 +84,17 @@ calendarmailer.ui.FilteringWidget.EventType = {
 
 
 /**
+ * Section names.
+ * @enum {string}
+ */
+calendarmailer.ui.FilteringWidget.SectionName = {
+  CALENDARS: 'filter-calendars',
+  EVENTS: 'filter-events',
+  SELECT: 'filter-select-control'
+};
+
+
+/**
  * The element for the textbox to decorate.
  * @type {!Element}
  * @private
@@ -105,14 +108,6 @@ calendarmailer.ui.FilteringWidget.prototype.textboxEl_;
  * @private
  */
 calendarmailer.ui.FilteringWidget.prototype.repeatCheckboxEl_;
-
-
-/**
- * The element for the location filter checkbox to decorate.
- * @type {!Element}
- * @private
- */
-calendarmailer.ui.FilteringWidget.prototype.locationCheckboxEl_;
 
 
 /**
@@ -157,7 +152,6 @@ calendarmailer.ui.FilteringWidget.prototype.createDom = function() {
 
   this.textboxEl_ = dom.getElementByClass('filter-textbox', el);
   this.repeatCheckboxEl_ = dom.getElementByClass('filter-checkbox', el);
-  this.locationCheckboxEl_ = dom.getELementByClass('filter-loc-checkbox', el);
   this.selectAllButtonEl_ = dom.getElementByClass('filter-selectall', el);
   this.selectNoneButtonEl_ = dom.getElementByClass('filter-selectnone', el);
   this.addButtonEl_ = dom.getElementByClass('filter-submit', el);
@@ -172,9 +166,6 @@ calendarmailer.ui.FilteringWidget.prototype.enterDocument = function() {
   this.repeatCheckbox_.decorate(this.repeatCheckboxEl_);
   this.repeatCheckbox_.setLabel(
       this.getDomHelper().getElement('repeatingfilter-label'));
-  this.locationCheckbox_.decorate(this.locationCheckboxEl_);
-  this.locationCheckbox_.setLabel(
-      this.getDomHelper().getElement('locationfilter-label'));
   this.selectAllButton_.decorate(this.selectAllButtonEl_);
   this.selectNoneButton_.decorate(this.selectNoneButtonEl_);
   this.addButton_.decorate(this.addButtonEl_);
@@ -187,8 +178,6 @@ calendarmailer.ui.FilteringWidget.prototype.enterDocument = function() {
       listen(this.textboxEl_, goog.events.EventType.KEYUP,
           this.handleFilterChange_).
       listen(this.repeatCheckbox_, goog.ui.Component.EventType.CHANGE,
-          this.handleFilterChange_).
-      listen(this.locationCheckbox_, goog.ui.Component.EventType.CHANGE,
           this.handleFilterChange_).
       listen(this.selectAllButton_, goog.ui.Component.EventType.ACTION,
           this.handleSelectAll_).
@@ -221,7 +210,7 @@ calendarmailer.ui.FilteringWidget.prototype.handleFilterChange_ = function() {
   this.dispatchEvent(new calendarmailer.ui.FilteringWidget.Event(
       calendarmailer.ui.FilteringWidget.EventType.FILTER_CHANGE,
       this.textModified_ ? this.textbox_.getValue() : '',
-      this.repeatCheckbox_.isChecked(), this.locationCheckbox_.isChecked()));
+      this.repeatCheckbox_.isChecked()));
 };
 
 
@@ -252,6 +241,23 @@ calendarmailer.ui.FilteringWidget.prototype.handleSubmit_ = function() {
 };
 
 
+/**
+ * Sets the given section visible.
+ * @param {calendarmailer.ui.FilteringWidget.SectionName} section The section.
+ */
+calendarmailer.ui.FilteringWidget.prototype.setSectionVisible = function(
+    section) {
+  var dom = this.getDomHelper();
+  var names = calendarmailer.ui.FilteringWidget.SectionName;
+  goog.dom.classes.enable(dom.getElement(names.CALENDARS),
+      'filter-section-hidden', !(section == names.CALENDARS));
+  goog.dom.classes.enable(dom.getElement(names.EVENTS),
+      'filter-section-hidden', !(section == names.EVENTS));
+  goog.dom.classes.enable(dom.getElement(names.SELECT),
+      'filter-section-hidden', !(section == names.EVENTS));
+};
+
+
 
 /**
  * Filter widget event.
@@ -259,19 +265,15 @@ calendarmailer.ui.FilteringWidget.prototype.handleSubmit_ = function() {
  * @param {string=} opt_strFilter Optional string for filtering by name.
  * @param {boolean=} opt_filterRepeats Optionally indicate whether events should
  *     be filtered by whether they are repeating.
- * @param {boolean=} opt_filterLocation Optionally indicate whether events
- *     should be filtered by whether they have a location.
  * @constructor
  * @extends {goog.events.Event}
  */
 calendarmailer.ui.FilteringWidget.Event = function(type, opt_strFilter,
-    opt_filterRepeats, opt_filterLocation) {
+    opt_filterRepeats) {
   goog.base(this, type);
 
   this.filterStr = opt_strFilter || '';
 
   this.filterByRepeats = !!opt_filterRepeats;
-
-  this.filterByLocation = !!opt_filterLocation;
 };
 goog.inherits(calendarmailer.ui.FilteringWidget.Event, goog.events.Event);

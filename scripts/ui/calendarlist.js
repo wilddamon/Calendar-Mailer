@@ -7,6 +7,7 @@
 goog.provide('calendarmailer.ui.CalendarList');
 
 goog.require('calendarmailer.ui.Picker');
+goog.require('goog.array');
 goog.require('goog.dom.classes');
 goog.require('goog.string');
 
@@ -35,7 +36,11 @@ goog.inherits(calendarmailer.ui.CalendarList, calendarmailer.ui.Picker);
  * @param {!Object} obj The object.
  */
 calendarmailer.ui.CalendarList.prototype.setListObject = function(obj) {
-  this.calendarFeedEntries_ = obj.items;
+  var items = obj.items;
+  goog.array.sort(items, function(item1, item2) {
+    return goog.string.caseInsensitiveCompare(item1.summary, item2.summary);
+  });
+  this.calendarFeedEntries_ = items;
 };
 
 

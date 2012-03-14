@@ -8,7 +8,7 @@ js_ui_files="scripts/ui/*.js"
 soy_files="soy/*.soy"
 css_files="css/*.css"
 
-gjslint ${js_files[@]} ${js_ui_files[@]}
+gjslint --strict ${js_files[@]} ${js_ui_files[@]}
 
 java -jar ../soy-latest/SoyToJsSrcCompiler.jar \
   --shouldGenerateJsdoc \

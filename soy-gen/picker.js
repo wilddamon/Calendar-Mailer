@@ -15,7 +15,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all">Select all</button><button class="picker-select picker-select-none">Select none</button><div class="picker-boxes">');
+  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title picker-title-hidden">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all">Select all</button><button class="picker-select picker-select-none">Select none</button><div class="picker-boxes">');
   var itemList16 = opt_data.items;
   var itemListLen16 = itemList16.length;
   for (var itemIndex16 = 0; itemIndex16 < itemListLen16; itemIndex16++) {
@@ -37,6 +37,6 @@ calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
  */
 calendarmailer.soy.picker.row = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="picker-row"><div id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" value="', soy.$$escapeHtml(opt_data.item.id), '" name="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="goog-checkbox goog-checkbox-unchecked"></div><label id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '-label" for="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="picker-label checkbox-label">', soy.$$escapeHtml(opt_data.item.summary), '</label></div>');
+  output.append('<div class="picker-row"><div id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" value="', soy.$$escapeHtml(opt_data.item.id), '" name="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="goog-checkbox goog-checkbox-unchecked"></div><label id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '-label" for="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="picker-label checkbox-label">', (opt_data.item.summary) ? soy.$$escapeHtml(opt_data.item.summary) : '(No Title)', '</label></div>');
   return opt_sb ? '' : output.toString();
 };

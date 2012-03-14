@@ -79,6 +79,9 @@
   font-size: 1.2em;
   padding-bottom: 4px;
 }
+.filter-section-hidden {
+  display: none;
+}
 .picker-base {
   background: #f8f8f8;
   border: 1px solid grey;
@@ -92,7 +95,7 @@
 .picker-base.goog-control-disabled {
   opacity: .4;
 }
-.picker-label-disabled {
+.picker-label-hidden, .picker-title-hidden {
   display: none;
 }
 .picker-boxes {

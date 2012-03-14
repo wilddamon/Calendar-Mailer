@@ -152,14 +152,17 @@ calendarmailer.ui.Picker.prototype.enterDocument = function() {
           this.handleSelectNone_).
       listen(this.submitButton_, goog.ui.Component.EventType.ACTION,
           this.handleSubmit_);
+
+  this.getRenderer().setFocusable(this, false);
 };
 
 
 /**
  * Adds an item to the picker. Subclasses should override this function.
  * @param {{id: string, summary: string}} item The item.
+ * @param {boolean=} opt_checked Whether the item should start out checked.
  */
-calendarmailer.ui.Picker.prototype.addItem = function(item) {
+calendarmailer.ui.Picker.prototype.addItem = function(item, opt_checked) {
   var dom = this.getDomHelper();
 
   var pickerBoxes = dom.getElementByClass('picker-boxes', this.getElement());
@@ -172,8 +175,9 @@ calendarmailer.ui.Picker.prototype.addItem = function(item) {
   var checkbox = new goog.ui.Checkbox(undefined /* opt_checked */, dom);
   this.addChild(checkbox);
   checkbox.setLabel(dom.getElement(
-        this.getId() + '-' + item.id + '-label'));
+      this.getId() + '-' + item.id + '-label'));
   checkbox.decorate(row.firstChild);
+  checkbox.setChecked(!!opt_checked);
 
   checkbox.setId(item.id);
   this.getHandler().listen(checkbox, goog.ui.Component.EventType.CHANGE,
@@ -259,7 +263,8 @@ calendarmailer.ui.Picker.prototype.getItems = goog.abstractMethod;
  */
 calendarmailer.ui.Picker.prototype.selectAll = function(select) {
   for (var i = 0; i < this.checkboxes.length; ++i) {
-    this.checkboxes[i].setChecked(select);
+    var box = this.checkboxes[i];
+    box.setChecked(select && box.isVisible());
   }
   goog.dom.classes.enable(this.getElement(), 'picker-selected',
       select ? this.checkboxes.length > 0 : false);
@@ -287,16 +292,27 @@ calendarmailer.ui.Picker.prototype.setEnabled = function(enabled) {
  * @protected
  */
 calendarmailer.ui.Picker.prototype.showBox = function(box, show) {
-    box.setVisible(show);
-    var label = this.getDomHelper().getElement(
-        this.getId() + '-' + box.getId() + '-label');
-    goog.dom.classes.enable(label, 'picker-label-disabled', !show);
+  box.setVisible(show);
+  var label = this.getDomHelper().getElement(
+      this.getId() + '-' + box.getId() + '-label');
+  goog.dom.classes.enable(label, 'picker-label-hidden', !show);
 
-    if (!show && box.isChecked()) {
-      box.setChecked(false);
-      // Sets the background colour.
-      this.handleClick_(); // TODO: rename
-    }
+  if (!show && box.isChecked()) {
+    box.setChecked(false);
+    // Sets the background colour.
+    this.handleClick_(); // TODO: rename
+  }
+};
+
+
+/**
+ * Sets the display of the title.
+ * @param {boolean} show Whether to show the title.
+ */
+calendarmailer.ui.Picker.prototype.showTitle = function(show) {
+  var title = this.getDomHelper().getElementByClass('picker-title',
+      this.getElement());
+  goog.dom.classes.enable(title, 'picker-title-hidden', !show);
 };
 
 

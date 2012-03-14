@@ -66,10 +66,10 @@ calendarmailer.CalendarApi.objectNames_ = {
 
 /**
  * The maximum number of results to be returned in a single request.
- * @type {number}
+ * @type {number=}
  * @private
  */
-calendarmailer.CalendarApi.MAX_RESULTS_ = 20;
+calendarmailer.CalendarApi.MAX_RESULTS_;
 
 
 /**
@@ -113,7 +113,6 @@ calendarmailer.CalendarApi.prototype.startLoad = function() {
  * @private
  */
 calendarmailer.CalendarApi.prototype.doAuth_ = function() {
-  window.console.log('checking auth...');
   var setKey = goog.getObjectByName(
       calendarmailer.CalendarApi.objectNames_.SET_API_KEY);
   setKey(this.config_.getApiKey());
@@ -121,12 +120,11 @@ calendarmailer.CalendarApi.prototype.doAuth_ = function() {
   goog.Timer.callOnce(function() {
     var authorize = goog.getObjectByName(
         calendarmailer.CalendarApi.objectNames_.AUTH);
-    var docs = authorize({
+    authorize({
       client_id: this.config_.getClientId(),
       scope: this.config_.getScope(),
       immediate: false
     }, goog.bind(this.loadApi_, this));
-    window.console.log('auth doc: ' + docs);
   }, 1, this);
 };
 
@@ -136,7 +134,6 @@ calendarmailer.CalendarApi.prototype.doAuth_ = function() {
  * @private
  */
 calendarmailer.CalendarApi.prototype.loadApi_ = function() {
-  window.console.log('loading api...');
   goog.Timer.callOnce(function() {
     var load = goog.getObjectByName(
         calendarmailer.CalendarApi.objectNames_.LOAD);
@@ -150,7 +147,6 @@ calendarmailer.CalendarApi.prototype.loadApi_ = function() {
  * @private
  */
 calendarmailer.CalendarApi.prototype.onApiLoaded_ = function() {
-  window.console.log('done loading');
   this.listCalendars_ = goog.getObjectByName(
       calendarmailer.CalendarApi.objectNames_.LIST);
   this.getEvents_ = goog.getObjectByName(
@@ -198,7 +194,6 @@ calendarmailer.CalendarApi.prototype.handleListResult_ = function(result) {
  */
 calendarmailer.CalendarApi.prototype.getCalendarEvents = function(id,
     opt_pageToken) {
-  window.console.log('requesting events for calendar: ' + id);
   this.getEvents_({
     calendarId: id,
     maxResults: calendarmailer.CalendarApi.MAX_RESULTS_,

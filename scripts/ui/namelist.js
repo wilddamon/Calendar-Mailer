@@ -40,5 +40,5 @@ calendarmailer.ui.NameList.prototype.addItem = function(item) {
   }
   this.items_.push(item);
 
-  goog.base(this, 'addItem', item);
+  goog.base(this, 'addItem', item, true);
 };

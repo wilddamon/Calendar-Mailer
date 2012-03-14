@@ -11,7 +11,11 @@
  */
 {template .all}
 <div class="picker-base">
-  {if $title}<div class="picker-title">{$title}</div>{/if}
+  {if $title}
+    <div class="picker-title picker-title-hidden">
+      {$title}
+    </div>
+  {/if}
   <button class="picker-select picker-select-all">
     Select all
   </button>
@@ -44,7 +48,11 @@
       class="goog-checkbox goog-checkbox-unchecked"></div>
   <label id="{$idprefix}-{$item.id}-label" for="{$idprefix}-{$item.id}"{sp}
       class="picker-label checkbox-label">
-    {$item.summary}
+    {if $item.summary}
+      {$item.summary}
+    {else}
+      (No Title)
+    {/if}
   </label>
 </div>
 {/template}

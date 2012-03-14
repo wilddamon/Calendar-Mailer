@@ -62,6 +62,8 @@ calendarmailer.App = function() {
    */
   this.filter_ = new calendarmailer.ui.FilteringWidget();
   this.filter_.render(document.getElementById('filter'));
+  this.filter_.setSectionVisible(
+      calendarmailer.ui.FilteringWidget.SectionName.CALENDARS);
 
   /**
    * The calendar list ui.
@@ -138,7 +140,7 @@ calendarmailer.App.prototype.handleGetCalendarsResult_ = function(e) {
  * @private
  */
 calendarmailer.App.prototype.handleCalendarListSubmit_ = function(e) {
-this.calendarListUi_.setEnabled(false);
+  this.calendarListUi_.setEnabled(false);
   // Start loading the first calendar which is not loaded yet.
   this.getNextEvents_(e.items);
 };
@@ -150,6 +152,10 @@ this.calendarListUi_.setEnabled(false);
  * @private
  */
 calendarmailer.App.prototype.handleGetEventsResult_ = function(e) {
+  this.calendarListUi_.setVisible(false);
+  this.filter_.setSectionVisible(
+      calendarmailer.ui.FilteringWidget.SectionName.EVENTS);
+
   var calendarUi = new calendarmailer.ui.Calendar(e.id);
   calendarUi.setListObject(e.result);
   this.calendarEventUis_[e.id] = calendarUi;
@@ -186,7 +192,7 @@ calendarmailer.App.prototype.handleFilterChange_ = function(e) {
     this.calendarListUi_.setFilterStr(filterStr);
   }
   goog.object.forEach(this.calendarEventUis_, function(ui) {
-    ui.setFilterByRepeating(e.filterByRepeats);
+    ui.setFilters(e.filterByRepeats, e.filterByLocation);
   }, this);
 };
 
@@ -231,9 +237,13 @@ calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
     var events = ui.getSelectedEvents();
     for (var i = 0; i < events.length; ++i) {
       var event = events[i];
+      if (!event.creator) {
+        console.log('event without creator! ID: ' + event.id);
+        continue;
+      }
       var displayName = event.creator.displayName ?
-        event.creator.displayName + ' (' + event.creator.email + ')' :
-        event.creator.email;
+          event.creator.displayName + ' (' + event.creator.email + ')' :
+          event.creator.email;
       this.nameList_.addItem({
         id: event.creator.email,
         summary: displayName
@@ -250,6 +260,7 @@ calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
 function initApp() {
   var app = new calendarmailer.App();
 }
+
 
 /**
  * Onload handler.
