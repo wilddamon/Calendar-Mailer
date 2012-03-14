@@ -20,10 +20,11 @@ goog.require('soy');
 
 /**
  * A ui object for a list of calendars.
+ * @param {string=} opt_title The title for the picker.
  * @constructor
  * @extends {goog.ui.Control}
  */
-calendarmailer.ui.Picker = function() {
+calendarmailer.ui.Picker = function(opt_title) {
   goog.base(this);
 
   /**
@@ -34,11 +35,11 @@ calendarmailer.ui.Picker = function() {
   this.checkboxes = [];
 
   /**
-   * An array of the ids of the selected calendars.
-   * @type {!Array.<string>}
+   * The title of the picker.
+   * @type {string}
    * @private
    */
-  this.selectedItems_ = [];
+  this.title_ = opt_title || '';
 
   /**
    * The select all button.
@@ -108,7 +109,7 @@ calendarmailer.ui.Picker.prototype.createDom = function() {
   var el = soy.renderAsElement(calendarmailer.soy.picker.all, {
     idprefix: this.getId(),
     items: items,
-    title: this.getId()
+    title: this.title_
   });
   this.setElementInternal(el);
 

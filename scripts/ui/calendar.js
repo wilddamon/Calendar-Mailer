@@ -12,11 +12,12 @@ goog.require('calendarmailer.ui.Picker');
 /**
  * A ui object for a calendar object.
  * @param {string} id The id of the calendar this represents.
+ * @param {string=} opt_title The title for the Calendar.
  * @constructor
  * @extends {calendarmailer.ui.Picker}
  */
-calendarmailer.ui.Calendar = function(id) {
-  goog.base(this);
+calendarmailer.ui.Calendar = function(id, opt_title) {
+  goog.base(this, opt_title);
 
   this.setId(id);
 

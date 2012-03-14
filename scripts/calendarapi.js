@@ -225,6 +225,7 @@ calendarmailer.CalendarApi.prototype.handleGetEventsResult_ = function(id,
  * @param {string} type The event type.
  * @param {!Object} result The result.
  * @param {string=} opt_id The id of the calendar this event refers to.
+ * @param {string=} opt_title The title of the calendar this event refers to.
  * @constructor
  * @extends {goog.events.Event}
  */
@@ -242,5 +243,11 @@ calendarmailer.CalendarApi.Event = function(type, result, opt_id) {
    * @type {?string}
    */
   this.id = opt_id || null;
+  
+  /**
+   * The title of the calendar the event refers to.
+   * @type {string=}
+   */
+  this.title = opt_title;
 };
 goog.inherits(calendarmailer.CalendarApi.Event, goog.events.Event);
