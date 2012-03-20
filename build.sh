@@ -3,8 +3,8 @@
 rm closure-gen/*
 rm soy-gen/*
 
-js_files="scripts/*.js"
-js_ui_files="scripts/ui/*.js"
+js_files="javascript/*.js"
+js_ui_files="javascript/ui/*.js"
 soy_files="soy/*.soy"
 css_files="css/*.css"
 
@@ -18,7 +18,7 @@ java -jar ../soy-latest/SoyToJsSrcCompiler.jar \
 
 ../closure-library/closure/bin/build/closurebuilder.py \
     --root=../closure-library/ \
-    --root=scripts/ \
+    --root=javascript/ \
     --root=soy-gen \
     --namespace="calendarmailer.App" \
     --output_mode=script \

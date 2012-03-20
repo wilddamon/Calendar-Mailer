@@ -13065,33 +13065,36 @@ calendarmailer.CalendarApi.prototype.handleListResult_ = function(result) {
 /**
  * Triggers a request for calendar events for the given calendar.
  * @param {string} id The id of the calendar.
+ * @param {string} title The title of the calendar.
  * @param {string=} opt_pageToken An optional page token to continue loading
  *     after a previous request.
  */
-calendarmailer.CalendarApi.prototype.getCalendarEvents = function(id,
+calendarmailer.CalendarApi.prototype.getCalendarEvents = function(id, title,
     opt_pageToken) {
   this.getEvents_({
     calendarId: id,
     maxResults: calendarmailer.CalendarApi.MAX_RESULTS_,
     timeMin: this.config_.getMinDate(),
     pageToken: opt_pageToken
-  }).execute(goog.bind(this.handleGetEventsResult_, this, id));
+  }).execute(goog.bind(this.handleGetEventsResult_, this, id, title));
 };
 
 
 /**
  * Handles a get events result from the server.
  * @param {string} id The id of the calendar the result is for.
+ * @param {string} title The title of the calendar the result is for.
  * @param {!Object} result The result.
  * @private
  */
 calendarmailer.CalendarApi.prototype.handleGetEventsResult_ = function(id,
-    result) {
+    title, result) {
   window.console.log('got events:');
   window.console.log(result);
   this.lastResult = result;
   this.dispatchEvent(new calendarmailer.CalendarApi.Event(
-      calendarmailer.CalendarApi.EventType.GET_EVENTS_RESULT, result, id));
+      calendarmailer.CalendarApi.EventType.GET_EVENTS_RESULT,
+      result, id, title));
 };
 
 
@@ -13101,10 +13104,11 @@ calendarmailer.CalendarApi.prototype.handleGetEventsResult_ = function(id,
  * @param {string} type The event type.
  * @param {!Object} result The result.
  * @param {string=} opt_id The id of the calendar this event refers to.
+ * @param {string=} opt_title The title of the calendar this event refers to.
  * @constructor
  * @extends {goog.events.Event}
  */
-calendarmailer.CalendarApi.Event = function(type, result, opt_id) {
+calendarmailer.CalendarApi.Event = function(type, result, opt_id, opt_title) {
   goog.base(this, type);
 
   /**
@@ -13118,6 +13122,12 @@ calendarmailer.CalendarApi.Event = function(type, result, opt_id) {
    * @type {?string}
    */
   this.id = opt_id || null;
+
+  /**
+   * The title of the calendar the event refers to.
+   * @type {string=}
+   */
+  this.title = opt_title;
 };
 goog.inherits(calendarmailer.CalendarApi.Event, goog.events.Event);
 // Copyright 2007 The Closure Library Authors. All Rights Reserved.
@@ -26130,10 +26140,11 @@ goog.require('soy');
 
 /**
  * A ui object for a list of calendars.
+ * @param {string=} opt_title The title for the picker.
  * @constructor
  * @extends {goog.ui.Control}
  */
-calendarmailer.ui.Picker = function() {
+calendarmailer.ui.Picker = function(opt_title) {
   goog.base(this);
 
   /**
@@ -26144,11 +26155,11 @@ calendarmailer.ui.Picker = function() {
   this.checkboxes = [];
 
   /**
-   * An array of the ids of the selected calendars.
-   * @type {!Array.<string>}
+   * The title of the picker.
+   * @type {string}
    * @private
    */
-  this.selectedItems_ = [];
+  this.title_ = opt_title || '';
 
   /**
    * The select all button.
@@ -26218,7 +26229,7 @@ calendarmailer.ui.Picker.prototype.createDom = function() {
   var el = soy.renderAsElement(calendarmailer.soy.picker.all, {
     idprefix: this.getId(),
     items: items,
-    title: this.getId()
+    title: this.title_
   });
   this.setElementInternal(el);
 
@@ -26345,16 +26356,20 @@ calendarmailer.ui.Picker.prototype.handleClick_ = function() {
 
 /**
  * Gets the selected items.
- * @return {!Array.<string>} The array of item ids.
+ * @return {!Array.<!Object>} The array of item ids and titles.
  */
 calendarmailer.ui.Picker.prototype.getSelectedItems = function() {
-  var ids = [];
+  var idTitles = [];
+  var items = this.getItems();
   for (var i = 0; i < this.checkboxes.length; ++i) {
     if (this.checkboxes[i].isChecked()) {
-      ids.push(this.checkboxes[i].getId());
+      idTitles.push({
+        'id': this.checkboxes[i].getId(),
+        'title': items[i].summary
+      });
     }
   }
-  return ids;
+  return idTitles;
 };
 
 
@@ -26422,7 +26437,9 @@ calendarmailer.ui.Picker.prototype.showBox = function(box, show) {
 calendarmailer.ui.Picker.prototype.showTitle = function(show) {
   var title = this.getDomHelper().getElementByClass('picker-title',
       this.getElement());
-  goog.dom.classes.enable(title, 'picker-title-hidden', !show);
+  if (title) {
+    goog.dom.classes.enable(title, 'picker-title-hidden', !show);
+  }
 };
 
 
@@ -27750,11 +27767,12 @@ goog.require('calendarmailer.ui.Picker');
 /**
  * A ui object for a calendar object.
  * @param {string} id The id of the calendar this represents.
+ * @param {string=} opt_title The title for the Calendar.
  * @constructor
  * @extends {calendarmailer.ui.Picker}
  */
-calendarmailer.ui.Calendar = function(id) {
-  goog.base(this);
+calendarmailer.ui.Calendar = function(id, opt_title) {
+  goog.base(this, opt_title);
 
   this.setId(id);
 
@@ -27824,7 +27842,7 @@ calendarmailer.ui.Calendar.prototype.getSelectedEvents = function() {
 calendarmailer.ui.Calendar.prototype.setFilters = function(
     byRepeating) {
   var checkboxes = this.checkboxes;
-  var showAll = !filter;
+  var showAll = !byRepeating;
   for (var i = 0; i < checkboxes.length; ++i) {
     var box = checkboxes[i];
     var show = showAll ||
@@ -28122,7 +28140,7 @@ calendarmailer.App.prototype.handleGetEventsResult_ = function(e) {
   this.filter_.setSectionVisible(
       calendarmailer.ui.FilteringWidget.SectionName.EVENTS);
 
-  var calendarUi = new calendarmailer.ui.Calendar(e.id);
+  var calendarUi = new calendarmailer.ui.Calendar(e.id, e.title);
   calendarUi.setListObject(e.result);
   this.calendarEventUis_[e.id] = calendarUi;
   calendarUi.render(document.getElementById('eventpickers'));
@@ -28133,14 +28151,14 @@ calendarmailer.App.prototype.handleGetEventsResult_ = function(e) {
 
 /**
  * Gets the next set of events.
- * @param {!Array.<string>} calendars The array of calendars which should
+ * @param {!Array.<Object>} calendars The array of calendars which should
  *     eventually be loaded.
  * @private
  */
 calendarmailer.App.prototype.getNextEvents_ = function(calendars) {
   for (var i = 0; i < calendars.length; ++i) {
-    if (!this.calendarEventUis_[calendars[i]]) {
-      this.calendar_.getCalendarEvents(calendars[i]);
+    if (!this.calendarEventUis_[calendars[i].id]) {
+      this.calendar_.getCalendarEvents(calendars[i].id, calendars[i].title);
       break;
     }
   }
