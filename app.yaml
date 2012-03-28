@@ -9,7 +9,7 @@ handlers:
   static_dir: stylesheets
   
 - url: /scripts
-  static_dir: closure-gen
+  static_dir: genfiles/closure-gen
 
 - url: .*
   script: main.py

@@ -30,7 +30,7 @@ class MainHandler(webapp.RequestHandler):
       return
 
     template_values = {}
-    html = template.render('templates/main.html', template_values)
+    html = template.render('django/main.html', template_values)
     self.response.out.write(html)
 
 def main():
