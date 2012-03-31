@@ -14,27 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from google.appengine.api import users as Users
+from server.handlers.dashboardhandler import DashboardHandler
+from server.handlers.pickerhandler import PickerHandler
+from server.handlers.submiteventshandler import SubmitEventsHandler
+from server.handlers.userhandler import UserHandler
 
 from google.appengine.ext import webapp
-from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp import util
 
-
-class MainHandler(webapp.RequestHandler):
-  def get(self):
-    user = Users.GetCurrentUser()
-    if not user:
-      url = Users.create_login_url(self.request.uri)
-      self.redirect(url)
-      return
-
-    template_values = {}
-    html = template.render('django/main.html', template_values)
-    self.response.out.write(html)
-
 def main():
-  application = webapp.WSGIApplication([('/', MainHandler)], debug=True)
+  application = webapp.WSGIApplication([
+      ('/dashboard', DashboardHandler),
+      ('/submitevents', SubmitEventsHandler),
+      ('/', PickerHandler)
+    ], debug=True)
   util.run_wsgi_app(application)
 
 
