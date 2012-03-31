@@ -1,0 +1,19 @@
+<html>
+<head>
+</head>
+<body>
+
+<div id="welcome">
+  Hello {{name}},
+  <br>
+  <br>
+  These are events which have been identified as recurring
+  forever by the calendar cleanup bot. Please select the relevant option for 
+  each event.
+</div>
+
+{% for event in events %}
+<div>{{event.summary}}</div>
+{% endfor %}
+
+</body>

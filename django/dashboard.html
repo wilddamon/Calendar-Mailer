@@ -1,0 +1,22 @@
+<html>
+<head>
+</head>
+<body>
+
+<div id="welcome">
+  Hello {{name}},
+  <br>
+  <br>
+  Here is the dasboard for cleanup cycles. Please select a cycle below, or begin 
+  a new cycle by pressing the "new cycle" button.
+</div>
+
+<br>
+<br>
+<button>Begin New Calendar Cleanup Cycle</button>
+
+{% for cycle in cycles %}
+<div>{{cycle.date}}</div>
+{% endfor %}
+
+</body>

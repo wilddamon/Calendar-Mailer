@@ -1,0 +1,103 @@
+.goog-button {
+  color: #036;
+  border-color: #036;
+  background-color: #69c;
+}
+.goog-button-disabled {
+  border-color: #333;
+  color: #333;
+  background-color: #999;
+}
+.goog-button-hover {
+  color: #369;
+  border-color: #369;
+  background-color: #9cf;
+}
+.goog-button-active {
+  color: #69c;
+  border-color: #69c;
+}
+.goog-checkbox {
+  border: 1px solid #1c5180;
+  display: -moz-inline-box;
+  display: inline-block;
+  font-size: 1px;
+  height: 11px;
+  margin: 0 4px 0 1px;
+  vertical-align: text-bottom;
+  width: 11px;
+}
+.goog-checkbox-checked {
+  background: #fff url(//ssl.gstatic.com/closure/check-sprite.gif) no-repeat 2px center;
+}
+.goog-checkbox-undetermined {
+  background: #bbb url(//ssl.gstatic.com/closure/check-sprite.gif) no-repeat 2px center;
+}
+.goog-checkbox-unchecked {
+  background: #fff;
+}
+.goog-checkbox-disabled {
+  border: 1px solid lightgray;
+  background-position: -7px;
+}
+.goog-inline-block {
+  position: relative;
+  display: -moz-inline-box;
+  display: inline-block;
+}
+* html .goog-inline-block, *:first-child+html .goog-inline-block {
+  display: inline;
+}
+#calendars, #eventpickers, #namelist, #email-preview {
+  clear: both;
+}
+.checkbox-label {
+  position: relative;
+  top: 3px;
+}
+.email-preview-outer {
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+.filter-base {
+  margin: 20px 0;
+  padding: 5px;
+  width: 600px;
+}
+.filter-textbox {
+  color: grey;
+  width: 500px;
+}
+.filter-textbox.filter-textbox-active {
+  color: black;
+}
+.filter-section {
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+.filter-title {
+  font-size: 1.2em;
+  padding-bottom: 4px;
+}
+.filter-section-hidden {
+  display: none;
+}
+.picker-base {
+  background: #f8f8f8;
+  border: 1px solid grey;
+  float: left;
+  margin: 2px;
+  padding: 5px;
+}
+.picker-base.picker-selected {
+  background: #e8fabb;
+}
+.picker-base.goog-control-disabled {
+  opacity: .4;
+}
+.picker-label-hidden, .picker-title-hidden {
+  display: none;
+}
+.picker-boxes {
+  margin-bottom: 8px;
+}
