@@ -284,7 +284,7 @@ calendarmailer.App.prototype.handleNamelistSubmit_ = function() {
   }, this);
   window.console.log(names);
   var events = this.selectedEvents_;
-  var obj = {'names': names, 'events': events};
+  var obj = {'names': names, 'events': events, cycleId: null};
   this.io_.send('/submitevents',
       'POST', goog.json.serialize(obj),
       {'content-type': 'application/json'});
