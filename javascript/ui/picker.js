@@ -12,7 +12,7 @@ goog.require('goog.dom.classes');
 goog.require('goog.events.Event');
 goog.require('goog.ui.Button');
 goog.require('goog.ui.Checkbox');
-goog.require('goog.ui.Component.EventType');
+goog.require('goog.ui.Component');
 goog.require('goog.ui.Control');
 goog.require('soy');
 

@@ -11,7 +11,8 @@ css_files="css/*.css"
 out_folder="genfiles/"
 
 echo "***Running gjslint***"
-gjslint --strict ${js_files[@]} ${js_ui_files[@]}
+gjslint --closurized_namespaces=calendarmailer,goog,soy \
+    --strict ${js_files[@]} ${js_ui_files[@]}
 
 echo "***Running SoyToJsSrcCompiler***"
 java -jar ../soy-latest/SoyToJsSrcCompiler.jar \
@@ -25,10 +26,10 @@ echo "***Running closurebuilder***"
     --root=../closure-library/ \
     --root=javascript/ \
     --root=genfiles/soy-gen \
-    --namespace="calendarmailer.App" \
+    --namespace="calendarmailer.PickerApp" \
     --output_mode=script \
     --compiler_jar=../compiler-latest/compiler.jar \
-    > genfiles/closure-gen/app.js
+    > genfiles/closure-gen/pickerapp.js
 
 echo "***Running css compiler***"
 java -jar ../css-compiler/closure-stylesheets-20111230.jar \

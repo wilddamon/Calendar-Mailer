@@ -1,4 +1,6 @@
 
+import logging
+
 from server.storage.cycle import Cycle
 
 from google.appengine.api import users
@@ -13,7 +15,8 @@ class DashboardHandler(webapp.RequestHandler):
       self.redirect(url)
       return
 
-    cycle = Cycle.gql('WHERE initiator = :1', user).get()
+    cycles = Cycle.gql('WHERE initiator = :1', user).get()
+    logging.info("Got cycles: " + str(cycles))
 
     template_values = {
       "name": user.user_id(),

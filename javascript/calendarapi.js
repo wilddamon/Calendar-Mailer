@@ -11,7 +11,6 @@ goog.require('goog.Timer');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventTarget');
 goog.require('goog.net.jsloader');
-goog.require('goog.string');
 
 
 

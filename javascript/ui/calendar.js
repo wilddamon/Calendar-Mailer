@@ -6,6 +6,8 @@
 goog.provide('calendarmailer.ui.Calendar');
 
 goog.require('calendarmailer.ui.Picker');
+goog.require('goog.array');
+goog.require('goog.string');
 
 
 

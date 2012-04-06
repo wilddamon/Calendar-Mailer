@@ -24,9 +24,9 @@ from google.appengine.ext.webapp import util
 
 def main():
   application = webapp.WSGIApplication([
-      ('/dashboard', DashboardHandler),
+      ('/', DashboardHandler),
       ('/submitevents', SubmitEventsHandler),
-      ('/', PickerHandler)
+      ('/picker', PickerHandler)
     ], debug=True)
   util.run_wsgi_app(application)
 
