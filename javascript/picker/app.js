@@ -3,16 +3,16 @@
  * @fileoverview The picker app for the calendar mailer.
  */
 
-goog.provide('calendarmailer.PickerApp');
+goog.provide('calendarmailer.picker.App');
 
 goog.require('calendarmailer.CalendarApi');
 goog.require('calendarmailer.Config');
+goog.require('calendarmailer.picker.ui.Calendar');
+goog.require('calendarmailer.picker.ui.CalendarList');
+goog.require('calendarmailer.picker.ui.FilteringWidget');
+goog.require('calendarmailer.picker.ui.NameList');
+goog.require('calendarmailer.picker.ui.Picker');
 goog.require('calendarmailer.soy.email');
-goog.require('calendarmailer.ui.Calendar');
-goog.require('calendarmailer.ui.CalendarList');
-goog.require('calendarmailer.ui.FilteringWidget');
-goog.require('calendarmailer.ui.NameList');
-goog.require('calendarmailer.ui.Picker');
 goog.require('goog.array');
 goog.require('goog.events.EventHandler');
 goog.require('goog.json');
@@ -24,10 +24,10 @@ goog.require('soy');
 
 
 /**
- * The main calendar app container class.
+ * The main calendar picker app container class.
  * @constructor
  */
-calendarmailer.PickerApp = function() {
+calendarmailer.picker.App = function() {
   /**
    * The selected and added events.
    * @type {!Array.<!Object.<string, string>>}
@@ -59,34 +59,35 @@ calendarmailer.PickerApp = function() {
 
   /**
    * The filter widget.
-   * @type {!calendarmailer.ui.FilteringWidget}
+   * @type {!calendarmailer.picker.ui.FilteringWidget}
    * @private
    */
-  this.filter_ = new calendarmailer.ui.FilteringWidget();
+  this.filter_ = new calendarmailer.picker.ui.FilteringWidget();
   this.filter_.render(document.getElementById('filter'));
   this.filter_.setSectionVisible(
-      calendarmailer.ui.FilteringWidget.SectionName.CALENDARS);
+      calendarmailer.picker.ui.FilteringWidget.SectionName.CALENDARS);
 
   /**
    * The calendar list ui.
-   * @type {!calendarmailer.ui.CalendarList}
+   * @type {!calendarmailer.picker.ui.CalendarList}
    * @private
    */
-  this.calendarListUi_ = new calendarmailer.ui.CalendarList(this.calendar_);
+  this.calendarListUi_ =
+      new calendarmailer.picker.ui.CalendarList(this.calendar_);
 
   /**
    * The map of calendar event uis (containers of calendar events).
-   * @type {!Object.<string, !calendarmailer.ui.Calendar>}
+   * @type {!Object.<string, !calendarmailer.picker.ui.Calendar>}
    * @private
    */
   this.calendarEventUis_ = {};
 
   /**
    * A name list.
-   * @type {!calendarmailer.ui.NameList}
+   * @type {!calendarmailer.picker.ui.NameList}
    * @private
    */
-  this.nameList_ = new calendarmailer.ui.NameList();
+  this.nameList_ = new calendarmailer.picker.ui.NameList();
 
   /**
    * The xhrio for sending stuff to the server when we're done.
@@ -104,21 +105,21 @@ calendarmailer.PickerApp = function() {
           calendarmailer.CalendarApi.EventType.GET_EVENTS_RESULT,
           this.handleGetEventsResult_).
       listen(this.filter_,
-          calendarmailer.ui.FilteringWidget.EventType.FILTER_CHANGE,
+          calendarmailer.picker.ui.FilteringWidget.EventType.FILTER_CHANGE,
           this.handleFilterChange_).
       listen(this.filter_,
-          calendarmailer.ui.FilteringWidget.EventType.SELECT_ALL,
+          calendarmailer.picker.ui.FilteringWidget.EventType.SELECT_ALL,
           this.handleGlobalSelectAll_).
       listen(this.filter_,
-          calendarmailer.ui.FilteringWidget.EventType.SELECT_NONE,
+          calendarmailer.picker.ui.FilteringWidget.EventType.SELECT_NONE,
           this.handleGlobalSelectNone_).
       listen(this.filter_,
-          calendarmailer.ui.FilteringWidget.EventType.SUBMIT,
+          calendarmailer.picker.ui.FilteringWidget.EventType.SUBMIT,
           this.handleGlobalAddNames_).
       listen(this.calendarListUi_,
-          calendarmailer.ui.Picker.EventType.SUBMIT,
+          calendarmailer.picker.ui.Picker.EventType.SUBMIT,
           this.handleCalendarListSubmit_).
-      listen(this.nameList_, calendarmailer.ui.Picker.EventType.SUBMIT,
+      listen(this.nameList_, calendarmailer.picker.ui.Picker.EventType.SUBMIT,
           this.handleNamelistSubmit_).
       listen(this.io_, goog.net.EventType.ERROR, this.handleIoError_).
       listen(this.io_, goog.net.EventType.SUCCESS, this.handleIoSuccess_);
@@ -129,7 +130,7 @@ calendarmailer.PickerApp = function() {
  * Handles the calendar api becoming ready.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleCalendarApiReady_ = function() {
+calendarmailer.picker.App.prototype.handleCalendarApiReady_ = function() {
   window.console.log('getting list...');
   this.calendar_.getCalendarList();
 };
@@ -140,7 +141,7 @@ calendarmailer.PickerApp.prototype.handleCalendarApiReady_ = function() {
  * @param {!calendarmailer.CalendarApi.Event} e The event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleGetCalendarsResult_ = function(e) {
+calendarmailer.picker.App.prototype.handleGetCalendarsResult_ = function(e) {
   this.calendarListUi_.setListObject(e.result);
   this.calendarListUi_.render(document.getElementById('calendars'));
   this.calendarListUi_.setSubmitCaption('Get events for these calendars!');
@@ -149,10 +150,10 @@ calendarmailer.PickerApp.prototype.handleGetCalendarsResult_ = function(e) {
 
 /**
  * Handles a calendar list submit event from the calendar picker.
- * @param {!calendarmailer.ui.CalendarList.Event} e The event.
+ * @param {!calendarmailer.picker.ui.CalendarList.Event} e The event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleCalendarListSubmit_ = function(e) {
+calendarmailer.picker.App.prototype.handleCalendarListSubmit_ = function(e) {
   this.calendarListUi_.setEnabled(false);
   // Start loading the first calendar which is not loaded yet.
   this.getNextEvents_(e.items);
@@ -164,18 +165,18 @@ calendarmailer.PickerApp.prototype.handleCalendarListSubmit_ = function(e) {
  * @param {!calendarmailer.CalendarApi.Event} e The event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleGetEventsResult_ = function(e) {
+calendarmailer.picker.App.prototype.handleGetEventsResult_ = function(e) {
   this.calendarListUi_.setVisible(false);
   this.filter_.setSectionVisible(
-      calendarmailer.ui.FilteringWidget.SectionName.EVENTS);
+      calendarmailer.picker.ui.FilteringWidget.SectionName.EVENTS);
 
-  var calendarUi = new calendarmailer.ui.Calendar(e.id, e.title);
+  var calendarUi = new calendarmailer.picker.ui.Calendar(e.id, e.title);
   calendarUi.setListObject(e.result);
   this.calendarEventUis_[e.id] = calendarUi;
   calendarUi.render(document.getElementById('eventpickers'));
   calendarUi.setSubmitCaption('Mail the owners of these events!');
   this.eventHandler_.listen(calendarUi,
-      calendarmailer.ui.Picker.EventType.SUBMIT, this.handleAddNames_);
+      calendarmailer.picker.ui.Picker.EventType.SUBMIT, this.handleAddNames_);
   this.getNextEvents_(this.calendarListUi_.getSelectedItems());
 };
 
@@ -186,7 +187,7 @@ calendarmailer.PickerApp.prototype.handleGetEventsResult_ = function(e) {
  *     eventually be loaded.
  * @private
  */
-calendarmailer.PickerApp.prototype.getNextEvents_ = function(calendars) {
+calendarmailer.picker.App.prototype.getNextEvents_ = function(calendars) {
   for (var i = 0; i < calendars.length; ++i) {
     if (!this.calendarEventUis_[calendars[i].id]) {
       this.calendar_.getCalendarEvents(calendars[i].id, calendars[i].title);
@@ -198,10 +199,10 @@ calendarmailer.PickerApp.prototype.getNextEvents_ = function(calendars) {
 
 /**
  * Handles filter change results.
- * @param {!calendarmailer.ui.FilteringWidget.Event} e The event.
+ * @param {!calendarmailer.picker.ui.FilteringWidget.Event} e The event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleFilterChange_ = function(e) {
+calendarmailer.picker.App.prototype.handleFilterChange_ = function(e) {
   var filterStr = e.filterStr;
   if (this.calendarListUi_.isEnabled()) {
     this.calendarListUi_.setFilterStr(filterStr);
@@ -216,7 +217,7 @@ calendarmailer.PickerApp.prototype.handleFilterChange_ = function(e) {
  * Handles a global select all event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleGlobalSelectAll_ = function() {
+calendarmailer.picker.App.prototype.handleGlobalSelectAll_ = function() {
   goog.object.forEach(this.calendarEventUis_, function(ui) {
     ui.selectAll(true);
   }, this);
@@ -227,7 +228,7 @@ calendarmailer.PickerApp.prototype.handleGlobalSelectAll_ = function() {
  * Handles a global select none event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleGlobalSelectNone_ = function() {
+calendarmailer.picker.App.prototype.handleGlobalSelectNone_ = function() {
   goog.object.forEach(this.calendarEventUis_, function(ui) {
     ui.selectAll(false);
   }, this);
@@ -238,7 +239,7 @@ calendarmailer.PickerApp.prototype.handleGlobalSelectNone_ = function() {
  * Handles a global add names event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleGlobalAddNames_ = function() {
+calendarmailer.picker.App.prototype.handleGlobalAddNames_ = function() {
   if (this.calendarListUi_.isEnabled()) {
     return;
   }
@@ -259,10 +260,10 @@ calendarmailer.PickerApp.prototype.handleGlobalAddNames_ = function() {
 
 /**
  * Adds the names from the given calendar to the list of people to notify.
- * @param {!calendarmailer.ui.CalendarList.Event} e The event.
+ * @param {!calendarmailer.picker.ui.CalendarList.Event} e The event.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleAddNames_ = function(e) {
+calendarmailer.picker.App.prototype.handleAddNames_ = function(e) {
   this.showNameList_();
   var selectedEvents = e.target.getSelectedEvents();
   this.addNames_(selectedEvents);
@@ -278,7 +279,7 @@ calendarmailer.PickerApp.prototype.handleAddNames_ = function(e) {
  *     names from.
  * @private
  */
-calendarmailer.PickerApp.prototype.addNames_ = function(events) {
+calendarmailer.picker.App.prototype.addNames_ = function(events) {
   for (var i = 0; i < events.length; ++i) {
     var event = events[i];
     var displayName = event.creator.displayName ?
@@ -296,7 +297,7 @@ calendarmailer.PickerApp.prototype.addNames_ = function(events) {
  * Shows the name list.
  * @private
  */
-calendarmailer.PickerApp.prototype.showNameList_ = function() {
+calendarmailer.picker.App.prototype.showNameList_ = function() {
   if (!this.nameList_.isInDocument()) {
     this.nameList_.render(document.getElementById('namelist'));
     document.getElementById('email-preview').appendChild(soy.renderAsElement(
@@ -309,7 +310,7 @@ calendarmailer.PickerApp.prototype.showNameList_ = function() {
  * Submits the names and the corresponding events to the server.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleNamelistSubmit_ = function() {
+calendarmailer.picker.App.prototype.handleNamelistSubmit_ = function() {
   window.console.log('submitting events...');
   // Compiles the list of people to be emailed and their events.
   var names = [];
@@ -342,7 +343,7 @@ calendarmailer.PickerApp.prototype.handleNamelistSubmit_ = function() {
  * @return {!Array.<!Object>} The translated events.
  * @private
  */
-calendarmailer.PickerApp.prototype.translateEvents_ = function(calendarId,
+calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
     events) {
   var result = [];
   goog.array.forEach(events, function(event) {
@@ -368,7 +369,7 @@ calendarmailer.PickerApp.prototype.translateEvents_ = function(calendarId,
  * Goes back to the dashboard once submission is finished.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleIoSuccess_ = function() {
+calendarmailer.picker.App.prototype.handleIoSuccess_ = function() {
   window.location = 'http://www.google.com';
 };
 
@@ -377,7 +378,7 @@ calendarmailer.PickerApp.prototype.handleIoSuccess_ = function() {
  * Resets the IO so another request can be sent.
  * @private
  */
-calendarmailer.PickerApp.prototype.handleIoError_ = function() {
+calendarmailer.picker.App.prototype.handleIoError_ = function() {
   goog.dispose(this.io_);
   this.io_ = new goog.net.XhrIo();
   this.nameList_.setEnabled(true);
@@ -386,7 +387,7 @@ calendarmailer.PickerApp.prototype.handleIoError_ = function() {
 
 // Bootstrap functions.
 function initApp() {
-  var app = new calendarmailer.PickerApp();
+  var app = new calendarmailer.picker.App();
 }
 
 

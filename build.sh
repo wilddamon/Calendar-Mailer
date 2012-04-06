@@ -4,7 +4,8 @@ rm genfiles/closure-gen/*
 rm genfiles/soy-gen/*
 
 js_files="javascript/*.js"
-js_ui_files="javascript/ui/*.js"
+js_more_files="javascript/*/*.js"
+js_even_more_files="javascript/*/*/*.js"
 soy_files="soy/*.soy"
 css_files="css/*.css"
 
@@ -12,7 +13,7 @@ out_folder="genfiles/"
 
 echo "***Running gjslint***"
 gjslint --closurized_namespaces=calendarmailer,goog,soy \
-    --strict ${js_files[@]} ${js_ui_files[@]}
+    --strict ${js_files[@]} ${js_more_files[@]} ${js_even_more_files[@]}
 
 echo "***Running SoyToJsSrcCompiler***"
 java -jar ../soy-latest/SoyToJsSrcCompiler.jar \

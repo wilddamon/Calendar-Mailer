@@ -4,9 +4,9 @@
  * in the app.
  */
 
-goog.provide('calendarmailer.ui.FilteringWidget');
-goog.provide('calendarmailer.ui.FilteringWidget.Event');
-goog.provide('calendarmailer.ui.FilteringWidget.EventType');
+goog.provide('calendarmailer.picker.ui.FilteringWidget');
+goog.provide('calendarmailer.picker.ui.FilteringWidget.Event');
+goog.provide('calendarmailer.picker.ui.FilteringWidget.EventType');
 
 goog.require('calendarmailer.soy.filteringwidget');
 goog.require('goog.dom.classes');
@@ -25,7 +25,7 @@ goog.require('soy');
  * @constructor
  * @extends {goog.ui.Component}
  */
-calendarmailer.ui.FilteringWidget = function() {
+calendarmailer.picker.ui.FilteringWidget = function() {
   goog.base(this);
 
   /**
@@ -68,14 +68,14 @@ calendarmailer.ui.FilteringWidget = function() {
   this.addButton_ = new goog.ui.Button(null /* content */);
   this.addChild(this.addButton_);
 };
-goog.inherits(calendarmailer.ui.FilteringWidget, goog.ui.Component);
+goog.inherits(calendarmailer.picker.ui.FilteringWidget, goog.ui.Component);
 
 
 /**
  * Filtering widget event types.
  * @enum {string}
  */
-calendarmailer.ui.FilteringWidget.EventType = {
+calendarmailer.picker.ui.FilteringWidget.EventType = {
   FILTER_CHANGE: 'fc',
   SELECT_ALL: 'sa',
   SELECT_NONE: 'sn',
@@ -87,7 +87,7 @@ calendarmailer.ui.FilteringWidget.EventType = {
  * Section names.
  * @enum {string}
  */
-calendarmailer.ui.FilteringWidget.SectionName = {
+calendarmailer.picker.ui.FilteringWidget.SectionName = {
   CALENDARS: 'filter-calendars',
   EVENTS: 'filter-events',
   SELECT: 'filter-select-control'
@@ -99,7 +99,7 @@ calendarmailer.ui.FilteringWidget.SectionName = {
  * @type {!Element}
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.textboxEl_;
+calendarmailer.picker.ui.FilteringWidget.prototype.textboxEl_;
 
 
 /**
@@ -107,7 +107,7 @@ calendarmailer.ui.FilteringWidget.prototype.textboxEl_;
  * @type {!Element}
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.repeatCheckboxEl_;
+calendarmailer.picker.ui.FilteringWidget.prototype.repeatCheckboxEl_;
 
 
 /**
@@ -115,7 +115,7 @@ calendarmailer.ui.FilteringWidget.prototype.repeatCheckboxEl_;
  * @type {!Element}
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.selectAllButtonEl_;
+calendarmailer.picker.ui.FilteringWidget.prototype.selectAllButtonEl_;
 
 
 /**
@@ -123,7 +123,7 @@ calendarmailer.ui.FilteringWidget.prototype.selectAllButtonEl_;
  * @type {!Element}
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.selectNoneButtonEl_;
+calendarmailer.picker.ui.FilteringWidget.prototype.selectNoneButtonEl_;
 
 
 /**
@@ -131,7 +131,7 @@ calendarmailer.ui.FilteringWidget.prototype.selectNoneButtonEl_;
  * @type {!Element}
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.submitButtonEl_;
+calendarmailer.picker.ui.FilteringWidget.prototype.submitButtonEl_;
 
 
 /**
@@ -139,11 +139,11 @@ calendarmailer.ui.FilteringWidget.prototype.submitButtonEl_;
  * @type {!boolean}
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.textModified_ = false;
+calendarmailer.picker.ui.FilteringWidget.prototype.textModified_ = false;
 
 
 /** @override */
-calendarmailer.ui.FilteringWidget.prototype.createDom = function() {
+calendarmailer.picker.ui.FilteringWidget.prototype.createDom = function() {
   var dom = this.getDomHelper();
 
   var el = soy.renderAsElement(calendarmailer.soy.filteringwidget.all, {
@@ -159,7 +159,7 @@ calendarmailer.ui.FilteringWidget.prototype.createDom = function() {
 
 
 /** @override */
-calendarmailer.ui.FilteringWidget.prototype.enterDocument = function() {
+calendarmailer.picker.ui.FilteringWidget.prototype.enterDocument = function() {
   goog.base(this, 'enterDocument');
 
   this.textbox_.decorate(this.textboxEl_);
@@ -192,7 +192,8 @@ calendarmailer.ui.FilteringWidget.prototype.enterDocument = function() {
  * Handles clicks on the textbox.
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.handleTextboxClick_ = function() {
+calendarmailer.picker.ui.FilteringWidget.prototype.handleTextboxClick_ =
+    function() {
   if (!this.textModified_) {
     this.textModified_ = true;
     goog.dom.classes.enable(this.textboxEl_, 'filter-textbox-active', true);
@@ -205,10 +206,11 @@ calendarmailer.ui.FilteringWidget.prototype.handleTextboxClick_ = function() {
  * Handles the filter changing.
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.handleFilterChange_ = function() {
+calendarmailer.picker.ui.FilteringWidget.prototype.handleFilterChange_ =
+    function() {
   window.console.log('handleFilterChange_');
-  this.dispatchEvent(new calendarmailer.ui.FilteringWidget.Event(
-      calendarmailer.ui.FilteringWidget.EventType.FILTER_CHANGE,
+  this.dispatchEvent(new calendarmailer.picker.ui.FilteringWidget.Event(
+      calendarmailer.picker.ui.FilteringWidget.EventType.FILTER_CHANGE,
       this.textModified_ ? this.textbox_.getValue() : '',
       this.repeatCheckbox_.isChecked()));
 };
@@ -218,8 +220,10 @@ calendarmailer.ui.FilteringWidget.prototype.handleFilterChange_ = function() {
  * Handles a global select all event.
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.handleSelectAll_ = function() {
-  this.dispatchEvent(calendarmailer.ui.FilteringWidget.EventType.SELECT_ALL);
+calendarmailer.picker.ui.FilteringWidget.prototype.handleSelectAll_ =
+    function() {
+  this.dispatchEvent(
+      calendarmailer.picker.ui.FilteringWidget.EventType.SELECT_ALL);
 };
 
 
@@ -227,8 +231,10 @@ calendarmailer.ui.FilteringWidget.prototype.handleSelectAll_ = function() {
  * Handles a global select none event.
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.handleSelectNone_ = function() {
-  this.dispatchEvent(calendarmailer.ui.FilteringWidget.EventType.SELECT_NONE);
+calendarmailer.picker.ui.FilteringWidget.prototype.handleSelectNone_ =
+    function() {
+  this.dispatchEvent(
+      calendarmailer.picker.ui.FilteringWidget.EventType.SELECT_NONE);
 };
 
 
@@ -236,19 +242,20 @@ calendarmailer.ui.FilteringWidget.prototype.handleSelectNone_ = function() {
  * Handles a global submit event.
  * @private
  */
-calendarmailer.ui.FilteringWidget.prototype.handleSubmit_ = function() {
-  this.dispatchEvent(calendarmailer.ui.FilteringWidget.EventType.SUBMIT);
+calendarmailer.picker.ui.FilteringWidget.prototype.handleSubmit_ = function() {
+  this.dispatchEvent(calendarmailer.picker.ui.FilteringWidget.EventType.SUBMIT);
 };
 
 
 /**
  * Sets the given section visible.
- * @param {calendarmailer.ui.FilteringWidget.SectionName} section The section.
+ * @param {calendarmailer.picker.ui.FilteringWidget.SectionName} section The
+ *     section.
  */
-calendarmailer.ui.FilteringWidget.prototype.setSectionVisible = function(
+calendarmailer.picker.ui.FilteringWidget.prototype.setSectionVisible = function(
     section) {
   var dom = this.getDomHelper();
-  var names = calendarmailer.ui.FilteringWidget.SectionName;
+  var names = calendarmailer.picker.ui.FilteringWidget.SectionName;
   goog.dom.classes.enable(dom.getElement(names.CALENDARS),
       'filter-section-hidden', !(section == names.CALENDARS));
   goog.dom.classes.enable(dom.getElement(names.EVENTS),
@@ -268,7 +275,7 @@ calendarmailer.ui.FilteringWidget.prototype.setSectionVisible = function(
  * @constructor
  * @extends {goog.events.Event}
  */
-calendarmailer.ui.FilteringWidget.Event = function(type, opt_strFilter,
+calendarmailer.picker.ui.FilteringWidget.Event = function(type, opt_strFilter,
     opt_filterRepeats) {
   goog.base(this, type);
 
@@ -276,4 +283,5 @@ calendarmailer.ui.FilteringWidget.Event = function(type, opt_strFilter,
 
   this.filterByRepeats = !!opt_filterRepeats;
 };
-goog.inherits(calendarmailer.ui.FilteringWidget.Event, goog.events.Event);
+goog.inherits(calendarmailer.picker.ui.FilteringWidget.Event,
+    goog.events.Event);

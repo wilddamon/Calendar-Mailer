@@ -3,9 +3,9 @@
  * @fileoverview A renderer for a list of calendars.
  */
 
-goog.provide('calendarmailer.ui.Picker');
-goog.provide('calendarmailer.ui.Picker.Event');
-goog.provide('calendarmailer.ui.Picker.EventType');
+goog.provide('calendarmailer.picker.ui.Picker');
+goog.provide('calendarmailer.picker.ui.Picker.Event');
+goog.provide('calendarmailer.picker.ui.Picker.EventType');
 
 goog.require('calendarmailer.soy.picker');
 goog.require('goog.dom.classes');
@@ -24,7 +24,7 @@ goog.require('soy');
  * @constructor
  * @extends {goog.ui.Control}
  */
-calendarmailer.ui.Picker = function(opt_title) {
+calendarmailer.picker.ui.Picker = function(opt_title) {
   goog.base(this);
 
   /**
@@ -65,14 +65,14 @@ calendarmailer.ui.Picker = function(opt_title) {
   this.submitButton_ = new goog.ui.Button(null /* content */);
   this.addChild(this.submitButton_);
 };
-goog.inherits(calendarmailer.ui.Picker, goog.ui.Control);
+goog.inherits(calendarmailer.picker.ui.Picker, goog.ui.Control);
 
 
 /**
  * The calendar list submit event type.
  * @enum {string}
  */
-calendarmailer.ui.Picker.EventType = {
+calendarmailer.picker.ui.Picker.EventType = {
   SUBMIT: 's'
 };
 
@@ -82,7 +82,7 @@ calendarmailer.ui.Picker.EventType = {
  * @type {!Element}
  * @protected
  */
-calendarmailer.ui.Picker.prototype.selectAllEl;
+calendarmailer.picker.ui.Picker.prototype.selectAllEl;
 
 
 /**
@@ -90,7 +90,7 @@ calendarmailer.ui.Picker.prototype.selectAllEl;
  * @type {!Element}
  * @protected
  */
-calendarmailer.ui.Picker.prototype.selectNoneEl;
+calendarmailer.picker.ui.Picker.prototype.selectNoneEl;
 
 
 /**
@@ -98,11 +98,11 @@ calendarmailer.ui.Picker.prototype.selectNoneEl;
  * @type {!Element}
  * @protected
  */
-calendarmailer.ui.Picker.prototype.submitEl;
+calendarmailer.picker.ui.Picker.prototype.submitEl;
 
 
 /** @override */
-calendarmailer.ui.Picker.prototype.createDom = function() {
+calendarmailer.picker.ui.Picker.prototype.createDom = function() {
   var dom = this.getDomHelper();
   var items = this.getItems();
 
@@ -120,7 +120,7 @@ calendarmailer.ui.Picker.prototype.createDom = function() {
 
 
 /** @override */
-calendarmailer.ui.Picker.prototype.enterDocument = function() {
+calendarmailer.picker.ui.Picker.prototype.enterDocument = function() {
   goog.base(this, 'enterDocument');
 
   var dom = this.getDomHelper();
@@ -163,7 +163,8 @@ calendarmailer.ui.Picker.prototype.enterDocument = function() {
  * @param {{id: string, summary: string}} item The item.
  * @param {boolean=} opt_checked Whether the item should start out checked.
  */
-calendarmailer.ui.Picker.prototype.addItem = function(item, opt_checked) {
+calendarmailer.picker.ui.Picker.prototype.addItem = function(item, 
+    opt_checked) {
   var dom = this.getDomHelper();
 
   var pickerBoxes = dom.getElementByClass('picker-boxes', this.getElement());
@@ -190,7 +191,7 @@ calendarmailer.ui.Picker.prototype.addItem = function(item, opt_checked) {
  * Sets the caption on the submit button. Only works after rendering.
  * @param {string} caption The caption.
  */
-calendarmailer.ui.Picker.prototype.setSubmitCaption = function(caption) {
+calendarmailer.picker.ui.Picker.prototype.setSubmitCaption = function(caption) {
   this.submitButton_.setContent(caption);
 };
 
@@ -199,7 +200,7 @@ calendarmailer.ui.Picker.prototype.setSubmitCaption = function(caption) {
  * Handles clicks on the select all button.
  * @private
  */
-calendarmailer.ui.Picker.prototype.handleSelectAll_ = function() {
+calendarmailer.picker.ui.Picker.prototype.handleSelectAll_ = function() {
   this.selectAll(true);
 };
 
@@ -208,7 +209,7 @@ calendarmailer.ui.Picker.prototype.handleSelectAll_ = function() {
  * Handles clicks on the select none button.
  * @private
  */
-calendarmailer.ui.Picker.prototype.handleSelectNone_ = function() {
+calendarmailer.picker.ui.Picker.prototype.handleSelectNone_ = function() {
   this.selectAll(false);
 };
 
@@ -217,8 +218,8 @@ calendarmailer.ui.Picker.prototype.handleSelectNone_ = function() {
  * Handles clicks on the submit button.
  * @private
  */
-calendarmailer.ui.Picker.prototype.handleSubmit_ = function() {
-  this.dispatchEvent(new calendarmailer.ui.Picker.Event(
+calendarmailer.picker.ui.Picker.prototype.handleSubmit_ = function() {
+  this.dispatchEvent(new calendarmailer.picker.ui.Picker.Event(
       this.getSelectedItems()));
 };
 
@@ -227,7 +228,7 @@ calendarmailer.ui.Picker.prototype.handleSubmit_ = function() {
  * Handles clicks on anything in the picker.
  * @private
  */
-calendarmailer.ui.Picker.prototype.handleClick_ = function() {
+calendarmailer.picker.ui.Picker.prototype.handleClick_ = function() {
   var selectedItems = this.getSelectedItems();
   goog.dom.classes.enable(this.getElement(), 'picker-selected',
       selectedItems.length > 0);
@@ -238,7 +239,7 @@ calendarmailer.ui.Picker.prototype.handleClick_ = function() {
  * Gets the selected items.
  * @return {!Array.<!Object>} The array of item ids and titles.
  */
-calendarmailer.ui.Picker.prototype.getSelectedItems = function() {
+calendarmailer.picker.ui.Picker.prototype.getSelectedItems = function() {
   var idTitles = [];
   var items = this.getItems();
   for (var i = 0; i < this.checkboxes.length; ++i) {
@@ -259,14 +260,14 @@ calendarmailer.ui.Picker.prototype.getSelectedItems = function() {
  * @return {!Array.<!Object>} An array of items; {id: string, summary: string}.
  * @protected
  */
-calendarmailer.ui.Picker.prototype.getItems = goog.abstractMethod;
+calendarmailer.picker.ui.Picker.prototype.getItems = goog.abstractMethod;
 
 
 /**
  * Programatically sets all checkboxes to the given state.
  * @param {boolean} select The new state for all the checkboxes.
  */
-calendarmailer.ui.Picker.prototype.selectAll = function(select) {
+calendarmailer.picker.ui.Picker.prototype.selectAll = function(select) {
   for (var i = 0; i < this.checkboxes.length; ++i) {
     var box = this.checkboxes[i];
     box.setChecked(select && box.isVisible());
@@ -277,7 +278,7 @@ calendarmailer.ui.Picker.prototype.selectAll = function(select) {
 
 
 /** @override */
-calendarmailer.ui.Picker.prototype.setEnabled = function(enabled) {
+calendarmailer.picker.ui.Picker.prototype.setEnabled = function(enabled) {
   for (var i = 0; i < this.checkboxes.length; ++i) {
     this.checkboxes[i].setEnabled(enabled);
   }
@@ -296,7 +297,7 @@ calendarmailer.ui.Picker.prototype.setEnabled = function(enabled) {
  * @param {boolean} show Whether to show the box.
  * @protected
  */
-calendarmailer.ui.Picker.prototype.showBox = function(box, show) {
+calendarmailer.picker.ui.Picker.prototype.showBox = function(box, show) {
   box.setVisible(show);
   var label = this.getDomHelper().getElement(
       this.getId() + '-' + box.getId() + '-label');
@@ -314,7 +315,7 @@ calendarmailer.ui.Picker.prototype.showBox = function(box, show) {
  * Sets the display of the title.
  * @param {boolean} show Whether to show the title.
  */
-calendarmailer.ui.Picker.prototype.showTitle = function(show) {
+calendarmailer.picker.ui.Picker.prototype.showTitle = function(show) {
   var title = this.getDomHelper().getElementByClass('picker-title',
       this.getElement());
   if (title) {
@@ -330,8 +331,8 @@ calendarmailer.ui.Picker.prototype.showTitle = function(show) {
  * @constructor
  * @extends {goog.events.Event}
  */
-calendarmailer.ui.Picker.Event = function(items) {
-  goog.base(this, calendarmailer.ui.Picker.EventType.SUBMIT);
+calendarmailer.picker.ui.Picker.Event = function(items) {
+  goog.base(this, calendarmailer.picker.ui.Picker.EventType.SUBMIT);
 
   /**
    * The ids of the items which were picked.
@@ -339,5 +340,5 @@ calendarmailer.ui.Picker.Event = function(items) {
    */
   this.items = items;
 };
-goog.inherits(calendarmailer.ui.Picker.Event, goog.events.Event);
+goog.inherits(calendarmailer.picker.ui.Picker.Event, goog.events.Event);
 

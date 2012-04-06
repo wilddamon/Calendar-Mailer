@@ -3,9 +3,9 @@
  * @fileoverview A renderer for a calendar object.
  */
 
-goog.provide('calendarmailer.ui.Calendar');
+goog.provide('calendarmailer.picker.ui.Calendar');
 
-goog.require('calendarmailer.ui.Picker');
+goog.require('calendarmailer.picker.ui.Picker');
 goog.require('goog.array');
 goog.require('goog.string');
 
@@ -16,9 +16,9 @@ goog.require('goog.string');
  * @param {string} id The id of the calendar this represents.
  * @param {string=} opt_title The title for the Calendar.
  * @constructor
- * @extends {calendarmailer.ui.Picker}
+ * @extends {calendarmailer.picker.ui.Picker}
  */
-calendarmailer.ui.Calendar = function(id, opt_title) {
+calendarmailer.picker.ui.Calendar = function(id, opt_title) {
   goog.base(this, opt_title);
 
   this.setId(id);
@@ -30,11 +30,12 @@ calendarmailer.ui.Calendar = function(id, opt_title) {
    */
   this.events_ = [];
 };
-goog.inherits(calendarmailer.ui.Calendar, calendarmailer.ui.Picker);
+goog.inherits(calendarmailer.picker.ui.Calendar,
+    calendarmailer.picker.ui.Picker);
 
 
 /** @override */
-calendarmailer.ui.Calendar.prototype.enterDocument = function() {
+calendarmailer.picker.ui.Calendar.prototype.enterDocument = function() {
   goog.base(this, 'enterDocument');
 
   this.showTitle(true);
@@ -45,7 +46,7 @@ calendarmailer.ui.Calendar.prototype.enterDocument = function() {
  * Sets the event list object.
  * @param {!Object} obj The object.
  */
-calendarmailer.ui.Calendar.prototype.setListObject = function(obj) {
+calendarmailer.picker.ui.Calendar.prototype.setListObject = function(obj) {
   var items = [];
   for (var i = 0; i < obj.items.length; ++i) {
     var item = obj.items[i];
@@ -62,7 +63,7 @@ calendarmailer.ui.Calendar.prototype.setListObject = function(obj) {
 
 
 /** @override */
-calendarmailer.ui.Calendar.prototype.getItems = function() {
+calendarmailer.picker.ui.Calendar.prototype.getItems = function() {
   return this.events_;
 };
 
@@ -71,7 +72,7 @@ calendarmailer.ui.Calendar.prototype.getItems = function() {
  * Gets an array of actual event objects for all the selected events.
  * @return {!Array.<!Object.<string, string>>} The names and emails.
  */
-calendarmailer.ui.Calendar.prototype.getSelectedEvents = function() {
+calendarmailer.picker.ui.Calendar.prototype.getSelectedEvents = function() {
   var result = [];
   for (var i = 0; i < this.checkboxes.length; ++i) {
     if (this.checkboxes[i].isChecked()) {
@@ -86,7 +87,7 @@ calendarmailer.ui.Calendar.prototype.getSelectedEvents = function() {
  * Sets whether to filter by repeating events.
  * @param {boolean} byRepeating Whether to filter by repeating events.
  */
-calendarmailer.ui.Calendar.prototype.setFilters = function(
+calendarmailer.picker.ui.Calendar.prototype.setFilters = function(
     byRepeating) {
   var checkboxes = this.checkboxes;
   var showAll = !byRepeating;
@@ -105,7 +106,7 @@ calendarmailer.ui.Calendar.prototype.setFilters = function(
  * @return {boolean} Whether the rule is unending. False if null or undefined.
  * @private
  */
-calendarmailer.ui.Calendar.prototype.getUnendingRecurrence_ =
+calendarmailer.picker.ui.Calendar.prototype.getUnendingRecurrence_ =
     function(opt_recurrence) {
   if (!opt_recurrence) {
     return false;

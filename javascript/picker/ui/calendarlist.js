@@ -4,9 +4,9 @@
  * @fileoverview A renderer for a list of calendars.
  */
 
-goog.provide('calendarmailer.ui.CalendarList');
+goog.provide('calendarmailer.picker.ui.CalendarList');
 
-goog.require('calendarmailer.ui.Picker');
+goog.require('calendarmailer.picker.ui.Picker');
 goog.require('goog.array');
 goog.require('goog.string');
 
@@ -17,7 +17,7 @@ goog.require('goog.string');
  * @constructor
  * @extends {calendarlist.ui.Picker}
  */
-calendarmailer.ui.CalendarList = function() {
+calendarmailer.picker.ui.CalendarList = function() {
   goog.base(this);
 
   /**
@@ -27,14 +27,15 @@ calendarmailer.ui.CalendarList = function() {
    */
   this.calendarFeedEntries_ = [];
 };
-goog.inherits(calendarmailer.ui.CalendarList, calendarmailer.ui.Picker);
+goog.inherits(calendarmailer.picker.ui.CalendarList,
+    calendarmailer.picker.ui.Picker);
 
 
 /**
  * Sets the calendar list object.
  * @param {!Object} obj The object.
  */
-calendarmailer.ui.CalendarList.prototype.setListObject = function(obj) {
+calendarmailer.picker.ui.CalendarList.prototype.setListObject = function(obj) {
   var items = obj.items;
   goog.array.sort(items, function(item1, item2) {
     return goog.string.caseInsensitiveCompare(item1.summary, item2.summary);
@@ -44,7 +45,7 @@ calendarmailer.ui.CalendarList.prototype.setListObject = function(obj) {
 
 
 /** @override */
-calendarmailer.ui.CalendarList.prototype.getItems = function() {
+calendarmailer.picker.ui.CalendarList.prototype.getItems = function() {
   return this.calendarFeedEntries_;
 };
 
@@ -53,7 +54,7 @@ calendarmailer.ui.CalendarList.prototype.getItems = function() {
  * Sets the filter string for the name of the contained calendars.
  * @param {string} str The string to filter by.
  */
-calendarmailer.ui.CalendarList.prototype.setFilterStr = function(str) {
+calendarmailer.picker.ui.CalendarList.prototype.setFilterStr = function(str) {
   var checkboxes = this.checkboxes;
   var showAll = str.length == 0;
   for (var i = 0; i < checkboxes.length; ++i) {
