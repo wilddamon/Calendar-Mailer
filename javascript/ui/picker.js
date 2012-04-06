@@ -326,7 +326,7 @@ calendarmailer.ui.Picker.prototype.showTitle = function(show) {
 
 /**
  * The event type which carries information on submit.
- * @param {!Array.<string>} items The item ids.
+ * @param {!Array.<!Object>} items The item ids.
  * @constructor
  * @extends {goog.events.Event}
  */
@@ -335,7 +335,7 @@ calendarmailer.ui.Picker.Event = function(items) {
 
   /**
    * The ids of the items which were picked.
-   * @type {!Array.<string>}
+   * @type {!Array.<!Object>}
    */
   this.items = items;
 };

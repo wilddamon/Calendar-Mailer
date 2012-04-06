@@ -26446,7 +26446,7 @@ calendarmailer.ui.Picker.prototype.showTitle = function(show) {
 
 /**
  * The event type which carries information on submit.
- * @param {!Array.<string>} items The item ids.
+ * @param {!Array.<!Object>} items The item ids.
  * @constructor
  * @extends {goog.events.Event}
  */
@@ -26455,7 +26455,7 @@ calendarmailer.ui.Picker.Event = function(items) {
 
   /**
    * The ids of the items which were picked.
-   * @type {!Array.<string>}
+   * @type {!Array.<!Object>}
    */
   this.items = items;
 };
@@ -34732,6 +34732,8 @@ calendarmailer.App.prototype.handleGetEventsResult_ = function(e) {
   this.calendarEventUis_[e.id] = calendarUi;
   calendarUi.render(document.getElementById('eventpickers'));
   calendarUi.setSubmitCaption('Mail the owners of these events!');
+  this.eventHandler_.listen(calendarUi,
+      calendarmailer.ui.Picker.EventType.SUBMIT, this.handleAddNames_);
   this.getNextEvents_(this.calendarListUi_.getSelectedItems());
 };
 
@@ -34798,35 +34800,68 @@ calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
   if (this.calendarListUi_.isEnabled()) {
     return;
   }
-  this.nameList_.render(document.getElementById('namelist'));
-  document.getElementById('email-preview').appendChild(soy.renderAsElement(
-      calendarmailer.soy.email.all, {}));
+  this.showNameList_();
   goog.object.forEach(this.calendarEventUis_, function(ui) {
     if (!ui.isEnabled()) {
       return;
     }
-    var events = ui.getSelectedEvents();
-    for (var i = 0; i < events.length; ++i) {
-      var event = events[i];
-      // Sometimes events don't appear to have a creator. If this is the case,
-      // log an error and continue. TODO: Log somewhere persistent and/or show a
-      // prompt for the admins to investigate.
-      if (!event.creator) {
-        console.log('event without creator! ID: ' + event.id);
-        continue;
-      }
-      var displayName = event.creator.displayName ?
-          event.creator.displayName + ' (' + event.creator.email + ')' :
-          event.creator.email;
-      this.nameList_.addItem({
-        id: event.creator.email,
-        summary: displayName
-      });
-    }
-    goog.array.extend(this.selectedEvents_, events);
+    this.addNames_(ui.getSelectedEvents());
     ui.setEnabled(false);
   }, this);
   this.nameList_.selectAll(true);
+};
+
+
+/**
+ * Adds the names from the given calendar to the list of people to notify.
+ * @param {!calendarmailer.ui.CalendarList.Event} e The event.
+ * @private
+ */
+calendarmailer.App.prototype.handleAddNames_ = function(e) {
+  this.showNameList_();
+  this.addNames_(e.target.getSelectedEvents());
+  e.target.setEnabled(false);
+};
+
+
+/**
+ * Adds the names from the given calendar to the list of people to notify.
+ * @param {!Array.<!Object.<string, string>>} events The events to pull the
+ *     names from.
+ * @private
+ */
+calendarmailer.App.prototype.addNames_ = function(events) {
+  for (var i = 0; i < events.length; ++i) {
+    var event = events[i];
+    // Sometimes events don't appear to have a creator. If this is the case,
+    // log an error and continue. TODO: Log somewhere persistent and/or show a
+    // prompt for the admins to investigate.
+    if (!event.creator) {
+      window.console.log('event without creator! ID: ' + event.id);
+      continue;
+    }
+    var displayName = event.creator.displayName ?
+        event.creator.displayName + ' (' + event.creator.email + ')' :
+        event.creator.email;
+    this.nameList_.addItem({
+      id: event.creator.email,
+      summary: displayName
+    });
+  }
+  goog.array.extend(this.selectedEvents_, events);
+};
+
+
+/**
+ * Shows the name list.
+ * @private
+ */
+calendarmailer.App.prototype.showNameList_ = function() {
+  if (!this.nameList_.isInDocument()) {
+    this.nameList_.render(document.getElementById('namelist'));
+    document.getElementById('email-preview').appendChild(soy.renderAsElement(
+        calendarmailer.soy.email.all, {}));
+  }
 };
 
 
