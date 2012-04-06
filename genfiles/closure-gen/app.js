@@ -34878,7 +34878,7 @@ calendarmailer.App.prototype.handleNamelistSubmit_ = function() {
   var obj = {
     'names': names,
     'events': this.selectedEvents_,
-    'cycleId': '07a0c85a515dde9140f0a5da499217530f294e1c'
+    'cycleId': '23885c5ca2aa670ce490657fa29c09208577b761'
   };
   this.io_.send('/submitevents',
       'POST', goog.json.serialize(obj),

@@ -25,7 +25,8 @@ class SubmitEventsHandler(webapp.RequestHandler):
     user_event_map = {}
     # Get the cycle and any existing users in the cycle.
     if (cycleId):
-      cycle = db.get(db.Key.from_path('Cycle', cycleId))
+      logging.info("getting cycle with id: " + cycleId)
+      cycle = db.get(db.Key.from_path(Cycle.kind(), cycleId))
       if (cycle):
         logging.info("got cycle: " + str(cycle))
         user_event_map = self.getEmailToEventId(cycle)
@@ -49,7 +50,7 @@ class SubmitEventsHandler(webapp.RequestHandler):
       if (not creator in user_event_map):
         user_event_map[creator] = []
       # Check to make sure we haven't already processed the event.
-      if (not event in user_event_map[creator]):
+      if (not event["eventId"] in user_event_map[creator]):
         # Create a new event and put it in the map.
         user_event_map[creator].append(event)
         # Save the event for later.
@@ -61,12 +62,12 @@ class SubmitEventsHandler(webapp.RequestHandler):
         db_event.put()
         logging.info("created event: " + event["eventId"])
 
-
   # Gets a map of email address : event object for the given cycle ID.
   def getEmailToEventId(self, cycle):
     user_event_map = {}
     if (cycle):
-      fetched_events = db.query_descendants(cycle).get()
+      # TODO(wilddamon): Figure out how to get all the events!
+      fetched_events = db.query_descendants(cycle).fetch(limit=10)
       logging.info("got events: " + str(fetched_events))
       if (fetched_events):
         for event in fetched_events:
@@ -74,5 +75,5 @@ class SubmitEventsHandler(webapp.RequestHandler):
           if (not email in user_event_map):
             user_event_map[email] = []
           user_event_map[email].append(event.event_id)
-          logging.info("Got event with ID: " + event.event_id)
+    logging.info("user_event_map: " + str(user_event_map))
     return user_event_map
