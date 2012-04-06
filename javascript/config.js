@@ -40,11 +40,26 @@ calendarmailer.Config = function() {
   this.apiUrl_ = 'https://apis.google.com/js/client.js';
 
   /**
+   * The cycle id.
+   * @type {string}
+   * @private
+   */
+  this.cycleId_ = '';
+
+  /**
    * Today's date.
    * @type {string}
    * @private
    */
   this.minDate_ = rfctimestamp();
+
+  var queries = window.location.href.split('?')[1].split('&');
+  for (var i = 0; i < queries.length; ++i) {
+    var parts = queries[i].split('=');
+    if (parts.length == 2 && parts[0] == 'id') {
+      this.cycleId_ = parts[1];
+    }
+  }
 };
 
 
@@ -77,6 +92,14 @@ calendarmailer.Config.prototype.getScope = function() {
  */
 calendarmailer.Config.prototype.getApiUrl = function() {
   return this.apiUrl_;
+};
+
+
+/**
+ * @return {string} The cycle id.
+ */
+calendarmailer.Config.prototype.getCycleId = function() {
+  return this.cycleId;
 };
 
 

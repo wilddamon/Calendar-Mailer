@@ -17088,11 +17088,26 @@ calendarmailer.Config = function() {
   this.apiUrl_ = 'https://apis.google.com/js/client.js';
 
   /**
+   * The cycle id.
+   * @type {string}
+   * @private
+   */
+  this.cycleId_ = '';
+
+  /**
    * Today's date.
    * @type {string}
    * @private
    */
   this.minDate_ = rfctimestamp();
+
+  var queries = window.location.href.split('?')[1].split('&');
+  for (var i = 0; i < queries.length; ++i) {
+    var parts = queries[i].split('=');
+    if (parts.length == 2 && parts[0] == 'id') {
+      this.cycleId_ = parts[1];
+    }
+  }
 };
 
 
@@ -17125,6 +17140,14 @@ calendarmailer.Config.prototype.getScope = function() {
  */
 calendarmailer.Config.prototype.getApiUrl = function() {
   return this.apiUrl_;
+};
+
+
+/**
+ * @return {string} The cycle id.
+ */
+calendarmailer.Config.prototype.getCycleId = function() {
+  return this.cycleId;
 };
 
 
@@ -34679,7 +34702,8 @@ calendarmailer.App = function() {
           this.handleCalendarListSubmit_).
       listen(this.nameList_, calendarmailer.ui.Picker.EventType.SUBMIT,
           this.handleNamelistSubmit_).
-      listen(this.io_, goog.net.EventType.ERROR, this.handleIoError_);
+      listen(this.io_, goog.net.EventType.ERROR, this.handleIoError_).
+      listen(this.io_, goog.net.EventType.SUCCESS, this.handleIoSuccess_);
 };
 
 
@@ -34878,8 +34902,9 @@ calendarmailer.App.prototype.handleNamelistSubmit_ = function() {
   var obj = {
     'names': names,
     'events': this.selectedEvents_,
-    'cycleId': '23885c5ca2aa670ce490657fa29c09208577b761'
+    'cycleId': this.config_.getCycleId()
   };
+  this.nameList_.setEnabled(false);
   this.io_.send('/submitevents',
       'POST', goog.json.serialize(obj),
       {'content-type': 'application/json'});
@@ -34921,12 +34946,22 @@ calendarmailer.App.prototype.translateEvents_ = function(calendarId, events) {
 
 
 /**
+ * Goes back to the dashboard once submission is finished.
+ * @private
+ */
+calendarmailer.App.prototype.handleIoSuccess_ = function() {
+  window.location = 'http://www.google.com';
+};
+
+
+/**
  * Resets the IO so another request can be sent.
  * @private
  */
 calendarmailer.App.prototype.handleIoError_ = function() {
   goog.dispose(this.io_);
   this.io_ = new goog.net.XhrIo();
+  this.nameList_.setEnabled(true);
 };
 
 
