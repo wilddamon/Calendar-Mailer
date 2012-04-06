@@ -4,10 +4,11 @@ import json
 import logging
 import os
 
-from server.storage.calendaruser import CalendarUser
+from server.storage.calendarevent import CalendarEvent
 from server.storage.cycle import Cycle
 
 from google.appengine.api import users
+from google.appengine.ext import db
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 
@@ -19,26 +20,59 @@ class SubmitEventsHandler(webapp.RequestHandler):
     names = jsonObj["names"]
     events = jsonObj["events"]
     cycleId = jsonObj["cycleId"]
-    logging.info("names:\n" + str(names))
-    logging.info("events:\n" + str(events))
-
-    # Create the user db entries
-    #for event in events:
-      #creator = event["creator"]["email"]
-      #if (names.index(creator) < 0):
-      #  continue
-      # TODO(wilddamon): Populate the models for this user.
     
-    if (not cycleId):
+    cycle = None
+    user_event_map = {}
+    # Get the cycle and any existing users in the cycle.
+    if (cycleId):
+      cycle = db.get(db.Key.from_path('Cycle', cycleId))
+      if (cycle):
+        logging.info("got cycle: " + str(cycle))
+        user_event_map = self.getEmailToEventId(cycle)
+    if (not cycle):
       # Create the cycle db entry
       os_rand = os.urandom(30)
       cycle_id = id = hashlib.sha1(user.nickname() + '-' + os_rand).hexdigest()
       
-      cycle_db = Cycle(
-        id = cycle_id,
-        initiator = user)
-      cycle_db.put()
-      logging.info("Cycle with id \"" + cycle_id + "\" created.")
-    else:
-      # Adding more entries to an existing cycle TODO(wilddamon)
-      pass
+      cycle = Cycle(key_name = cycle_id, initiator = user)
+      cycle.put()
+      logging.info("Cycle with id \"" + cycle_id + "\" created by " +
+          user.nickname())
+
+    # Create the user db entries
+    for event in events:
+      #logging.info("event: " + str(event))
+      creator = event["owner"]
+      if (not creator in names):
+        logging.info("skipped due to creator being unselected: " + creator)
+        continue
+      if (not creator in user_event_map):
+        user_event_map[creator] = []
+      # Check to make sure we haven't already processed the event.
+      if (not event in user_event_map[creator]):
+        # Create a new event and put it in the map.
+        user_event_map[creator].append(event)
+        # Save the event for later.
+        db_event = CalendarEvent(parent = cycle,
+            owner = creator,
+            calendar_id = event["calendarId"],
+            event_id = event["eventId"],
+            state = "Pending")
+        db_event.put()
+        logging.info("created event: " + event["eventId"])
+
+
+  # Gets a map of email address : event object for the given cycle ID.
+  def getEmailToEventId(self, cycle):
+    user_event_map = {}
+    if (cycle):
+      fetched_events = db.query_descendants(cycle).get()
+      logging.info("got events: " + str(fetched_events))
+      if (fetched_events):
+        for event in fetched_events:
+          email = event.owner
+          if (not email in user_event_map):
+            user_event_map[email] = []
+          user_event_map[email].append(event.event_id)
+          logging.info("Got event with ID: " + event.event_id)
+    return user_event_map

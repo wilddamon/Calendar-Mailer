@@ -1,5 +1,5 @@
 
-from server.storage.calendaruser import CalendarUser
+from server.storage.calendarevent import CalendarEvent
 
 from google.appengine.api import users
 from google.appengine.ext import webapp
@@ -13,7 +13,7 @@ class UserHandler(webapp.RequestHandler):
       self.redirect(url)
       return
 
-    userObj = CalendarUser.gql('WHERE user = :1', user).get()
+    #userObj = CalendarUser.gql('WHERE user = :1', user).get()
 
     template_values = {
       "name": user.user_id(),

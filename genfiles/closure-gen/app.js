@@ -34805,8 +34805,11 @@ calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
     if (!ui.isEnabled()) {
       return;
     }
-    this.addNames_(ui.getSelectedEvents());
+    var selectedEvents = ui.getSelectedEvents();
+    this.addNames_(selectedEvents);
     ui.setEnabled(false);
+    goog.array.extend(this.selectedEvents_,
+        this.translateEvents_(ui.getId(), selectedEvents));
   }, this);
   this.nameList_.selectAll(true);
 };
@@ -34819,8 +34822,11 @@ calendarmailer.App.prototype.handleGlobalAddNames_ = function() {
  */
 calendarmailer.App.prototype.handleAddNames_ = function(e) {
   this.showNameList_();
-  this.addNames_(e.target.getSelectedEvents());
+  var selectedEvents = e.target.getSelectedEvents();
+  this.addNames_(selectedEvents);
   e.target.setEnabled(false);
+  goog.array.extend(this.selectedEvents_,
+      this.translateEvents_(e.target.getId(), selectedEvents));
 };
 
 
@@ -34833,13 +34839,6 @@ calendarmailer.App.prototype.handleAddNames_ = function(e) {
 calendarmailer.App.prototype.addNames_ = function(events) {
   for (var i = 0; i < events.length; ++i) {
     var event = events[i];
-    // Sometimes events don't appear to have a creator. If this is the case,
-    // log an error and continue. TODO: Log somewhere persistent and/or show a
-    // prompt for the admins to investigate.
-    if (!event.creator) {
-      window.console.log('event without creator! ID: ' + event.id);
-      continue;
-    }
     var displayName = event.creator.displayName ?
         event.creator.displayName + ' (' + event.creator.email + ')' :
         event.creator.email;
@@ -34848,7 +34847,6 @@ calendarmailer.App.prototype.addNames_ = function(events) {
       summary: displayName
     });
   }
-  goog.array.extend(this.selectedEvents_, events);
 };
 
 
@@ -34877,11 +34875,48 @@ calendarmailer.App.prototype.handleNamelistSubmit_ = function() {
     names.push(item.id);
   }, this);
   window.console.log(names);
-  var events = this.selectedEvents_;
-  var obj = {'names': names, 'events': events, cycleId: null};
+  var obj = {
+    'names': names,
+    'events': this.selectedEvents_,
+    'cycleId': '07a0c85a515dde9140f0a5da499217530f294e1c'
+  };
   this.io_.send('/submitevents',
       'POST', goog.json.serialize(obj),
       {'content-type': 'application/json'});
+};
+
+
+/**
+ * Translates and truncates each event in the given events array to the form,
+ * using the given calendar ID:
+ * {
+ *   "owner": event[creator][email]
+ *   "calendarId": calendarId,
+ *   "eventId": event["id"]
+ * }
+ * @param {string} calendarId The id of the calendar the events are from.
+ * @param {!Array.<!Object>} events The calendar events to translate.
+ * @return {!Array.<!Object>} The translated events.
+ * @private
+ */
+calendarmailer.App.prototype.translateEvents_ = function(calendarId, events) {
+  var result = [];
+  goog.array.forEach(events, function(event) {
+    // Sometimes events don't appear to have a creator. If this is the case,
+    // log an error and continue. TODO: Log somewhere persistent and/or show a
+    // prompt for the admins to investigate.
+    if (!event.creator) {
+      window.console.log('event without creator! ID: ' + event.id);
+      return;
+    }
+    var owner = event.creator.email;
+    result.push({
+      'owner': owner,
+      'calendarId': calendarId,
+      'eventId': event.id
+    });
+  }, this);
+  return result;
 };
 
 
