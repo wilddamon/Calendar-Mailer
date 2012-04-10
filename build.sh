@@ -27,7 +27,7 @@ echo "***Running closurebuilder***"
     --root=../closure-library/ \
     --root=javascript/ \
     --root=genfiles/soy-gen \
-    --namespace="calendarmailer.PickerApp" \
+    --namespace="calendarmailer.picker.App" \
     --output_mode=script \
     --compiler_jar=../compiler-latest/compiler.jar \
     > genfiles/closure-gen/pickerapp.js
