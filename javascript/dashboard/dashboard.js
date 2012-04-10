@@ -2,7 +2,7 @@
 /**
  * @fileoverview The dashboard app for the calendar mailer.
  */
-goog.provide('calendarmailer.PickerApp');
+goog.provide('calendarmailer.dashboard.App');
 
 
 
@@ -10,5 +10,5 @@ goog.provide('calendarmailer.PickerApp');
  * The main dashboard app container class.
  * @constructor
  */
-calendarmailer.PickerApp = function() {
+calendarmailer.dashboard.App = function() {
 };

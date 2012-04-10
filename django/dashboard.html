@@ -14,11 +14,12 @@
 </div>
 
 <br>
-<br>
-<button>Begin New Calendar Cleanup Cycle</button>
 
 {% for cycle in cycles %}
-<div>{{cycle.date}}</div>
+<div id="{{cycle.cycle_id}}">Cycle created at: {{cycle.start_date}}</div>
 {% endfor %}
+
+<br>
+<button>Begin New Calendar Cleanup Cycle</button>
 
 </body>
