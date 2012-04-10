@@ -19,21 +19,23 @@ class SubmitEventsHandler(webapp.RequestHandler):
     jsonObj = json.loads(self.request.body)
     names = jsonObj["names"]
     events = jsonObj["events"]
-    cycleId = jsonObj["cycleId"]
+    cycle_id = jsonObj["cycleId"]
     
     cycle = None
     user_event_map = {}
     # Get the cycle and any existing users in the cycle.
-    if (cycleId):
-      logging.info("getting cycle with id: " + cycleId)
-      cycle = db.get(db.Key.from_path(Cycle.kind(), cycleId))
+    if (cycle_id):
+      logging.info("getting cycle with id: " + cycle_id)
+      cycle = db.get(db.Key.from_path(Cycle.kind(), cycle_id))
       if (cycle):
         logging.info("got cycle: " + str(cycle))
         user_event_map = self.getEmailToEventId(cycle)
     if (not cycle):
       # Create the cycle db entry
-      os_rand = os.urandom(30)
-      cycle_id = id = hashlib.sha1(user.nickname() + '-' + os_rand).hexdigest()
+      if (not cycle_id):
+        os_rand = os.urandom(30)
+        cycle_id = id = hashlib.sha1(user.nickname() + '-' + 
+                   os_rand).hexdigest()
       
       cycle = Cycle(key_name = cycle_id, initiator = user)
       cycle.put()
