@@ -99,7 +99,7 @@ calendarmailer.Config.prototype.getApiUrl = function() {
  * @return {string} The cycle id.
  */
 calendarmailer.Config.prototype.getCycleId = function() {
-  return this.cycleId;
+  return this.cycleId_;
 };
 
 
