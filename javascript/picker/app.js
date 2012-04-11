@@ -370,7 +370,7 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
  * @private
  */
 calendarmailer.picker.App.prototype.handleIoSuccess_ = function() {
-  window.location = 'http://www.google.com';
+  window.location = 'http://localhost:8081';
 };
 
 

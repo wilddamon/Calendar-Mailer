@@ -7,3 +7,9 @@
   position: relative;
   top: 3px;
 }
+
+.cycle {
+  color: blue;
+  cursor: pointer;
+  text-decoration: underline;
+}

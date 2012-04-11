@@ -1,5 +1,6 @@
 <html>
 <head>
+  <title>Calendar Mailer Dashboard</title>
   <script type="text/javascript" src="/scripts/dashboard.js"></script>
 	<link type="text/css" rel="stylesheet" href="/scripts/app.css">
 </head>
@@ -13,11 +14,14 @@
   a new cycle by pressing the "new cycle" button.
 </div>
 
-<br>
 
-{% for cycle in cycles %}
-<div id="{{cycle.cycle_id}}">Cycle created at: {{cycle.start_date}}</div>
-{% endfor %}
+<div id="cycles">
+  {% for cycle in cycles %}
+  <div id="{{cycle.cycle_id}}" class="cycle">
+    Cycle created at: {{cycle.start_date}}
+  </div>
+  {% endfor %}
+</div>
 
 <br>
 <button>Begin New Calendar Cleanup Cycle</button>

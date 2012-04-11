@@ -55,6 +55,11 @@
   position: relative;
   top: 3px;
 }
+.cycle {
+  color: blue;
+  cursor: pointer;
+  text-decoration: underline;
+}
 .email-preview-outer {
   border: 1px solid #ccc;
   padding: 10px;
