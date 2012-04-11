@@ -31,6 +31,14 @@ echo "***Running closurebuilder***"
     --output_mode=script \
     --compiler_jar=../compiler-latest/compiler.jar \
     > genfiles/closure-gen/pickerapp.js
+../closure-library/closure/bin/build/closurebuilder.py \
+    --root=../closure-library/ \
+    --root=javascript/ \
+    --root=genfiles/soy-gen \
+    --namespace="calendarmailer.dashboard.App" \
+    --output_mode=script \
+    --compiler_jar=../compiler-latest/compiler.jar \
+    > genfiles/closure-gen/dashboard.js
 
 echo "***Running css compiler***"
 java -jar ../css-compiler/closure-stylesheets-20111230.jar \
