@@ -6,24 +6,38 @@
 </head>
 <body>
 
-<div id="welcome">
-  Hello {{name}},
-  <br>
-  <br>
-  Here is the dasboard for cleanup cycles. Please select a cycle below, or begin 
-  a new cycle by pressing the "new cycle" button.
-</div>
-
-
-<div id="cycles">
-  {% for cycle in cycles %}
-  <div id="{{cycle.cycle_id}}" class="cycle">
-    Cycle created at: {{cycle.start_date}}
+<div id="all-cycles">
+  <div>
+    Hello {{name}},
+    <br>
+    <br>
+    Here is the dasboard for cleanup cycles. Please select a cycle below, or
+    begin a new cycle by pressing the "new cycle" button.
   </div>
-  {% endfor %}
+  <br>
+  <div id="cycles">
+    {% for cycle in cycles %}
+    <div id="{{cycle.cycle_id}}" class="cycle">
+      Cycle created at: {{cycle.start_date}}
+    </div>
+    {% endfor %}
+  </div>
+  
+  <br>
+  <button id="new-cycle-button">Begin New Calendar Cleanup Cycle</button>
 </div>
 
-<br>
-<button>Begin New Calendar Cleanup Cycle</button>
+<div id="individual-cycle" style="display:none;">
+  <div>
+    Hello {{name}},
+    <br>
+    <br>
+    Here are the states of the people you selected for emailing. Underneath that 
+    is a list of calendars these events were pulled from.
+  </div>
+  <br>
+  <button id="individual-back-button">Back</button>
+  <div id="individual-cycle-content"></div>
+</div>
 
 </body>

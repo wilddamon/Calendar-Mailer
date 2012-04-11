@@ -17100,11 +17100,14 @@ calendarmailer.Config = function() {
    */
   this.minDate_ = rfctimestamp();
 
-  var queries = window.location.href.split('?')[1].split('&');
-  for (var i = 0; i < queries.length; ++i) {
-    var parts = queries[i].split('=');
-    if (parts.length == 2 && parts[0] == 'id') {
-      this.cycleId_ = parts[1];
+  var query = window.location.href.split('?');
+  if (query.length > 1) {
+    var queries = query[1].split('&');
+    for (var i = 0; i < queries.length; ++i) {
+      var parts = queries[i].split('=');
+      if (parts.length == 2 && parts[0] == 'id') {
+        this.cycleId_ = parts[1];
+      }
     }
   }
 };
@@ -34931,6 +34934,7 @@ calendarmailer.picker.App.prototype.handleNamelistSubmit_ = function() {
  *   "owner": event[creator][email]
  *   "calendarId": calendarId,
  *   "eventId": event["id"]
+ *   "summary": event["summary"]
  * }
  * @param {string} calendarId The id of the calendar the events are from.
  * @param {!Array.<!Object>} events The calendar events to translate.
@@ -34952,7 +34956,8 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
     result.push({
       'owner': owner,
       'calendarId': calendarId,
-      'eventId': event.id
+      'eventId': event.id,
+      'summary': event.summary
     });
   }, this);
   return result;
@@ -34964,7 +34969,7 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
  * @private
  */
 calendarmailer.picker.App.prototype.handleIoSuccess_ = function() {
-  window.location = 'http://www.google.com';
+  window.location = 'http://localhost:8081';
 };
 
 

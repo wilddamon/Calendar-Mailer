@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+from server.handlers.cyclehandler import CycleHandler
 from server.handlers.dashboardhandler import DashboardHandler
 from server.handlers.pickerhandler import PickerHandler
 from server.handlers.submiteventshandler import SubmitEventsHandler
@@ -26,7 +27,8 @@ def main():
   application = webapp.WSGIApplication([
       ('/', DashboardHandler),
       ('/submitevents', SubmitEventsHandler),
-      ('/picker', PickerHandler)
+      ('/picker', PickerHandler),
+      ('/cycle', CycleHandler)
     ], debug=True)
   util.run_wsgi_app(application)
 

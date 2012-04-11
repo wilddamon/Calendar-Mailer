@@ -1,0 +1,49 @@
+// Filter widget template.
+
+{namespace calendarmailer.soy.userlist}
+
+
+/**
+ * The user list template.
+ * @param users An array of user objects.
+ */
+{template .all}
+<table class="userlist">
+  <tr>
+    <th>Name</th>
+    <th>Number of events</th>
+    <th>Events</th>
+  </tr>
+  {foreach $user in $users}
+    {call .row}
+      {param user: $user /}
+    {/call}
+  {/foreach}
+</table>
+{/template}
+
+
+/**
+ * A row in the user list.
+ * @param user The user object {name: string, num_events: number, events: array}
+ */
+{template .row}
+<tr>
+  <td>{$user.name}</td>
+  <td>{$user.num_events}</td>
+  <td>
+    <table>
+      {foreach $event in $user.events}
+        <tr>
+          <td>
+            {$event.summary}
+          </td>
+          <td>
+            {$event.state}
+          </td>
+        </tr>
+      {/foreach}
+    </table>
+  </td>
+</tr>
+{/template}
