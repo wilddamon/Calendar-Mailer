@@ -4,6 +4,7 @@ import json
 import logging
 import os
 
+from server.handlers.eventutil import util
 from server.storage.calendarevent import CalendarEvent
 from server.storage.cycle import Cycle
 
@@ -29,7 +30,7 @@ class SubmitEventsHandler(webapp.RequestHandler):
       cycle = db.get(db.Key.from_path(Cycle.kind(), cycle_id))
       if (cycle):
         logging.info("got cycle: " + str(cycle))
-        user_event_map = self.getEmailToEventId(cycle)
+        user_event_map = util.getEmailToEventId(cycle)
     if (not cycle):
       # Create the cycle db entry
       if (not cycle_id):
@@ -60,22 +61,7 @@ class SubmitEventsHandler(webapp.RequestHandler):
             owner = creator,
             calendar_id = event["calendarId"],
             event_id = event["eventId"],
+            summary = event["summary"],
             state = "Pending")
         db_event.put()
         logging.info("created event: " + event["eventId"])
-
-  # Gets a map of email address : event object for the given cycle ID.
-  def getEmailToEventId(self, cycle):
-    user_event_map = {}
-    if (cycle):
-      # TODO(wilddamon): Figure out how to get all the events!
-      fetched_events = db.query_descendants(cycle).fetch(limit=10)
-      logging.info("got events: " + str(fetched_events))
-      if (fetched_events):
-        for event in fetched_events:
-          email = event.owner
-          if (not email in user_event_map):
-            user_event_map[email] = []
-          user_event_map[email].append(event.event_id)
-    logging.info("user_event_map: " + str(user_event_map))
-    return user_event_map

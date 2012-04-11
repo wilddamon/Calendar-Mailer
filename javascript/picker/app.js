@@ -337,6 +337,7 @@ calendarmailer.picker.App.prototype.handleNamelistSubmit_ = function() {
  *   "owner": event[creator][email]
  *   "calendarId": calendarId,
  *   "eventId": event["id"]
+ *   "summary": event["summary"]
  * }
  * @param {string} calendarId The id of the calendar the events are from.
  * @param {!Array.<!Object>} events The calendar events to translate.
@@ -358,7 +359,8 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
     result.push({
       'owner': owner,
       'calendarId': calendarId,
-      'eventId': event.id
+      'eventId': event.id,
+      'summary': event.summary
     });
   }, this);
   return result;
