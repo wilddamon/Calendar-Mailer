@@ -55,7 +55,7 @@ calendarmailer.Config = function() {
 
   var query = window.location.href.split('?');
   if (query.length > 1) {
-    var queries = query[1].split('&')
+    var queries = query[1].split('&');
     for (var i = 0; i < queries.length; ++i) {
       var parts = queries[i].split('=');
       if (parts.length == 2 && parts[0] == 'id') {
