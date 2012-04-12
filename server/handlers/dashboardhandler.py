@@ -26,7 +26,7 @@ class DashboardHandler(webapp.RequestHandler):
     logging.info("Got cycles: " + str(cycles))
 
     template_values = {
-      "name": user.user_id(),
+      "name": user.nickname(),
       "cycles": cycles
     }
     html = template.render('django/dashboard.html', template_values)
