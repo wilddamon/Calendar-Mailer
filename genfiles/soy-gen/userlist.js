@@ -23,6 +23,7 @@ calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
     calendarmailer.soy.userlist.row({user: userData56}, output);
   }
   output.append('</table>');
+  calendarmailer.soy.userlist.calendarList(opt_data, output);
   return opt_sb ? '' : output.toString();
 };
 
@@ -36,12 +37,47 @@ calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
 calendarmailer.soy.userlist.row = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<tr><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><table>');
-  var eventList67 = opt_data.user.events;
-  var eventListLen67 = eventList67.length;
-  for (var eventIndex67 = 0; eventIndex67 < eventListLen67; eventIndex67++) {
-    var eventData67 = eventList67[eventIndex67];
-    output.append('<tr><td>', soy.$$escapeHtml(eventData67.summary), '</td><td>', soy.$$escapeHtml(eventData67.state), '</td></tr>');
+  var eventList68 = opt_data.user.events;
+  var eventListLen68 = eventList68.length;
+  for (var eventIndex68 = 0; eventIndex68 < eventListLen68; eventIndex68++) {
+    var eventData68 = eventList68[eventIndex68];
+    output.append('<tr><td>', soy.$$escapeHtml(eventData68.summary), '</td><td>', soy.$$escapeHtml(eventData68.state), '</td></tr>');
   }
   output.append('</table></td></tr>');
+  return opt_sb ? '' : output.toString();
+};
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<ul id="userlist-calendarlist">');
+  if (opt_data.calendars) {
+    var calendarList80 = calendars;
+    var calendarListLen80 = calendarList80.length;
+    for (var calendarIndex80 = 0; calendarIndex80 < calendarListLen80; calendarIndex80++) {
+      var calendarData80 = calendarList80[calendarIndex80];
+      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData80}, output);
+    }
+  }
+  output.append('</ul>');
+  return opt_sb ? '' : output.toString();
+};
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.userlist.calendarListRow = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<li>', soy.$$escapeHtml(opt_data.calendar.summary), '</li>');
   return opt_sb ? '' : output.toString();
 };

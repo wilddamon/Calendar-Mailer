@@ -20,6 +20,7 @@
     {/call}
   {/foreach}
 </table>
+{call .calendarList data="all" /}
 {/template}
 
 
@@ -46,4 +47,30 @@
     </table>
   </td>
 </tr>
+{/template}
+
+
+/**
+ * The list of calendars that goes under the user list.
+ * @param? calendars An array of calendar objects.
+ */
+{template .calendarList}
+<ul id="userlist-calendarlist">
+  {if $calendars}
+    {foreach $calendar in calendars}
+      {call .calendarListRow}
+        {param calendar: $calendar /}
+      {/call}
+    {/foreach}
+  {/if}
+</ul>
+{/template}
+
+
+/**
+ * A row for the list of calendars.
+ * @param calendar A calendar object {summary: string}
+ */
+{template .calendarListRow}
+  <li>{$calendar.summary}</li>
 {/template}

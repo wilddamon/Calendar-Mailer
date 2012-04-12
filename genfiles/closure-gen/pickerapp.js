@@ -12908,7 +12908,7 @@ calendarmailer.CalendarApi = function(config) {
   this.config_ = config;
 
   goog.exportSymbol('c_api_cb',
-      goog.bind(this.doAuth_, this));
+      goog.bind(this.checkAuth_, this));
 };
 goog.inherits(calendarmailer.CalendarApi, goog.events.EventTarget);
 
@@ -12932,6 +12932,7 @@ calendarmailer.CalendarApi.EventType = {
 calendarmailer.CalendarApi.objectNames_ = {
   AUTH: 'gapi.auth.authorize',
   GAPI: 'gapi',
+  GET_CALENDAR: 'gapi.client.calendar.calendars.get',
   GET_EVENTS: 'gapi.client.calendar.events.list',
   LOAD: 'gapi.client.load',
   LIST: 'gapi.client.calendar.calendarList.list',
@@ -12964,11 +12965,27 @@ calendarmailer.CalendarApi.prototype.listCalendars_ = null;
 
 
 /**
+ * The get calendar request generator function.
+ * @type {?function}
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.getCalendar_ = null;
+
+
+/**
  * The get events request generator function.
  * @type {?function}
  * @private
  */
 calendarmailer.CalendarApi.prototype.getEvents_ = null;
+
+
+/**
+ * @return {boolean} Whether the api is initialized.
+ */
+calendarmailer.CalendarApi.prototype.isInitialized = function() {
+  return this.isInitialized_;
+};
 
 
 /**
@@ -12984,10 +13001,10 @@ calendarmailer.CalendarApi.prototype.startLoad = function() {
 
 
 /**
- * Does authorization.
+ * Checks authorization.
  * @private
  */
-calendarmailer.CalendarApi.prototype.doAuth_ = function() {
+calendarmailer.CalendarApi.prototype.checkAuth_ = function() {
   var setKey = goog.getObjectByName(
       calendarmailer.CalendarApi.objectNames_.SET_API_KEY);
   setKey(this.config_.getApiKey());
@@ -12998,9 +13015,29 @@ calendarmailer.CalendarApi.prototype.doAuth_ = function() {
     authorize({
       client_id: this.config_.getClientId(),
       scope: this.config_.getScope(),
+      immediate: true
+    }, goog.bind(this.handleAuthResult_, this));
+  }, 1, this);
+};
+
+
+/**
+ * Checks the authorization result, and if it didn't succeed, show a popup to
+ * the user.
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.handleAuthResult_ = function(result) {
+  if (result) {
+    this.loadApi_();
+  } else {
+    var authorize = goog.getObjectByName(
+        calendarmailer.CalendarApi.objectNames_.AUTH);
+    authorize({
+      client_id: this.config_.getClientId(),
+      scope: this.config_.getScope(),
       immediate: false
     }, goog.bind(this.loadApi_, this));
-  }, 1, this);
+  }
 };
 
 
@@ -13026,6 +13063,8 @@ calendarmailer.CalendarApi.prototype.onApiLoaded_ = function() {
       calendarmailer.CalendarApi.objectNames_.LIST);
   this.getEvents_ = goog.getObjectByName(
       calendarmailer.CalendarApi.objectNames_.GET_EVENTS);
+  this.getCalendar_ = goog.getObjectByName(
+      calendarmailer.CalendarApi.objectNames_.GET_CALENDAR);
 
   this.isInitialized_ = true;
 
@@ -13053,11 +13092,20 @@ calendarmailer.CalendarApi.prototype.getCalendarList = function(
  * @private
  */
 calendarmailer.CalendarApi.prototype.handleListResult_ = function(result) {
-  window.console.log('listed calendars:');
-  window.console.log(result);
-  this.lastResult = result;
   this.dispatchEvent(new calendarmailer.CalendarApi.Event(
       calendarmailer.CalendarApi.EventType.LIST_RESULT, result));
+};
+
+
+/**
+ * Sends a request to get the calendar summary.
+ * @param {string} calendarId The calendar ID.
+ */
+calendarmailer.CalendarApi.prototype.getCalendarSummary = function(calendarId,
+    callback) {
+  this.getCalendar_({
+    'calendarId': calendarId
+  }).execute(callback);
 };
 
 
@@ -13088,9 +13136,6 @@ calendarmailer.CalendarApi.prototype.getCalendarEvents = function(id, title,
  */
 calendarmailer.CalendarApi.prototype.handleGetEventsResult_ = function(id,
     title, result) {
-  window.console.log('got events:');
-  window.console.log(result);
-  this.lastResult = result;
   this.dispatchEvent(new calendarmailer.CalendarApi.Event(
       calendarmailer.CalendarApi.EventType.GET_EVENTS_RESULT,
       result, id, title));
@@ -34969,7 +35014,7 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
  * @private
  */
 calendarmailer.picker.App.prototype.handleIoSuccess_ = function() {
-  window.location = 'http://localhost:8081';
+  window.location = window.location.origin;
 };
 
 

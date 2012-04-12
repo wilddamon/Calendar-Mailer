@@ -36,6 +36,7 @@ class util:
           eventJson = {}
           eventJson["summary"] = event.summary
           eventJson["state"] = event.state
+          eventJson["calendar_id"] = event.calendar_id
           user_event_map[email].append(eventJson)
     logging.info("user_event_map: " + str(user_event_map))
     return user_event_map

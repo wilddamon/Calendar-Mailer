@@ -12678,6 +12678,7 @@ calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
     calendarmailer.soy.userlist.row({user: userData56}, output);
   }
   output.append('</table>');
+  calendarmailer.soy.userlist.calendarList(opt_data, output);
   return opt_sb ? '' : output.toString();
 };
 
@@ -12691,13 +12692,48 @@ calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
 calendarmailer.soy.userlist.row = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<tr><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><table>');
-  var eventList67 = opt_data.user.events;
-  var eventListLen67 = eventList67.length;
-  for (var eventIndex67 = 0; eventIndex67 < eventListLen67; eventIndex67++) {
-    var eventData67 = eventList67[eventIndex67];
-    output.append('<tr><td>', soy.$$escapeHtml(eventData67.summary), '</td><td>', soy.$$escapeHtml(eventData67.state), '</td></tr>');
+  var eventList68 = opt_data.user.events;
+  var eventListLen68 = eventList68.length;
+  for (var eventIndex68 = 0; eventIndex68 < eventListLen68; eventIndex68++) {
+    var eventData68 = eventList68[eventIndex68];
+    output.append('<tr><td>', soy.$$escapeHtml(eventData68.summary), '</td><td>', soy.$$escapeHtml(eventData68.state), '</td></tr>');
   }
   output.append('</table></td></tr>');
+  return opt_sb ? '' : output.toString();
+};
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<ul id="userlist-calendarlist">');
+  if (opt_data.calendars) {
+    var calendarList80 = calendars;
+    var calendarListLen80 = calendarList80.length;
+    for (var calendarIndex80 = 0; calendarIndex80 < calendarListLen80; calendarIndex80++) {
+      var calendarData80 = calendarList80[calendarIndex80];
+      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData80}, output);
+    }
+  }
+  output.append('</ul>');
+  return opt_sb ? '' : output.toString();
+};
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.userlist.calendarListRow = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<li>', soy.$$escapeHtml(opt_data.calendar.summary), '</li>');
   return opt_sb ? '' : output.toString();
 };
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
@@ -19479,6 +19515,1749 @@ goog.ui.Component.prototype.removeChildren = function(opt_unrender) {
     this.removeChildAt(0, opt_unrender);
   }
 };
+// Copyright 2007 Bob Ippolito. All Rights Reserved.
+// Modifications Copyright 2009 The Closure Library Authors. All Rights
+// Reserved.
+
+/**
+ * @license Portions of this code are from MochiKit, received by
+ * The Closure Authors under the MIT license. All other code is Copyright
+ * 2005-2009 The Closure Authors. All Rights Reserved.
+ */
+
+/**
+ * @fileoverview Classes for tracking asynchronous operations and handling the
+ * results. The Deferred object here is patterned after the Deferred object in
+ * the Twisted python networking framework.
+ *
+ * See: http://twistedmatrix.com/projects/core/documentation/howto/defer.html
+ *
+ * Based on the Dojo code which in turn is based on the MochiKit code.
+ *
+ */
+
+goog.provide('goog.async.Deferred');
+goog.provide('goog.async.Deferred.AlreadyCalledError');
+goog.provide('goog.async.Deferred.CancelledError');
+
+goog.require('goog.array');
+goog.require('goog.asserts');
+goog.require('goog.debug.Error');
+
+
+
+/**
+ * Represents the results of an asynchronous operation. A Deferred object
+ * starts with no result, and then gets a result at some point in the future.
+ * @param {Function=} opt_canceller A function that will be called if the
+ *     deferred is cancelled.
+ * @param {Object=} opt_defaultScope The default scope to call callbacks with.
+ * @constructor
+ */
+goog.async.Deferred = function(opt_canceller, opt_defaultScope) {
+  /**
+   * Entries in the chain are arrays containing a callback, errback, and
+   * optional scope. Callbacks or errbacks may be null.
+   * @type {!Array.<!Array>}
+   * @private
+   */
+  this.chain_ = [];
+
+  /**
+   * If provided, this is the function to call when the deferred is cancelled.
+   * @type {Function|undefined}
+   * @private
+   */
+  this.canceller_ = opt_canceller;
+
+  /**
+   * The default scope to execute callbacks in.
+   * @type {Object}
+   * @private
+   */
+  this.defaultScope_ = opt_defaultScope || null;
+};
+
+
+/**
+ * Whether the deferred has been fired.
+ * @type {boolean}
+ * @private
+ */
+goog.async.Deferred.prototype.fired_ = false;
+
+
+/**
+ * Whether the last result in the callback chain was an error.
+ * @type {boolean}
+ * @private
+ */
+goog.async.Deferred.prototype.hadError_ = false;
+
+
+/**
+ * The current Deferred result, updated by registered callbacks and errbacks.
+ * @type {*}
+ * @private
+ */
+goog.async.Deferred.prototype.result_;
+
+
+/**
+ * The number of times this deferred has been paused.
+ * @type {number}
+ * @private
+ */
+goog.async.Deferred.prototype.paused_ = 0;
+
+
+/**
+ * If the deferred was cancelled but it did not have a canceller then this gets
+ * set to true.
+ * @type {boolean}
+ * @private
+ */
+goog.async.Deferred.prototype.silentlyCancelled_ = false;
+
+/**
+ * If a callback returns a deferred then this deferred is considered a chained
+ * deferred and once it is chained we cannot add more callbacks.
+ * @type {boolean}
+ * @private
+ */
+goog.async.Deferred.prototype.chained_ = false;
+
+
+/**
+ * If an error is thrown during Deferred execution with no errback to catch it,
+ * the error is rethrown after a timeout. Reporting the error after a timeout
+ * allows execution to continue in the calling context.
+ * @type {number}
+ * @private
+ */
+goog.async.Deferred.prototype.unhandledExceptionTimeoutId_;
+
+
+/**
+ * If this Deferred was created by branch(), this will be the "parent" Deferred.
+ * @type {goog.async.Deferred}
+ * @private
+ */
+goog.async.Deferred.prototype.parent_;
+
+
+/**
+ * The number of Deferred objects that have been branched off this one. This
+ * will be decremented whenever a branch is fired or cancelled.
+ * @type {number}
+ * @private
+ */
+goog.async.Deferred.prototype.branches_ = 0;
+
+
+/**
+ * Cancels a deferred that has not yet received a value. If this Deferred is
+ * paused waiting for a chained Deferred to fire, the chained Deferred will also
+ * be cancelled.
+ *
+ * If this Deferred was created by calling branch() on a parent Deferred with
+ * opt_propagateCancel set to true, the parent may also be cancelled. If
+ * opt_deepCancel is set, cancel() will be called on the parent (as well as any
+ * other ancestors if the parent is also a branch). If one or more branches were
+ * created with opt_propagateCancel set to true, the parent will be cancelled if
+ * cancel() is called on all of those branches.
+ *
+ * @param {boolean=} opt_deepCancel If true, cancels this Deferred's parent even
+ *     if cancel() hasn't been called on some of the parent's branches. Has no
+ *     effect on a branch without opt_propagateCancel set to true.
+ */
+goog.async.Deferred.prototype.cancel = function(opt_deepCancel) {
+  if (!this.hasFired()) {
+    if (this.parent_) {
+      // Get rid of the parent reference before potentially running the parent's
+      // canceller callback to ensure that this cancellation doesn't get
+      // double-counted in any way.
+      var parent = this.parent_;
+      delete this.parent_;
+      if (opt_deepCancel) {
+        parent.cancel(opt_deepCancel);
+      } else {
+        parent.branchCancel_();
+      }
+    }
+
+    if (this.canceller_) {
+      // Call in user-specified scope.
+      this.canceller_.call(this.defaultScope_, this);
+    } else {
+      this.silentlyCancelled_ = true;
+    }
+    if (!this.hasFired()) {
+      this.errback(new goog.async.Deferred.CancelledError(this));
+    }
+  } else if (this.result_ instanceof goog.async.Deferred) {
+    this.result_.cancel();
+  }
+};
+
+
+/**
+ * Handle a single branch being cancelled. Once all branches are cancelled, this
+ * Deferred will be cancelled as well.
+ * @private
+ */
+goog.async.Deferred.prototype.branchCancel_ = function() {
+  this.branches_--;
+  if (this.branches_ <= 0) {
+    this.cancel();
+  }
+};
+
+
+/**
+ * Pauses the deferred.
+ * @private
+ */
+goog.async.Deferred.prototype.pause_ = function() {
+  this.paused_++;
+};
+
+
+/**
+ * Resumes a paused deferred.
+ * @private
+ */
+goog.async.Deferred.prototype.unpause_ = function() {
+  // TODO(arv): Rename
+  this.paused_--;
+  if (this.paused_ == 0 && this.hasFired()) {
+    this.fire_();
+  }
+};
+
+
+/**
+ * Called when a dependent deferred fires.
+ * @param {boolean} isSuccess Whether the result is a success or an error.
+ * @param {*} res The result of the dependent deferred.
+ * @private
+ */
+goog.async.Deferred.prototype.continue_ = function(isSuccess, res) {
+  this.resback_(isSuccess, res);
+  this.unpause_();
+};
+
+
+/**
+ * Called when either a success or a failure happens.
+ * @param {boolean} isSuccess Whether the result is a success or an error.
+ * @param {*} res The result.
+ * @private
+ */
+goog.async.Deferred.prototype.resback_ = function(isSuccess, res) {
+  this.fired_ = true;
+  this.result_ = res;
+  this.hadError_ = !isSuccess;
+  this.fire_();
+};
+
+
+/**
+ * Verifies that the deferred has not yet been fired.
+ * @private
+ * @throws {Error} If this has already been fired.
+ */
+goog.async.Deferred.prototype.check_ = function() {
+  if (this.hasFired()) {
+    if (!this.silentlyCancelled_) {
+      throw new goog.async.Deferred.AlreadyCalledError(this);
+    }
+    this.silentlyCancelled_ = false;
+  }
+};
+
+
+/**
+ * Record a successful result for this operation, and send the result
+ * to all registered callback functions.
+ * @param {*} result The result of the operation.
+ */
+goog.async.Deferred.prototype.callback = function(result) {
+  this.check_();
+  this.assertNotDeferred_(result);
+  this.resback_(true /* isSuccess */, result);
+};
+
+
+/**
+ * Record that this operation failed with an error, and send the error
+ * to all registered errback functions.
+ * @param {*} result The error result of the operation.
+ */
+goog.async.Deferred.prototype.errback = function(result) {
+  this.check_();
+  this.assertNotDeferred_(result);
+  this.resback_(false /* isSuccess */, result);
+};
+
+
+/**
+ * Asserts that an object is not a Deferred.
+ * @param {*} obj The object to test.
+ * @throws {Error} Throws an exception if the object is a Deferred.
+ * @private
+ */
+goog.async.Deferred.prototype.assertNotDeferred_ = function(obj) {
+  goog.asserts.assert(
+      !(obj instanceof goog.async.Deferred),
+      'Deferred instances can only be chained if they are the result of a ' +
+      'callback');
+};
+
+
+/**
+ * Register a callback function, to be called when a successful result
+ * is available.
+ * @param {!Function} cb The function to be called on a successful result.
+ * @param {Object=} opt_scope An optional scope to call the callback in.
+ * @return {!goog.async.Deferred} The deferred object for chaining.
+ */
+goog.async.Deferred.prototype.addCallback = function(cb, opt_scope) {
+  return this.addCallbacks(cb, null, opt_scope);
+};
+
+
+/**
+ * Register a callback function, to be called if this operation fails.
+ * @param {!Function} eb The function to be called on an unsuccessful result.
+ * @param {Object=} opt_scope An optional scope to call the errback in.
+ * @return {!goog.async.Deferred} The deferred object for chaining.
+ */
+goog.async.Deferred.prototype.addErrback = function(eb, opt_scope) {
+  return this.addCallbacks(null, eb, opt_scope);
+};
+
+
+/**
+ * Registers a callback function and errback function.
+ * @param {Function} cb The function to be called on a successful result.
+ * @param {Function} eb The function to be called on an unsuccessful result.
+ * @param {Object=} opt_scope An optional scope to call the callbacks in.
+ * @return {!goog.async.Deferred} The deferred object for chaining.
+ */
+goog.async.Deferred.prototype.addCallbacks = function(cb, eb, opt_scope) {
+  goog.asserts.assert(!this.chained_, 'Chained Deferreds can not be re-used');
+  this.chain_.push([cb, eb, opt_scope]);
+  if (this.hasFired()) {
+    this.fire_();
+  }
+  return this;
+};
+
+
+/**
+ * Adds another deferred to the end of this deferred's processing chain.
+ *
+ * Use this when you want otherDeferred to be called at the end of
+ * thisDeferred's previous callbacks.
+ *
+ * @param {!goog.async.Deferred} otherDeferred The Deferred to chain.
+ * @return {!goog.async.Deferred} The deferred object for chaining.
+ */
+goog.async.Deferred.prototype.chainDeferred = function(otherDeferred) {
+  this.addCallbacks(
+      otherDeferred.callback, otherDeferred.errback, otherDeferred);
+  return this;
+};
+
+
+/**
+ * Makes this Deferred wait for otherDeferred to be called, and its preceding
+ * callbacks to be executed, before continuing with the callback sequence.
+ *
+ * This is equivalent to adding a callback that returns otherDeferred, but
+ * doesn't prevent additional callbacks from being added to otherDeferred.
+ *
+ * @param {!goog.async.Deferred} otherDeferred The Deferred to wait for.
+ * @return {!goog.async.Deferred} The deferred object for chaining.
+ */
+goog.async.Deferred.prototype.awaitDeferred = function(otherDeferred) {
+  return this.addCallback(goog.bind(otherDeferred.branch, otherDeferred));
+};
+
+
+/**
+ * Create a branch off this Deferred's callback chain, and return it as a new
+ * Deferred. This means that the return value will have the value at the current
+ * point in the callback chain, regardless of any further callbacks added to
+ * this Deferred.
+ *
+ * Additional callbacks added to the original Deferred will not affect the value
+ * of any branches. All branches at the same stage in the callback chain will
+ * receive the same starting value.
+ *
+ * @param {boolean=} opt_propagateCancel If cancel() is called on every child
+ *     branch created with opt_propagateCancel, the parent will be cancelled as
+ *     well.
+ * @return {!goog.async.Deferred} The deferred value at this point in the
+ *     callback chain.
+ */
+goog.async.Deferred.prototype.branch = function(opt_propagateCancel) {
+  var d = new goog.async.Deferred();
+  this.chainDeferred(d);
+  if (opt_propagateCancel) {
+    d.parent_ = this;
+    this.branches_++;
+  }
+  return d;
+};
+
+
+/**
+ * Registers a function as both callback and errback.
+ * @param {!Function} f The function to be called on any result.
+ * @param {Object=} opt_scope An optional scope to call the callbacks in.
+ * @return {!goog.async.Deferred} The deferred object for chaining.
+ */
+goog.async.Deferred.prototype.addBoth = function(f, opt_scope) {
+  return this.addCallbacks(f, f, opt_scope);
+};
+
+
+/**
+ * @return {boolean} Whether callback or errback has been called on this
+ *     deferred.
+ */
+goog.async.Deferred.prototype.hasFired = function() {
+  return this.fired_;
+};
+
+
+/**
+ * @param {*} res The current callback result.
+ * @return {boolean} Whether the current result is an error that should cause
+ *     registered errbacks to fire. May be overridden by subclasses to handle
+ *     special error types.
+ * @protected
+ */
+goog.async.Deferred.prototype.isError = function(res) {
+  return res instanceof Error;
+};
+
+
+/**
+ * @return {boolean} Whether an errback has been registered.
+ * @private
+ */
+goog.async.Deferred.prototype.hasErrback_ = function() {
+  return goog.array.some(this.chain_, function(chainRow) {
+    // The errback is the second element in the array.
+    return goog.isFunction(chainRow[1]);
+  });
+};
+
+
+/**
+ * Exhausts the callback sequence once a result is available.
+ * @private
+ */
+goog.async.Deferred.prototype.fire_ = function() {
+  if (this.unhandledExceptionTimeoutId_ && this.hasFired() &&
+      this.hasErrback_()) {
+    // It is possible to add errbacks after the Deferred has fired. If a new
+    // errback is added immediately after the Deferred encountered an unhandled
+    // error, but before that error is rethrown, cancel the rethrow.
+    goog.global.clearTimeout(this.unhandledExceptionTimeoutId_);
+    delete this.unhandledExceptionTimeoutId_;
+  }
+
+  if (this.parent_) {
+    this.parent_.branches_--;
+    delete this.parent_;
+  }
+
+  var res = this.result_;
+  var unhandledException = false;
+  var isChained = false;
+
+  while (this.chain_.length && this.paused_ == 0) {
+    var chainEntry = this.chain_.shift();
+
+    var callback = chainEntry[0];
+    var errback = chainEntry[1];
+    var scope = chainEntry[2];
+
+    var f = this.hadError_ ? errback : callback;
+    if (f) {
+      try {
+        var ret = f.call(scope || this.defaultScope_, res);
+
+        // If no result, then use previous result.
+        if (goog.isDef(ret)) {
+          // Bubble up the error as long as the return value hasn't changed.
+          this.hadError_ = this.hadError_ && (ret == res || this.isError(ret));
+          this.result_ = res = ret;
+        }
+
+        if (res instanceof goog.async.Deferred) {
+          isChained = true;
+          this.pause_();
+        }
+
+      } catch (ex) {
+        res = ex;
+        this.hadError_ = true;
+
+        if (!this.hasErrback_()) {
+          // If an error is thrown with no additional errbacks in the queue,
+          // prepare to rethrow the error.
+          unhandledException = true;
+        }
+      }
+    }
+  }
+
+  this.result_ = res;
+
+  if (isChained && this.paused_) {
+    res.addCallbacks(
+        goog.bind(this.continue_, this, true /* isSuccess */),
+        goog.bind(this.continue_, this, false /* isSuccess */));
+    res.chained_ = true;
+  }
+
+  if (unhandledException) {
+    // Rethrow the unhandled error after a timeout. Execution will continue, but
+    // the error will be seen by global handlers and the user. The rethrow will
+    // be canceled if another errback is appended before the timeout executes.
+    this.unhandledExceptionTimeoutId_ = goog.global.setTimeout(function() {
+      // The stack trace is clobbered when the error is rethrown. Append the
+      // stack trace to the message if available. Since no one is capturing this
+      // error, the stack trace will be printed to the debug console.
+      if (goog.DEBUG && goog.isDef(res.message) && res.stack) {
+        res.message += '\n' + res.stack;
+      }
+      throw res;
+    }, 0);
+  }
+};
+
+
+/**
+ * Creates a deferred that always succeeds.
+ * @param {*} res The result.
+ * @return {!goog.async.Deferred} The deferred object.
+ */
+goog.async.Deferred.succeed = function(res) {
+  var d = new goog.async.Deferred();
+  d.callback(res);
+  return d;
+};
+
+
+/**
+ * Creates a deferred that always fails.
+ * @param {*} res The error result.
+ * @return {!goog.async.Deferred} The deferred object.
+ */
+goog.async.Deferred.fail = function(res) {
+  var d = new goog.async.Deferred();
+  d.errback(res);
+  return d;
+};
+
+
+/**
+ * Creates a deferred that has already been cancelled.
+ * @return {!goog.async.Deferred} The deferred object.
+ */
+goog.async.Deferred.cancelled = function() {
+  var d = new goog.async.Deferred();
+  d.cancel();
+  return d;
+};
+
+
+/**
+ * Applies a callback to both deferred and non-deferred values, providing a
+ * mechanism to normalize synchronous and asynchronous behavior.
+ *
+ * If the value is non-deferred, the callback will be executed immediately and
+ * an already committed deferred returned.
+ *
+ * If the object is a deferred, it is branched (so the callback doesn't affect
+ * the previous chain) and the callback is added to the new deferred.  The
+ * branched deferred is then returned.
+ *
+ * In the following (contrived) example, if <code>isImmediate</code> is true
+ * then 3 is alerted immediately, otherwise 6 is alerted after a 2-second delay.
+ *
+ * <pre>
+ * var value;
+ * if (isImmediate) {
+ *   value = 3;
+ * } else {
+ *   value = new goog.async.Deferred();
+ *   setTimeout(function() { value.callback(6); }, 2000);
+ * }
+ *
+ * var d = goog.async.Deferred.when(value, alert);
+ * </pre>
+ *
+ * @param {*} value Deferred or non-deferred value to pass to the callback.
+ * @param {!Function} callback The callback to execute.
+ * @param {Object=} opt_scope An optional scope to call the callback in.
+ * @return {!goog.async.Deferred}
+ */
+goog.async.Deferred.when = function(value, callback, opt_scope) {
+  if (value instanceof goog.async.Deferred) {
+    return value.branch(true).addCallback(callback, opt_scope);
+  } else {
+    return goog.async.Deferred.succeed(value).addCallback(callback, opt_scope);
+  }
+};
+
+
+
+/**
+ * An error sub class that is used when a deferred has already been called.
+ * @param {!goog.async.Deferred} deferred The deferred object.
+ * @constructor
+ * @extends {goog.debug.Error}
+ */
+goog.async.Deferred.AlreadyCalledError = function(deferred) {
+  goog.debug.Error.call(this);
+
+  /**
+   * The deferred that raised this error.
+   * @type {goog.async.Deferred}
+   */
+  this.deferred = deferred;
+};
+goog.inherits(goog.async.Deferred.AlreadyCalledError, goog.debug.Error);
+
+
+/**
+ * Message text.
+ * @type {string}
+ * @override
+ */
+goog.async.Deferred.AlreadyCalledError.prototype.message = 'Already called';
+
+
+
+/**
+ * An error sub class that is used when a deferred is cancelled.
+ * @param {!goog.async.Deferred} deferred The deferred object.
+ * @constructor
+ * @extends {goog.debug.Error}
+ */
+goog.async.Deferred.CancelledError = function(deferred) {
+  goog.debug.Error.call(this);
+
+  /**
+   * The deferred that raised this error.
+   * @type {goog.async.Deferred}
+   */
+  this.deferred = deferred;
+};
+goog.inherits(goog.async.Deferred.CancelledError, goog.debug.Error);
+
+
+/**
+ * Message text.
+ * @type {string}
+ * @override
+ */
+goog.async.Deferred.CancelledError.prototype.message = 'Deferred was cancelled';
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A utility to load JavaScript files.
+ * Refactored from goog.net.Jsonp.
+ *
+ */
+
+goog.provide('goog.net.jsloader');
+goog.provide('goog.net.jsloader.Error');
+
+goog.require('goog.array');
+goog.require('goog.async.Deferred');
+goog.require('goog.debug.Error');
+goog.require('goog.dom');
+goog.require('goog.userAgent');
+
+
+/**
+ * The name of the property of goog.global under which the JavaScript
+ * verification object is stored by the loaded script.
+ * @type {string}
+ * @private
+ */
+goog.net.jsloader.GLOBAL_VERIFY_OBJS_ = 'closure_verification';
+
+
+/**
+ * The default length of time, in milliseconds, we are prepared to wait for a
+ * load request to complete.
+ * @type {number}
+ */
+goog.net.jsloader.DEFAULT_TIMEOUT = 5000;
+
+
+/**
+ * Optional parameters for goog.net.jsloader.send.
+ * timeout: The length of time, in milliseconds, we are prepared to wait
+ *     for a load request to complete. Default it 5 seconds.
+ * document: The HTML document under which to load the JavaScript. Default is
+ *     the current document.
+ * cleanupWhenDone: If true clean up the script tag after script completes to
+ *     load. This is important if you just want to read data from the JavaScript
+ *     and then throw it away. Default is false.
+ *
+ * @typedef {{
+ *   timeout: (number|undefined),
+ *   document: (HTMLDocument|undefined),
+ *   cleanupWhenDone: (boolean|undefined)
+ * }}
+ */
+goog.net.jsloader.Options;
+
+
+/**
+ * Scripts (URIs) waiting to be loaded.
+ * @type {Array.<string>}
+ * @private
+ */
+goog.net.jsloader.scriptsToLoad_ = [];
+
+
+/**
+ * Loads and evaluates the JavaScript files at the specified URIs, in order.
+ *
+ * @param {Array.<string>} uris The URIs to load.
+ * @param {goog.net.jsloader.Options=} opt_options Optional parameters. See
+ *     goog.net.jsloader.options documentation for details.
+ */
+goog.net.jsloader.loadMany = function(uris, opt_options) {
+  // Loading the scripts in serial introduces asynchronosity into the flow.
+  // Therefore, there are race conditions where client A can kick off the load
+  // sequence for client B, even though client A's scripts haven't all been
+  // loaded yet.
+  //
+  // To work around this issue, all module loads share a queue.
+  if (!uris.length) {
+    return;
+  }
+
+  if (goog.userAgent.GECKO && !goog.userAgent.isVersion(2)) {
+    // For <script> tags that are loaded in this manner, Gecko 1.9 and earlier
+    // ensures that tag order is consistent with evaluation order.
+    // Unfortunately, other browsers do not make that guarantee. So the other
+    // browsers need a slower and more complex implementation.
+    for (var i = 0; i < uris.length; i++) {
+      goog.net.jsloader.load(uris[i], opt_options);
+    }
+  } else {
+    var isAnotherModuleLoading = goog.net.jsloader.scriptsToLoad_.length;
+    goog.array.extend(goog.net.jsloader.scriptsToLoad_, uris);
+    if (isAnotherModuleLoading) {
+      // jsloader is still loading some other scripts.
+      // In order to prevent the race condition noted above, we just add
+      // these URIs to the end of the scripts' queue and return.
+      return;
+    }
+
+    uris = goog.net.jsloader.scriptsToLoad_;
+    var popAndLoadNextScript = function() {
+      var uri = uris.shift();
+      var deferred = goog.net.jsloader.load(uri, opt_options);
+      if (uris.length) {
+        deferred.addBoth(popAndLoadNextScript);
+      }
+    };
+    popAndLoadNextScript();
+  }
+};
+
+
+/**
+ * Loads and evaluates a JavaScript file.
+ * When the script loads, a user callback is called.
+ * It is the client's responsibility to verify that the script ran successfully.
+ *
+ * @param {string} uri The URI of the JavaScript.
+ * @param {goog.net.jsloader.Options=} opt_options Optional parameters. See
+ *     goog.net.jsloader.Options documentation for details.
+ * @return {!goog.async.Deferred} The deferred result, that may be used to add
+ *     callbacks and/or cancel the transmission.
+ *     The error callback will be called with a single goog.net.jsloader.Error
+ *     parameter.
+ */
+goog.net.jsloader.load = function(uri, opt_options) {
+  var options = opt_options || {};
+  var doc = options.document || document;
+
+  var script = goog.dom.createElement(goog.dom.TagName.SCRIPT);
+  var request = {script_: script, timeout_: undefined};
+  var deferred = new goog.async.Deferred(goog.net.jsloader.cancel_, request);
+
+  // Set a timeout.
+  var timeout = null;
+  var timeoutDuration = goog.isDefAndNotNull(options.timeout) ?
+      options.timeout : goog.net.jsloader.DEFAULT_TIMEOUT;
+  if (timeoutDuration > 0) {
+    timeout = window.setTimeout(function() {
+      goog.net.jsloader.cleanup_(script, true);
+      deferred.errback(new goog.net.jsloader.Error(
+          goog.net.jsloader.ErrorCode.TIMEOUT,
+          'Timeout reached for loading script ' + uri));
+    }, timeoutDuration);
+    request.timeout_ = timeout;
+  }
+
+  // Hang the user callback to be called when the script completes to load.
+  // NOTE(user): This callback will be called in IE even upon error. In any
+  // case it is the client's responsibility to verify that the script ran
+  // successfully.
+  script.onload = script.onreadystatechange = function() {
+    if (!script.readyState || script.readyState == 'loaded' ||
+        script.readyState == 'complete') {
+      var removeScriptNode = options.cleanupWhenDone || false;
+      goog.net.jsloader.cleanup_(script, removeScriptNode, timeout);
+      deferred.callback(null);
+    }
+  };
+
+  // Add an error callback.
+  // NOTE(user): Not supported in IE.
+  script.onerror = function() {
+    goog.net.jsloader.cleanup_(script, true, timeout);
+    deferred.errback(new goog.net.jsloader.Error(
+        goog.net.jsloader.ErrorCode.LOAD_ERROR,
+        'Error while loading script ' + uri));
+  };
+
+  // Add the script element to the document.
+  goog.dom.setProperties(script, {
+    'type': 'text/javascript',
+    'charset': 'UTF-8',
+    // NOTE(user): Safari never loads the script if we don't set
+    // the src attribute before appending.
+    'src': uri
+  });
+  var scriptParent = goog.net.jsloader.getScriptParentElement_(doc);
+  scriptParent.appendChild(script);
+
+  return deferred;
+};
+
+
+/**
+ * Loads a JavaScript file and verifies it was evaluated successfully, using a
+ * verification object.
+ * The verification object is set by the loaded JavaScript at the end of the
+ * script.
+ * We verify this object was set and return its value in the success callback.
+ * If the object is not defined we trigger an error callback.
+ *
+ * @param {string} uri The URI of the JavaScript.
+ * @param {string} verificationObjName The name of the verification object that
+ *     the loaded script should set.
+ * @param {goog.net.jsloader.Options} options Optional parameters. See
+ *     goog.net.jsloader.Options documentation for details.
+ * @return {!goog.async.Deferred} The deferred result, that may be used to add
+ *     callbacks and/or cancel the transmission.
+ *     The success callback will be called with a single parameter containing
+ *     the value of the verification object.
+ *     The error callback will be called with a single goog.net.jsloader.Error
+ *     parameter.
+ */
+goog.net.jsloader.loadAndVerify = function(uri, verificationObjName, options) {
+  // Define the global objects variable.
+  if (!goog.global[goog.net.jsloader.GLOBAL_VERIFY_OBJS_]) {
+    goog.global[goog.net.jsloader.GLOBAL_VERIFY_OBJS_] = {};
+  }
+  var verifyObjs = goog.global[goog.net.jsloader.GLOBAL_VERIFY_OBJS_];
+
+  // Verify that the expected object does not exist yet.
+  if (goog.isDef(verifyObjs[verificationObjName])) {
+    // TODO(user): Error or reset variable?
+    return goog.async.Deferred.fail(new goog.net.jsloader.Error(
+        goog.net.jsloader.ErrorCode.VERIFY_OBJECT_ALREADY_EXISTS,
+        'Verification object ' + verificationObjName + ' already defined.'));
+  }
+
+  // Send request to load the JavaScript.
+  var sendDeferred = goog.net.jsloader.load(uri, options);
+
+  // Create a deferred object wrapping the send result.
+  var deferred = new goog.async.Deferred(sendDeferred.cancel);
+
+  // Call user back with object that was set by the script.
+  sendDeferred.addCallback(function() {
+    var result = verifyObjs[verificationObjName];
+    if (goog.isDef(result)) {
+      deferred.callback(result);
+      delete verifyObjs[verificationObjName];
+    } else {
+      // Error: script was not loaded properly.
+      deferred.errback(new goog.net.jsloader.Error(
+          goog.net.jsloader.ErrorCode.VERIFY_ERROR,
+          'Script ' + uri + ' loaded, but verification object ' +
+          verificationObjName + ' was not defined.'));
+    }
+  });
+
+  // Pass error to new deferred object.
+  sendDeferred.addErrback(function(error) {
+    if (goog.isDef(verifyObjs[verificationObjName])) {
+      delete verifyObjs[verificationObjName];
+    }
+    deferred.errback(error);
+  });
+
+  return deferred;
+};
+
+
+/**
+ * Gets the DOM element under which we should add new script elements.
+ * How? Take the first head element, and if not found take doc.documentElement,
+ * which always exists.
+ *
+ * @param {!HTMLDocument} doc The relevant document.
+ * @return {!Element} The script parent element.
+ * @private
+ */
+goog.net.jsloader.getScriptParentElement_ = function(doc) {
+  var headElements = doc.getElementsByTagName(goog.dom.TagName.HEAD);
+  if (!headElements || goog.array.isEmpty(headElements)) {
+    return doc.documentElement;
+  } else {
+    return headElements[0];
+  }
+};
+
+
+/**
+ * Cancels a given request.
+ * @this {{script_: Element, timeout_: number}} The request context.
+ * @private
+ */
+goog.net.jsloader.cancel_ = function() {
+  var request = this;
+  if (request && request.script_) {
+    var scriptNode = request.script_;
+    if (scriptNode && scriptNode.tagName == 'SCRIPT') {
+      goog.net.jsloader.cleanup_(scriptNode, true, request.timeout_);
+    }
+  }
+};
+
+
+/**
+ * Removes the script node and the timeout.
+ *
+ * @param {Node} scriptNode The node to be cleaned up.
+ * @param {boolean} removeScriptNode If true completely remove the script node.
+ * @param {?number=} opt_timeout The timeout handler to cleanup.
+ * @private
+ */
+goog.net.jsloader.cleanup_ = function(scriptNode, removeScriptNode,
+                                      opt_timeout) {
+  if (goog.isDefAndNotNull(opt_timeout)) {
+    goog.global.clearTimeout(opt_timeout);
+  }
+
+  scriptNode.onload = goog.nullFunction;
+  scriptNode.onerror = goog.nullFunction;
+  scriptNode.onreadystatechange = goog.nullFunction;
+
+  // Do this after a delay (removing the script node of a running script can
+  // confuse older IEs).
+  if (removeScriptNode) {
+    window.setTimeout(function() {
+      goog.dom.removeNode(scriptNode);
+    }, 0);
+  }
+};
+
+
+/**
+ * Possible error codes for jsloader.
+ * @enum {number}
+ */
+goog.net.jsloader.ErrorCode = {
+  LOAD_ERROR: 0,
+  TIMEOUT: 1,
+  VERIFY_ERROR: 2,
+  VERIFY_OBJECT_ALREADY_EXISTS: 3
+};
+
+
+
+/**
+ * A jsloader error.
+ *
+ * @param {goog.net.jsloader.ErrorCode} code The error code.
+ * @param {string=} opt_message Additional message.
+ * @constructor
+ * @extends {goog.debug.Error}
+ */
+goog.net.jsloader.Error = function(code, opt_message) {
+  var msg = 'Jsloader error (code #' + code + ')';
+  if (opt_message) {
+    msg += ': ' + opt_message;
+  }
+  goog.base(this, msg);
+
+  /**
+   * The code for this error.
+   *
+   * @type {goog.net.jsloader.ErrorCode}
+   */
+  this.code = code;
+};
+goog.inherits(goog.net.jsloader.Error, goog.debug.Error);
+// Copyright 2006 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A timer class to which other classes and objects can
+ * listen on.  This is only an abstraction above setInterval.
+ *
+ * @see ../demos/timers.html
+ */
+
+goog.provide('goog.Timer');
+
+goog.require('goog.events.EventTarget');
+
+
+
+/**
+ * Class for handling timing events.
+ *
+ * @param {number=} opt_interval Number of ms between ticks (Default: 1ms).
+ * @param {Object=} opt_timerObject  An object that has setTimeout, setInterval,
+ *     clearTimeout and clearInterval (eg Window).
+ * @constructor
+ * @extends {goog.events.EventTarget}
+ */
+goog.Timer = function(opt_interval, opt_timerObject) {
+  goog.events.EventTarget.call(this);
+
+  /**
+   * Number of ms between ticks
+   * @type {number}
+   * @private
+   */
+  this.interval_ = opt_interval || 1;
+
+  /**
+   * An object that implements setTimout, setInterval, clearTimeout and
+   * clearInterval. We default to the window object. Changing this on
+   * goog.Timer.prototype changes the object for all timer instances which can
+   * be useful if your environment has some other implementation of timers than
+   * the window object.
+   * @type {Object}
+   * @private
+   */
+  this.timerObject_ = opt_timerObject || goog.Timer.defaultTimerObject;
+
+  /**
+   * Cached tick_ bound to the object for later use in the timer.
+   * @type {Function}
+   * @private
+   */
+  this.boundTick_ = goog.bind(this.tick_, this);
+
+ /**
+  * Firefox browser often fires the timer event sooner
+  * (sometimes MUCH sooner) than the requested timeout. So we
+  * compare the time to when the event was last fired, and
+  * reschedule if appropriate. See also goog.Timer.intervalScale
+  * @type {number}
+  * @private
+  */
+  this.last_ = goog.now();
+};
+goog.inherits(goog.Timer, goog.events.EventTarget);
+
+
+/**
+ * Maximum timeout value.
+ *
+ * Timeout values too big to fit into a signed 32-bit integer may cause
+ * overflow in FF, Safari, and Chrome, resulting in the timeout being
+ * scheduled immediately.  It makes more sense simply not to schedule these
+ * timeouts, since 24.8 days is beyond a reasonable expectation for the
+ * browser to stay open.
+ *
+ * @type {number}
+ * @private
+ */
+goog.Timer.MAX_TIMEOUT_ = 2147483647;
+
+
+/**
+ * Whether this timer is enabled
+ * @type {boolean}
+ */
+goog.Timer.prototype.enabled = false;
+
+
+/**
+ * An object that implements setTimout, setInterval, clearTimeout and
+ * clearInterval. We default to the window object. Changing this on
+ * goog.Timer.prototype changes the object for all timer instances which can be
+ * useful if your environment has some other implementation of timers than the
+ * window object.
+ * @type {Object}
+ */
+goog.Timer.defaultTimerObject = goog.global['window'];
+
+
+/**
+ * A variable that controls the timer error correction. If the
+ * timer is called before the requested interval times
+ * intervalScale, which often happens on mozilla, the timer is
+ * rescheduled. See also this.last_
+ * @type {number}
+ */
+goog.Timer.intervalScale = 0.8;
+
+
+/**
+ * Variable for storing the result of setInterval
+ * @type {?number}
+ * @private
+ */
+goog.Timer.prototype.timer_ = null;
+
+
+/**
+ * Gets the interval of the timer.
+ * @return {number} interval Number of ms between ticks.
+ */
+goog.Timer.prototype.getInterval = function() {
+  return this.interval_;
+};
+
+
+/**
+ * Sets the interval of the timer.
+ * @param {number} interval Number of ms between ticks.
+ */
+goog.Timer.prototype.setInterval = function(interval) {
+  this.interval_ = interval;
+  if (this.timer_ && this.enabled) {
+    // Stop and then start the timer to reset the interval.
+    this.stop();
+    this.start();
+  } else if (this.timer_) {
+    this.stop();
+  }
+};
+
+
+/**
+ * Callback for the setTimeout used by the timer
+ * @private
+ */
+goog.Timer.prototype.tick_ = function() {
+  if (this.enabled) {
+    var elapsed = goog.now() - this.last_;
+    if (elapsed > 0 &&
+        elapsed < this.interval_ * goog.Timer.intervalScale) {
+      this.timer_ = this.timerObject_.setTimeout(this.boundTick_,
+          this.interval_ - elapsed);
+      return;
+    }
+
+    this.dispatchTick();
+    // The timer could be stopped in the timer event handler.
+    if (this.enabled) {
+      this.timer_ = this.timerObject_.setTimeout(this.boundTick_,
+          this.interval_);
+      this.last_ = goog.now();
+    }
+  }
+};
+
+
+/**
+ * Dispatches the TICK event. This is its own method so subclasses can override.
+ */
+goog.Timer.prototype.dispatchTick = function() {
+  this.dispatchEvent(goog.Timer.TICK);
+};
+
+
+/**
+ * Starts the timer.
+ */
+goog.Timer.prototype.start = function() {
+  this.enabled = true;
+
+  // If there is no interval already registered, start it now
+  if (!this.timer_) {
+    // IMPORTANT!
+    // window.setInterval in FireFox has a bug - it fires based on
+    // absolute time, rather than on relative time. What this means
+    // is that if a computer is sleeping/hibernating for 24 hours
+    // and the timer interval was configured to fire every 1000ms,
+    // then after the PC wakes up the timer will fire, in rapid
+    // succession, 3600*24 times.
+    // This bug is described here and is already fixed, but it will
+    // take time to propagate, so for now I am switching this over
+    // to setTimeout logic.
+    //     https://bugzilla.mozilla.org/show_bug.cgi?id=376643
+    //
+    this.timer_ = this.timerObject_.setTimeout(this.boundTick_,
+        this.interval_);
+    this.last_ = goog.now();
+  }
+};
+
+
+/**
+ * Stops the timer.
+ */
+goog.Timer.prototype.stop = function() {
+  this.enabled = false;
+  if (this.timer_) {
+    this.timerObject_.clearTimeout(this.timer_);
+    this.timer_ = null;
+  }
+};
+
+
+/** @override */
+goog.Timer.prototype.disposeInternal = function() {
+  goog.Timer.superClass_.disposeInternal.call(this);
+  this.stop();
+  delete this.timerObject_;
+};
+
+
+/**
+ * Constant for the timer's event type
+ * @type {string}
+ */
+goog.Timer.TICK = 'tick';
+
+
+/**
+ * Calls the given function once, after the optional pause.
+ *
+ * The function is always called asynchronously, even if the delay is 0. This
+ * is a common trick to schedule a function to run after a batch of browser
+ * event processing.
+ *
+ * @param {Function} listener Function or object that has a handleEvent method.
+ * @param {number=} opt_delay Milliseconds to wait; default is 0.
+ * @param {Object=} opt_handler Object in whose scope to call the listener.
+ * @return {number} A handle to the timer ID.
+ */
+goog.Timer.callOnce = function(listener, opt_delay, opt_handler) {
+  if (goog.isFunction(listener)) {
+    if (opt_handler) {
+      listener = goog.bind(listener, opt_handler);
+    }
+  } else if (listener && typeof listener.handleEvent == 'function') {
+    // using typeof to prevent strict js warning
+    listener = goog.bind(listener.handleEvent, listener);
+  } else {
+   throw Error('Invalid listener argument');
+  }
+
+  if (opt_delay > goog.Timer.MAX_TIMEOUT_) {
+    // Timeouts greater than MAX_INT return immediately due to integer
+    // overflow in many browsers.  Since MAX_INT is 24.8 days, just don't
+    // schedule anything at all.
+    return -1;
+  } else {
+    return goog.Timer.defaultTimerObject.setTimeout(
+        listener, opt_delay || 0);
+  }
+};
+
+
+/**
+ * Clears a timeout initiated by callOnce
+ * @param {?number} timerId a timer ID.
+ */
+goog.Timer.clear = function(timerId) {
+  goog.Timer.defaultTimerObject.clearTimeout(timerId);
+};
+// Copyright 2012 Edwina Mead. All rights reserved.
+
+/**
+ * @fileoverview The calendar api management for the mailer app.
+ */
+
+goog.provide('calendarmailer.CalendarApi');
+goog.provide('calendarmailer.CalendarApi.EventType');
+
+goog.require('goog.Timer');
+goog.require('goog.events.Event');
+goog.require('goog.events.EventTarget');
+goog.require('goog.net.jsloader');
+
+
+
+/**
+ * Contains all the messiness for communicating with the calendar api.
+ * Assumes that the gapi library has been loaded elsewhere.
+ * @param {!calendarmailer.Config} config The config.
+ * @constructor
+ * @extends {goog.events.EventTarget}
+ */
+calendarmailer.CalendarApi = function(config) {
+  goog.base(this);
+
+  /**
+   * The config object.
+   * @type {!calendarmailer.Config}
+   * @private
+   */
+  this.config_ = config;
+
+  goog.exportSymbol('c_api_cb',
+      goog.bind(this.checkAuth_, this));
+};
+goog.inherits(calendarmailer.CalendarApi, goog.events.EventTarget);
+
+
+/**
+ * Event types.
+ * @enum {string}
+ */
+calendarmailer.CalendarApi.EventType = {
+  GET_EVENTS_RESULT: 'gev',
+  LIST_RESULT: 'lr',
+  LOADED: 'l'
+};
+
+
+/**
+ * Object names of api pieces.
+ * @enum {string}
+ * @private
+ */
+calendarmailer.CalendarApi.objectNames_ = {
+  AUTH: 'gapi.auth.authorize',
+  GAPI: 'gapi',
+  GET_CALENDAR: 'gapi.client.calendar.calendars.get',
+  GET_EVENTS: 'gapi.client.calendar.events.list',
+  LOAD: 'gapi.client.load',
+  LIST: 'gapi.client.calendar.calendarList.list',
+  SET_API_KEY: 'gapi.client.setApiKey'
+};
+
+
+/**
+ * The maximum number of results to be returned in a single request.
+ * @type {number=}
+ * @private
+ */
+calendarmailer.CalendarApi.MAX_RESULTS_;
+
+
+/**
+ * Whether this has been initialized.
+ * @type {boolean}
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.isInitialized_ = false;
+
+
+/**
+ * The list calendars request generator function.
+ * @type {?function}
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.listCalendars_ = null;
+
+
+/**
+ * The get calendar request generator function.
+ * @type {?function}
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.getCalendar_ = null;
+
+
+/**
+ * The get events request generator function.
+ * @type {?function}
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.getEvents_ = null;
+
+
+/**
+ * @return {boolean} Whether the api is initialized.
+ */
+calendarmailer.CalendarApi.prototype.isInitialized = function() {
+  return this.isInitialized_;
+};
+
+
+/**
+ * Kicks off the api loading process.
+ */
+calendarmailer.CalendarApi.prototype.startLoad = function() {
+  if (!window[calendarmailer.CalendarApi.objectNames_.GAPI]) {
+    goog.net.jsloader.load(this.config_.getApiUrl() + '?onload=c_api_cb');
+  } else {
+    this.loadCalendarApi_();
+  }
+};
+
+
+/**
+ * Checks authorization.
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.checkAuth_ = function() {
+  var setKey = goog.getObjectByName(
+      calendarmailer.CalendarApi.objectNames_.SET_API_KEY);
+  setKey(this.config_.getApiKey());
+
+  goog.Timer.callOnce(function() {
+    var authorize = goog.getObjectByName(
+        calendarmailer.CalendarApi.objectNames_.AUTH);
+    authorize({
+      client_id: this.config_.getClientId(),
+      scope: this.config_.getScope(),
+      immediate: true
+    }, goog.bind(this.handleAuthResult_, this));
+  }, 1, this);
+};
+
+
+/**
+ * Checks the authorization result, and if it didn't succeed, show a popup to
+ * the user.
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.handleAuthResult_ = function(result) {
+  if (result) {
+    this.loadApi_();
+  } else {
+    var authorize = goog.getObjectByName(
+        calendarmailer.CalendarApi.objectNames_.AUTH);
+    authorize({
+      client_id: this.config_.getClientId(),
+      scope: this.config_.getScope(),
+      immediate: false
+    }, goog.bind(this.loadApi_, this));
+  }
+};
+
+
+/**
+ * Kicks off the final stage of loading the calendar api.
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.loadApi_ = function() {
+  goog.Timer.callOnce(function() {
+    var load = goog.getObjectByName(
+        calendarmailer.CalendarApi.objectNames_.LOAD);
+    load('calendar', 'v3', goog.bind(this.onApiLoaded_, this));
+  }, 1, this);
+};
+
+
+/**
+ * Finishes the loading and sets all the methods required.
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.onApiLoaded_ = function() {
+  this.listCalendars_ = goog.getObjectByName(
+      calendarmailer.CalendarApi.objectNames_.LIST);
+  this.getEvents_ = goog.getObjectByName(
+      calendarmailer.CalendarApi.objectNames_.GET_EVENTS);
+  this.getCalendar_ = goog.getObjectByName(
+      calendarmailer.CalendarApi.objectNames_.GET_CALENDAR);
+
+  this.isInitialized_ = true;
+
+  this.dispatchEvent(calendarmailer.CalendarApi.EventType.LOADED);
+};
+
+
+/**
+ * Triggers a request for the user's list of calendars.
+ * @param {string=} opt_pageToken An optional page token to continue loading
+ *     after a previous request.
+ */
+calendarmailer.CalendarApi.prototype.getCalendarList = function(
+    opt_pageToken) {
+  this.listCalendars_({
+    maxResults: calendarmailer.CalendarApi.MAX_RESULTS_,
+    pageToken: opt_pageToken
+  }).execute(goog.bind(this.handleListResult_, this));
+};
+
+
+/**
+ * Handles a list result from the server.
+ * @param {!Object} result The result.
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.handleListResult_ = function(result) {
+  this.dispatchEvent(new calendarmailer.CalendarApi.Event(
+      calendarmailer.CalendarApi.EventType.LIST_RESULT, result));
+};
+
+
+/**
+ * Sends a request to get the calendar summary.
+ * @param {string} calendarId The calendar ID.
+ */
+calendarmailer.CalendarApi.prototype.getCalendarSummary = function(calendarId,
+    callback) {
+  this.getCalendar_({
+    'calendarId': calendarId
+  }).execute(callback);
+};
+
+
+/**
+ * Triggers a request for calendar events for the given calendar.
+ * @param {string} id The id of the calendar.
+ * @param {string} title The title of the calendar.
+ * @param {string=} opt_pageToken An optional page token to continue loading
+ *     after a previous request.
+ */
+calendarmailer.CalendarApi.prototype.getCalendarEvents = function(id, title,
+    opt_pageToken) {
+  this.getEvents_({
+    calendarId: id,
+    maxResults: calendarmailer.CalendarApi.MAX_RESULTS_,
+    timeMin: this.config_.getMinDate(),
+    pageToken: opt_pageToken
+  }).execute(goog.bind(this.handleGetEventsResult_, this, id, title));
+};
+
+
+/**
+ * Handles a get events result from the server.
+ * @param {string} id The id of the calendar the result is for.
+ * @param {string} title The title of the calendar the result is for.
+ * @param {!Object} result The result.
+ * @private
+ */
+calendarmailer.CalendarApi.prototype.handleGetEventsResult_ = function(id,
+    title, result) {
+  this.dispatchEvent(new calendarmailer.CalendarApi.Event(
+      calendarmailer.CalendarApi.EventType.GET_EVENTS_RESULT,
+      result, id, title));
+};
+
+
+
+/**
+ * A calendar api event.
+ * @param {string} type The event type.
+ * @param {!Object} result The result.
+ * @param {string=} opt_id The id of the calendar this event refers to.
+ * @param {string=} opt_title The title of the calendar this event refers to.
+ * @constructor
+ * @extends {goog.events.Event}
+ */
+calendarmailer.CalendarApi.Event = function(type, result, opt_id, opt_title) {
+  goog.base(this, type);
+
+  /**
+   * The result.
+   * @type {!Object}
+   */
+  this.result = result;
+
+  /**
+   * The id of the calendar this event refers to.
+   * @type {?string}
+   */
+  this.id = opt_id || null;
+
+  /**
+   * The title of the calendar the event refers to.
+   * @type {string=}
+   */
+  this.title = opt_title;
+};
+goog.inherits(calendarmailer.CalendarApi.Event, goog.events.Event);
+
+goog.provide('rfctimestamp');
+
+/*
+ Internet Timestamp Generator
+ Copyright (c) 2009 Sebastiaan Deckers
+ License: GNU General Public License version 3 or later
+*/
+rfctimestamp = function(date) {
+  var pad = function(amount, width) {
+    var padding = '';
+    while (padding.length < width - 1 &&
+        amount < Math.pow(10, width - padding.length - 1))
+      padding += '0';
+    return padding + amount.toString();
+  }
+  date = date ? date : new Date();
+  var offset = date.getTimezoneOffset();
+  return pad(date.getFullYear(), 4) +
+      '-' + pad(date.getMonth() + 1, 2) +
+      '-' + pad(date.getDate(), 2) +
+      'T' + pad(date.getHours(), 2) +
+      ':' + pad(date.getMinutes(), 2) +
+      ':' + pad(date.getSeconds(), 2) +
+      '.' + pad(date.getMilliseconds(), 3) +
+      (offset > 0 ? '-' : '+') +
+      pad(Math.floor(Math.abs(offset) / 60), 2) +
+      ':' + pad(Math.abs(offset) % 60, 2);
+};
+// Copyright 2012 Edwina Mead. All rights reserved.
+
+goog.provide('calendarmailer.Config');
+
+goog.require('rfctimestamp');
+
+
+
+/**
+ * The config object for the calendar mailer.
+ * @constructor
+ */
+calendarmailer.Config = function() {
+  /**
+   * The api key.
+   * @type {string}
+   * @private
+   */
+  this.apiKey_ = 'AIzaSyCApKI3skdxt1QaVS-KKedN1E2n1MZUyyk';
+
+  /**
+   * The client id.
+   * @type {string}
+   * @private
+   */
+  this.clientId_ = '673691169320';
+
+  /**
+   * The scope.
+   * @type {string}
+   * @private
+   */
+  this.scope_ = 'https://www.googleapis.com/auth/calendar.readonly';
+
+  /**
+   * The api url.
+   * @type {string}
+   * @private
+   */
+  this.apiUrl_ = 'https://apis.google.com/js/client.js';
+
+  /**
+   * The cycle id.
+   * @type {string}
+   * @private
+   */
+  this.cycleId_ = '';
+
+  /**
+   * Today's date.
+   * @type {string}
+   * @private
+   */
+  this.minDate_ = rfctimestamp();
+
+  var query = window.location.href.split('?');
+  if (query.length > 1) {
+    var queries = query[1].split('&');
+    for (var i = 0; i < queries.length; ++i) {
+      var parts = queries[i].split('=');
+      if (parts.length == 2 && parts[0] == 'id') {
+        this.cycleId_ = parts[1];
+      }
+    }
+  }
+};
+
+
+/**
+ * @return {string} The api key.
+ */
+calendarmailer.Config.prototype.getApiKey = function() {
+  return this.apiKey_;
+};
+
+
+/**
+ * @return {string} The client id.
+ */
+calendarmailer.Config.prototype.getClientId = function() {
+  return this.clientId_;
+};
+
+
+/**
+ * @return {string} The scope.
+ */
+calendarmailer.Config.prototype.getScope = function() {
+  return this.scope_;
+};
+
+
+/**
+ * @return {string} The api url.
+ */
+calendarmailer.Config.prototype.getApiUrl = function() {
+  return this.apiUrl_;
+};
+
+
+/**
+ * @return {string} The cycle id.
+ */
+calendarmailer.Config.prototype.getCycleId = function() {
+  return this.cycleId_;
+};
+
+
+/**
+ * @return {string} Today's date represented in an iso string.
+ */
+calendarmailer.Config.prototype.getMinDate = function() {
+  return this.minDate_;
+};
 // This file was automatically generated from spinner.soy.
 // Please don't edit this file by hand.
 
@@ -25352,289 +27131,6 @@ goog.uri.utils.makeUnique = function(uri) {
   return goog.uri.utils.setParam(uri,
       goog.uri.utils.StandardQueryParam.RANDOM, goog.string.getRandomString());
 };
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview A timer class to which other classes and objects can
- * listen on.  This is only an abstraction above setInterval.
- *
- * @see ../demos/timers.html
- */
-
-goog.provide('goog.Timer');
-
-goog.require('goog.events.EventTarget');
-
-
-
-/**
- * Class for handling timing events.
- *
- * @param {number=} opt_interval Number of ms between ticks (Default: 1ms).
- * @param {Object=} opt_timerObject  An object that has setTimeout, setInterval,
- *     clearTimeout and clearInterval (eg Window).
- * @constructor
- * @extends {goog.events.EventTarget}
- */
-goog.Timer = function(opt_interval, opt_timerObject) {
-  goog.events.EventTarget.call(this);
-
-  /**
-   * Number of ms between ticks
-   * @type {number}
-   * @private
-   */
-  this.interval_ = opt_interval || 1;
-
-  /**
-   * An object that implements setTimout, setInterval, clearTimeout and
-   * clearInterval. We default to the window object. Changing this on
-   * goog.Timer.prototype changes the object for all timer instances which can
-   * be useful if your environment has some other implementation of timers than
-   * the window object.
-   * @type {Object}
-   * @private
-   */
-  this.timerObject_ = opt_timerObject || goog.Timer.defaultTimerObject;
-
-  /**
-   * Cached tick_ bound to the object for later use in the timer.
-   * @type {Function}
-   * @private
-   */
-  this.boundTick_ = goog.bind(this.tick_, this);
-
- /**
-  * Firefox browser often fires the timer event sooner
-  * (sometimes MUCH sooner) than the requested timeout. So we
-  * compare the time to when the event was last fired, and
-  * reschedule if appropriate. See also goog.Timer.intervalScale
-  * @type {number}
-  * @private
-  */
-  this.last_ = goog.now();
-};
-goog.inherits(goog.Timer, goog.events.EventTarget);
-
-
-/**
- * Maximum timeout value.
- *
- * Timeout values too big to fit into a signed 32-bit integer may cause
- * overflow in FF, Safari, and Chrome, resulting in the timeout being
- * scheduled immediately.  It makes more sense simply not to schedule these
- * timeouts, since 24.8 days is beyond a reasonable expectation for the
- * browser to stay open.
- *
- * @type {number}
- * @private
- */
-goog.Timer.MAX_TIMEOUT_ = 2147483647;
-
-
-/**
- * Whether this timer is enabled
- * @type {boolean}
- */
-goog.Timer.prototype.enabled = false;
-
-
-/**
- * An object that implements setTimout, setInterval, clearTimeout and
- * clearInterval. We default to the window object. Changing this on
- * goog.Timer.prototype changes the object for all timer instances which can be
- * useful if your environment has some other implementation of timers than the
- * window object.
- * @type {Object}
- */
-goog.Timer.defaultTimerObject = goog.global['window'];
-
-
-/**
- * A variable that controls the timer error correction. If the
- * timer is called before the requested interval times
- * intervalScale, which often happens on mozilla, the timer is
- * rescheduled. See also this.last_
- * @type {number}
- */
-goog.Timer.intervalScale = 0.8;
-
-
-/**
- * Variable for storing the result of setInterval
- * @type {?number}
- * @private
- */
-goog.Timer.prototype.timer_ = null;
-
-
-/**
- * Gets the interval of the timer.
- * @return {number} interval Number of ms between ticks.
- */
-goog.Timer.prototype.getInterval = function() {
-  return this.interval_;
-};
-
-
-/**
- * Sets the interval of the timer.
- * @param {number} interval Number of ms between ticks.
- */
-goog.Timer.prototype.setInterval = function(interval) {
-  this.interval_ = interval;
-  if (this.timer_ && this.enabled) {
-    // Stop and then start the timer to reset the interval.
-    this.stop();
-    this.start();
-  } else if (this.timer_) {
-    this.stop();
-  }
-};
-
-
-/**
- * Callback for the setTimeout used by the timer
- * @private
- */
-goog.Timer.prototype.tick_ = function() {
-  if (this.enabled) {
-    var elapsed = goog.now() - this.last_;
-    if (elapsed > 0 &&
-        elapsed < this.interval_ * goog.Timer.intervalScale) {
-      this.timer_ = this.timerObject_.setTimeout(this.boundTick_,
-          this.interval_ - elapsed);
-      return;
-    }
-
-    this.dispatchTick();
-    // The timer could be stopped in the timer event handler.
-    if (this.enabled) {
-      this.timer_ = this.timerObject_.setTimeout(this.boundTick_,
-          this.interval_);
-      this.last_ = goog.now();
-    }
-  }
-};
-
-
-/**
- * Dispatches the TICK event. This is its own method so subclasses can override.
- */
-goog.Timer.prototype.dispatchTick = function() {
-  this.dispatchEvent(goog.Timer.TICK);
-};
-
-
-/**
- * Starts the timer.
- */
-goog.Timer.prototype.start = function() {
-  this.enabled = true;
-
-  // If there is no interval already registered, start it now
-  if (!this.timer_) {
-    // IMPORTANT!
-    // window.setInterval in FireFox has a bug - it fires based on
-    // absolute time, rather than on relative time. What this means
-    // is that if a computer is sleeping/hibernating for 24 hours
-    // and the timer interval was configured to fire every 1000ms,
-    // then after the PC wakes up the timer will fire, in rapid
-    // succession, 3600*24 times.
-    // This bug is described here and is already fixed, but it will
-    // take time to propagate, so for now I am switching this over
-    // to setTimeout logic.
-    //     https://bugzilla.mozilla.org/show_bug.cgi?id=376643
-    //
-    this.timer_ = this.timerObject_.setTimeout(this.boundTick_,
-        this.interval_);
-    this.last_ = goog.now();
-  }
-};
-
-
-/**
- * Stops the timer.
- */
-goog.Timer.prototype.stop = function() {
-  this.enabled = false;
-  if (this.timer_) {
-    this.timerObject_.clearTimeout(this.timer_);
-    this.timer_ = null;
-  }
-};
-
-
-/** @override */
-goog.Timer.prototype.disposeInternal = function() {
-  goog.Timer.superClass_.disposeInternal.call(this);
-  this.stop();
-  delete this.timerObject_;
-};
-
-
-/**
- * Constant for the timer's event type
- * @type {string}
- */
-goog.Timer.TICK = 'tick';
-
-
-/**
- * Calls the given function once, after the optional pause.
- *
- * The function is always called asynchronously, even if the delay is 0. This
- * is a common trick to schedule a function to run after a batch of browser
- * event processing.
- *
- * @param {Function} listener Function or object that has a handleEvent method.
- * @param {number=} opt_delay Milliseconds to wait; default is 0.
- * @param {Object=} opt_handler Object in whose scope to call the listener.
- * @return {number} A handle to the timer ID.
- */
-goog.Timer.callOnce = function(listener, opt_delay, opt_handler) {
-  if (goog.isFunction(listener)) {
-    if (opt_handler) {
-      listener = goog.bind(listener, opt_handler);
-    }
-  } else if (listener && typeof listener.handleEvent == 'function') {
-    // using typeof to prevent strict js warning
-    listener = goog.bind(listener.handleEvent, listener);
-  } else {
-   throw Error('Invalid listener argument');
-  }
-
-  if (opt_delay > goog.Timer.MAX_TIMEOUT_) {
-    // Timeouts greater than MAX_INT return immediately due to integer
-    // overflow in many browsers.  Since MAX_INT is 24.8 days, just don't
-    // schedule anything at all.
-    return -1;
-  } else {
-    return goog.Timer.defaultTimerObject.setTimeout(
-        listener, opt_delay || 0);
-  }
-};
-
-
-/**
- * Clears a timeout initiated by callOnce
- * @param {?number} timerId a timer ID.
- */
-goog.Timer.clear = function(timerId) {
-  goog.Timer.defaultTimerObject.clearTimeout(timerId);
-};
 // Copyright 2007 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30881,8 +32377,11 @@ goog.debug.entryPointRegistry.register(
  */
 goog.provide('calendarmailer.dashboard.App');
 
+goog.require('calendarmailer.CalendarApi');
+goog.require('calendarmailer.Config');
 goog.require('calendarmailer.soy.spinner');
 goog.require('calendarmailer.soy.userlist');
+goog.require('goog.array');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
 goog.require('goog.json');
@@ -30905,6 +32404,14 @@ calendarmailer.dashboard.App = function() {
    * @private
    */
   this.eventHandler_ = new goog.events.EventHandler(this);
+
+  /**
+   * The calendar api wrapper.
+   * @type {!calandermailer.CalendarApi}
+   * @private
+   */
+  this.calendar_ = new calendarmailer.CalendarApi(new calendarmailer.Config());
+  this.calendar_.startLoad();
 
   /**
    * The div in which the list of all the cycles are displayed.
@@ -30938,8 +32445,21 @@ calendarmailer.dashboard.App = function() {
   this.backButton_ = new goog.ui.Button(null /* content */);
   this.backButton_.decorate(document.getElementById(
       'individual-back-button'));
-  this.eventHandler_.listen(this.backButton_,
-      goog.ui.Component.EventType.ACTION, this.handleBackClick_);
+
+  /**
+   * The add more events button.
+   * @type {!goog.ui.Button}
+   * @private
+   */
+  this.addEventsButton_ = new goog.ui.Button(null /* content */);
+  this.addEventsButton_.decorate(document.getElementById(
+      'individual-add-button'));
+
+  this.eventHandler_.
+      listen(this.backButton_, goog.ui.Component.EventType.ACTION,
+          this.handleBackClick_).
+      listen(this.addEventsButton_, goog.ui.Component.EventType.ACTION,
+          this.handleAddClick_);
 
   var cyclenodes = document.getElementsByClassName('cycle');
   for (var i = 0; i < cyclenodes.length; ++i) {
@@ -30956,21 +32476,31 @@ calendarmailer.dashboard.App = function() {
 
 
 /**
+ * The ID of the cycle currently rendered into the app.
+ * @type {?string}
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.currentCycle_ = null;
+
+
+/**
  * Handles clicks on the cycles.
  * @param {!goog.events.BrowserEvent} e The event.
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
-  var id = e.target.id;
+  if (e.target.id != this.currentCycle_) {
+    this.currentCycle_ = e.target.id;
+    // Start sending a request to the server to get the cycle contents.
+    goog.net.XhrIo.send(
+        window.location.origin + '/cycle?id=' + this.currentCycle_,
+        goog.bind(this.handleGetCycleResult_, this), 'POST');
 
-  // Start sending a request to the server to get the cycle contents.
-  goog.net.XhrIo.send(window.location.origin + '/cycle?id=' + id,
-      goog.bind(this.handleGetCycleResult_, this), 'POST');
-
-  // Clear out the contents of the individual cycle area, and replace with a
-  // spinner.
-  var content = document.getElementById('individual-cycle-content');
-  goog.soy.renderElement(content, calendarmailer.soy.spinner.spinner, {});
+    // Clear out the contents of the individual cycle area, and replace with a
+    // spinner.
+    var content = document.getElementById('individual-cycle-content');
+    goog.soy.renderElement(content, calendarmailer.soy.spinner.spinner, {});
+  }
 
   goog.style.setStyle(this.allCyclesEl_, 'display', 'none');
   goog.style.setStyle(this.oneCycleEl_, 'display', '');
@@ -30985,6 +32515,15 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
 calendarmailer.dashboard.App.prototype.handleBackClick_ = function() {
   goog.style.setStyle(this.allCyclesEl_, 'display', '');
   goog.style.setStyle(this.oneCycleEl_, 'display', 'none');
+};
+
+
+/**
+ * Handles a click on the add events button.
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.handleAddClick_ = function() {
+  window.location = window.location.origin + '/picker?id=' + this.currentCycle_;
 };
 
 
@@ -31005,11 +32544,48 @@ calendarmailer.dashboard.App.prototype.handleNewCycleClick_ = function() {
 calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
     function(e) {
   var json = e.target.getResponse();
-  var obj = goog.json.parse(json);
-  window.console.log(obj);
+  var userArray = goog.json.parse(json);
   var content = document.getElementById('individual-cycle-content');
   goog.soy.renderElement(content, calendarmailer.soy.userlist.all,
-      {'users': obj});
+      {'users': userArray});
+
+  this.calendarIds_ = [];
+  for (var i = 0; i < userArray.length; ++i) {
+    var events = userArray[i]['events'] || [];
+    for (var j = 0; j < events.length; ++j) {
+      this.calendarIds_.push(events[j]['calendar_id']);
+    }
+  }
+  goog.array.removeDuplicates(this.calendarIds_);
+
+  if (this.calendar_.isInitialized()) {
+    this.calendar_.getCalendarSummary(this.calendarIds_[0],
+        goog.bind(this.handleCalendarResult_, this));
+  } else {
+    this.eventHandler_.listenOnce(this.calendar_,
+        calendarmailer.CalendarApi.EventType.LOADED, function() {
+          this.calendar_.getCalendarSummary(this.calendarIds_[0],
+              goog.bind(this.handleCalendarResult_, this));
+        });
+  }
+};
+
+
+/**
+ * Handles receiving a cycle from ther server.
+ * @param {!Object} result The result.
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
+    result) {
+  var listEl = document.getElementById('userlist-calendarlist');
+  listEl.appendChild(goog.soy.renderAsFragment(
+      calendarmailer.soy.userlist.calendarListRow, {'calendar': result}));
+  var index = goog.array.indexOf(this.calendarIds_, result.id);
+  if (++index < this.calendarIds_.length) {
+    this.calendar_.getCalendarSummary(this.calendarIds_[index],
+        goog.bind(this.handleCalendarResult_, this));
+  }
 };
 
 

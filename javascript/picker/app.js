@@ -372,7 +372,7 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
  * @private
  */
 calendarmailer.picker.App.prototype.handleIoSuccess_ = function() {
-  window.location = 'http://localhost:8081';
+  window.location = window.location.origin;
 };
 
 
