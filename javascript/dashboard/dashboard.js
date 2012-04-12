@@ -87,7 +87,7 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
   var id = e.target.id;
 
   // Start sending a request to the server to get the cycle contents.
-  goog.net.XhrIo.send('http://localhost:8081/cycle?id=' + id,
+  goog.net.XhrIo.send(window.location.origin + '/cycle?id=' + id,
       goog.bind(this.handleGetCycleResult_, this), 'POST');
 
   // Clear out the contents of the individual cycle area, and replace with a
@@ -116,7 +116,7 @@ calendarmailer.dashboard.App.prototype.handleBackClick_ = function() {
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleNewCycleClick_ = function() {
-  window.location = 'http://localhost:8081/picker';
+  window.location = window.location.origin + '/picker';
 };
 
 
