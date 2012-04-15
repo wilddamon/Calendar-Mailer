@@ -12671,11 +12671,11 @@ goog.require('soy.StringBuilder');
 calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>Name</th><th>Number of events</th><th>Events</th></tr>');
-  var userList56 = opt_data.users;
-  var userListLen56 = userList56.length;
-  for (var userIndex56 = 0; userIndex56 < userListLen56; userIndex56++) {
-    var userData56 = userList56[userIndex56];
-    calendarmailer.soy.userlist.row({user: userData56}, output);
+  var userList53 = opt_data.users;
+  var userListLen53 = userList53.length;
+  for (var userIndex53 = 0; userIndex53 < userListLen53; userIndex53++) {
+    var userData53 = userList53[userIndex53];
+    calendarmailer.soy.userlist.row({user: userData53}, output);
   }
   output.append('</tbody></table>');
   calendarmailer.soy.userlist.calendarList(opt_data, output);
@@ -12692,11 +12692,11 @@ calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
 calendarmailer.soy.userlist.row = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<tr><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><table><tbody>');
-  var eventList68 = opt_data.user.events;
-  var eventListLen68 = eventList68.length;
-  for (var eventIndex68 = 0; eventIndex68 < eventListLen68; eventIndex68++) {
-    var eventData68 = eventList68[eventIndex68];
-    output.append('<tr><td>', soy.$$escapeHtml(eventData68.summary), '</td><td>', soy.$$escapeHtml(eventData68.state), '</td></tr>');
+  var eventList65 = opt_data.user.events;
+  var eventListLen65 = eventList65.length;
+  for (var eventIndex65 = 0; eventIndex65 < eventListLen65; eventIndex65++) {
+    var eventData65 = eventList65[eventIndex65];
+    output.append('<tr><td>', soy.$$escapeHtml(eventData65.summary), '</td><td>', soy.$$escapeHtml(eventData65.state), '</td></tr>');
   }
   output.append('</tbody></table></td></tr>');
   return opt_sb ? '' : output.toString();
@@ -12728,11 +12728,11 @@ calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<ul id="userlist-calendarlist">');
   if (opt_data.calendars) {
-    var calendarList84 = calendars;
-    var calendarListLen84 = calendarList84.length;
-    for (var calendarIndex84 = 0; calendarIndex84 < calendarListLen84; calendarIndex84++) {
-      var calendarData84 = calendarList84[calendarIndex84];
-      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData84}, output);
+    var calendarList81 = calendars;
+    var calendarListLen81 = calendarList81.length;
+    for (var calendarIndex81 = 0; calendarIndex81 < calendarListLen81; calendarIndex81++) {
+      var calendarData81 = calendarList81[calendarIndex81];
+      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData81}, output);
     }
   }
   output.append('</ul>');
@@ -20980,9 +20980,10 @@ calendarmailer.CalendarApi.prototype.checkAuth_ = function() {
 /**
  * Checks the authorization result, and if it didn't succeed, show a popup to
  * the user.
+ * @param {Object=} opt_result The result from checkAuth_.
  * @private
  */
-calendarmailer.CalendarApi.prototype.handleAuthResult_ = function(result) {
+calendarmailer.CalendarApi.prototype.handleAuthResult_ = function(opt_result) {
   if (result) {
     this.loadApi_();
   } else {
@@ -21056,6 +21057,7 @@ calendarmailer.CalendarApi.prototype.handleListResult_ = function(result) {
 /**
  * Sends a request to get the calendar summary.
  * @param {string} calendarId The calendar ID.
+ * @param {function} callback A function to use as a callback.
  */
 calendarmailer.CalendarApi.prototype.getCalendarSummary = function(calendarId,
     callback) {
@@ -32450,6 +32452,20 @@ calendarmailer.dashboard.App = function() {
   this.addEventsButton_.decorate(document.getElementById(
       'individual-add-button'));
 
+  /**
+   * An array of the ids of all the calendars events fetched are from.
+   * @type {!Array.<string>}
+   * @private
+   */
+  this.calendarIds_ = [];
+
+  /**
+   * A map of username to array of events.
+   * @type {!Object.<!Array.<!Object>>}
+   * @private
+   */
+  this.userToEventArray_ = {};
+
   this.eventHandler_.
       listen(this.backButton_, goog.ui.Component.EventType.ACTION,
           this.handleBackClick_).
@@ -32476,22 +32492,6 @@ calendarmailer.dashboard.App = function() {
  * @private
  */
 calendarmailer.dashboard.App.prototype.currentCycle_ = null;
-
-
-/**
- * An array of the ids of all the calendars events fetched are from.
- * @type {!Array.<string>}
- * @private
- */
-calendarmailer.dashboard.App.prototype.calendarIds_ = [];
-
-
-/**
- * A map of username to array of events.
- * @type {!Object.<!Array.<!Object>>}
- * @private
- */
-calendarmailer.dashboard.App.prototype.userToEventArray_ = {};
 
 
 /**
@@ -32583,6 +32583,10 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
 };
 
 
+/**
+ * Renders the events currently stored in userToEventArray.
+ * @private
+ */
 calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
   var spinner = document.getElementById('spinner');
   goog.style.setStyle(spinner, 'display', 'none');

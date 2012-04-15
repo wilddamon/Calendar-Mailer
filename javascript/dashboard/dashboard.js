@@ -82,6 +82,20 @@ calendarmailer.dashboard.App = function() {
   this.addEventsButton_.decorate(document.getElementById(
       'individual-add-button'));
 
+  /**
+   * An array of the ids of all the calendars events fetched are from.
+   * @type {!Array.<string>}
+   * @private
+   */
+  this.calendarIds_ = [];
+
+  /**
+   * A map of username to array of events.
+   * @type {!Object.<!Array.<!Object>>}
+   * @private
+   */
+  this.userToEventArray_ = {};
+
   this.eventHandler_.
       listen(this.backButton_, goog.ui.Component.EventType.ACTION,
           this.handleBackClick_).
@@ -108,22 +122,6 @@ calendarmailer.dashboard.App = function() {
  * @private
  */
 calendarmailer.dashboard.App.prototype.currentCycle_ = null;
-
-
-/**
- * An array of the ids of all the calendars events fetched are from.
- * @type {!Array.<string>}
- * @private
- */
-calendarmailer.dashboard.App.prototype.calendarIds_ = [];
-
-
-/**
- * A map of username to array of events.
- * @type {!Object.<!Array.<!Object>>}
- * @private
- */
-calendarmailer.dashboard.App.prototype.userToEventArray_ = {};
 
 
 /**
@@ -215,6 +213,10 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
 };
 
 
+/**
+ * Renders the events currently stored in userToEventArray.
+ * @private
+ */
 calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
   var spinner = document.getElementById('spinner');
   goog.style.setStyle(spinner, 'display', 'none');

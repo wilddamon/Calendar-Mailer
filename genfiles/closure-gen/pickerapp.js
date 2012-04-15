@@ -13024,9 +13024,10 @@ calendarmailer.CalendarApi.prototype.checkAuth_ = function() {
 /**
  * Checks the authorization result, and if it didn't succeed, show a popup to
  * the user.
+ * @param {Object=} opt_result The result from checkAuth_.
  * @private
  */
-calendarmailer.CalendarApi.prototype.handleAuthResult_ = function(result) {
+calendarmailer.CalendarApi.prototype.handleAuthResult_ = function(opt_result) {
   if (result) {
     this.loadApi_();
   } else {
@@ -13100,6 +13101,7 @@ calendarmailer.CalendarApi.prototype.handleListResult_ = function(result) {
 /**
  * Sends a request to get the calendar summary.
  * @param {string} calendarId The calendar ID.
+ * @param {function} callback A function to use as a callback.
  */
 calendarmailer.CalendarApi.prototype.getCalendarSummary = function(calendarId,
     callback) {
