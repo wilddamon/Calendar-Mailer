@@ -12670,14 +12670,14 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<table class="userlist"><tr><th>Name</th><th>Number of events</th><th>Events</th></tr>');
+  output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>Name</th><th>Number of events</th><th>Events</th></tr>');
   var userList56 = opt_data.users;
   var userListLen56 = userList56.length;
   for (var userIndex56 = 0; userIndex56 < userListLen56; userIndex56++) {
     var userData56 = userList56[userIndex56];
     calendarmailer.soy.userlist.row({user: userData56}, output);
   }
-  output.append('</table>');
+  output.append('</tbody></table>');
   calendarmailer.soy.userlist.calendarList(opt_data, output);
   return opt_sb ? '' : output.toString();
 };
@@ -12691,14 +12691,29 @@ calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
  */
 calendarmailer.soy.userlist.row = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<tr><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><table>');
+  output.append('<tr><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><table><tbody>');
   var eventList68 = opt_data.user.events;
   var eventListLen68 = eventList68.length;
   for (var eventIndex68 = 0; eventIndex68 < eventListLen68; eventIndex68++) {
     var eventData68 = eventList68[eventIndex68];
     output.append('<tr><td>', soy.$$escapeHtml(eventData68.summary), '</td><td>', soy.$$escapeHtml(eventData68.state), '</td></tr>');
   }
-  output.append('</table></td></tr>');
+  output.append('</tbody></table></td></tr>');
+  return opt_sb ? '' : output.toString();
+};
+
+
+/**
+ * @param {Object.<string, *>=} opt_data
+ * @param {soy.StringBuilder=} opt_sb
+ * @return {string}
+ * @notypecheck
+ */
+calendarmailer.soy.userlist.wrappedRow = function(opt_data, opt_sb) {
+  var output = opt_sb || new soy.StringBuilder();
+  output.append('<table><tbody>');
+  calendarmailer.soy.userlist.row(opt_data, output);
+  output.append('</tbody></table>');
   return opt_sb ? '' : output.toString();
 };
 
@@ -12713,11 +12728,11 @@ calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<ul id="userlist-calendarlist">');
   if (opt_data.calendars) {
-    var calendarList80 = calendars;
-    var calendarListLen80 = calendarList80.length;
-    for (var calendarIndex80 = 0; calendarIndex80 < calendarListLen80; calendarIndex80++) {
-      var calendarData80 = calendarList80[calendarIndex80];
-      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData80}, output);
+    var calendarList84 = calendars;
+    var calendarListLen84 = calendarList84.length;
+    for (var calendarIndex84 = 0; calendarIndex84 < calendarListLen84; calendarIndex84++) {
+      var calendarData84 = calendarList84[calendarIndex84];
+      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData84}, output);
     }
   }
   output.append('</ul>');
@@ -21257,26 +21272,6 @@ calendarmailer.Config.prototype.getCycleId = function() {
  */
 calendarmailer.Config.prototype.getMinDate = function() {
   return this.minDate_;
-};
-// This file was automatically generated from spinner.soy.
-// Please don't edit this file by hand.
-
-goog.provide('calendarmailer.soy.spinner');
-
-goog.require('soy');
-goog.require('soy.StringBuilder');
-
-
-/**
- * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
- * @return {string}
- * @notypecheck
- */
-calendarmailer.soy.spinner.spinner = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<p class="spinner">Please wait.</p>');
-  return opt_sb ? '' : output.toString();
 };
 // Copyright 2009 The Closure Library Authors. All Rights Reserved.
 //
@@ -32379,13 +32374,13 @@ goog.provide('calendarmailer.dashboard.App');
 
 goog.require('calendarmailer.CalendarApi');
 goog.require('calendarmailer.Config');
-goog.require('calendarmailer.soy.spinner');
 goog.require('calendarmailer.soy.userlist');
 goog.require('goog.array');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
 goog.require('goog.json');
 goog.require('goog.net.XhrIo');
+goog.require('goog.object');
 goog.require('goog.soy');
 goog.require('goog.style');
 goog.require('goog.ui.Button');
@@ -32484,6 +32479,22 @@ calendarmailer.dashboard.App.prototype.currentCycle_ = null;
 
 
 /**
+ * An array of the ids of all the calendars events fetched are from.
+ * @type {!Array.<string>}
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.calendarIds_ = [];
+
+
+/**
+ * A map of username to array of events.
+ * @type {!Object.<!Array.<!Object>>}
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.userToEventArray_ = {};
+
+
+/**
  * Handles clicks on the cycles.
  * @param {!goog.events.BrowserEvent} e The event.
  * @private
@@ -32491,6 +32502,8 @@ calendarmailer.dashboard.App.prototype.currentCycle_ = null;
 calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
   if (e.target.id != this.currentCycle_) {
     this.currentCycle_ = e.target.id;
+    this.calendarIds_ = [];
+    this.userToEventArray_ = {};
     // Start sending a request to the server to get the cycle contents.
     goog.net.XhrIo.send(
         window.location.origin + '/cycle?id=' + this.currentCycle_,
@@ -32499,7 +32512,11 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
     // Clear out the contents of the individual cycle area, and replace with a
     // spinner.
     var content = document.getElementById('individual-cycle-content');
-    goog.soy.renderElement(content, calendarmailer.soy.spinner.spinner, {});
+    goog.soy.renderElement(content, calendarmailer.soy.userlist.all,
+        {'users': []});
+
+    var spinner = document.getElementById('spinner');
+    goog.style.setStyle(spinner, 'display', '');
   }
 
   goog.style.setStyle(this.allCyclesEl_, 'display', 'none');
@@ -32543,19 +32560,50 @@ calendarmailer.dashboard.App.prototype.handleNewCycleClick_ = function() {
  */
 calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
     function(e) {
-  var json = e.target.getResponse();
-  var userArray = goog.json.parse(json);
-  var content = document.getElementById('individual-cycle-content');
-  goog.soy.renderElement(content, calendarmailer.soy.userlist.all,
-      {'users': userArray});
+  var json = goog.json.parse(e.target.getResponse());
+  var userMap = json['events'];
 
-  this.calendarIds_ = [];
-  for (var i = 0; i < userArray.length; ++i) {
-    var events = userArray[i]['events'] || [];
-    for (var j = 0; j < events.length; ++j) {
-      this.calendarIds_.push(events[j]['calendar_id']);
+  goog.object.forEach(userMap, function(eventArray, email) {
+    if (!this.userToEventArray_[email]) {
+      this.userToEventArray_[email] = [];
     }
+    for (var i = 0; i < eventArray.length; ++i) {
+      goog.array.insert(this.userToEventArray_[email], eventArray[i]);
+    }
+  }, this);
+
+  if (json['more_to_come']) {
+    goog.net.XhrIo.send(
+        window.location.origin + '/cycle?id=' + this.currentCycle_ +
+            '&page=' + json['next_page'],
+        goog.bind(this.handleGetCycleResult_, this), 'POST');
+  } else {
+    this.renderCycles_();
   }
+};
+
+
+calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', 'none');
+
+  var tableEl = document.getElementById('userlist-table').firstChild;
+  goog.object.forEach(this.userToEventArray_, function(eventArray, email) {
+    // Render the table row.
+    tableEl.appendChild(goog.soy.renderAsFragment(
+        calendarmailer.soy.userlist.wrappedRow, {
+          'user': {
+            'name': email,
+            'num_events': eventArray.length,
+            'events': eventArray
+          }
+        }).firstChild.firstChild);
+    // Store the calendar IDs.
+    for (var i = 0; i < eventArray.length; ++i) {
+      this.calendarIds_.push(eventArray[i]['calendar_id']);
+    }
+  }, this);
+
   goog.array.removeDuplicates(this.calendarIds_);
 
   if (this.calendar_.isInitialized()) {
@@ -32572,7 +32620,7 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
 
 
 /**
- * Handles receiving a cycle from ther server.
+ * Handles receiving a information about events from ther server.
  * @param {!Object} result The result.
  * @private
  */

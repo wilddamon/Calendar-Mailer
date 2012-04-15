@@ -22,21 +22,29 @@ class util:
     return user_event_map
 
   @staticmethod
-  def getEmailToEventObject(cycle):
+  def getEmailToEventObject(cycle, opt_pageOffset):
+    if (opt_pageOffset):
+      page_offset = opt_pageOffset
+    else:
+      page_offset = 0
+
+    fetched_events = db.query_descendants(cycle).fetch(
+        limit=50, offset=50*page_offset)
+
     user_event_map = {}
-    if (cycle):
-      # TODO(wilddamon): Figure out how to get all the events!
-      fetched_events = db.query_descendants(cycle).fetch(limit=1000)
-      logging.info("got events: " + str(fetched_events))
-      if (fetched_events):
-        for event in fetched_events:
-          email = event.owner
-          if (not email in user_event_map):
-            user_event_map[email] = []
-          eventJson = {}
-          eventJson["summary"] = event.summary
-          eventJson["state"] = event.state
-          eventJson["calendar_id"] = event.calendar_id
-          user_event_map[email].append(eventJson)
+    if (fetched_events):
+      for event in fetched_events:
+        email = event.owner
+        if (not email in user_event_map):
+          user_event_map[email] = []
+        eventJson = {}
+        eventJson["summary"] = event.summary
+        eventJson["state"] = event.state
+        eventJson["calendar_id"] = event.calendar_id
+        user_event_map[email].append(eventJson)
     logging.info("user_event_map: " + str(user_event_map))
-    return user_event_map
+    return {
+        "events": user_event_map, 
+        "more_to_come": len(fetched_events) >= 50,
+        "next_page": page_offset + 1
+      }
