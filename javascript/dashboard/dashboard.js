@@ -6,10 +6,14 @@ goog.provide('calendarmailer.dashboard.App');
 
 goog.require('calendarmailer.CalendarApi');
 goog.require('calendarmailer.Config');
+goog.require('calendarmailer.RRuleFormatter');
+goog.require('calendarmailer.RfcDateFormatter');
 goog.require('calendarmailer.soy.userlist');
 goog.require('goog.array');
+goog.require('goog.dom');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
+goog.require('goog.i18n.DateTimeFormat');
 goog.require('goog.json');
 goog.require('goog.net.XhrIo');
 goog.require('goog.object');
@@ -190,6 +194,8 @@ calendarmailer.dashboard.App.prototype.handleNewCycleClick_ = function() {
  */
 calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
     function(e) {
+  var dateTimeFormatter = new goog.i18n.DateTimeFormat(
+      goog.i18n.DateTimeFormat.Format.LONG_TIME);
   var json = goog.json.parse(e.target.getResponse());
   var userMap = json['events'];
 
@@ -198,6 +204,17 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
       this.userToEventArray_[email] = [];
     }
     for (var i = 0; i < eventArray.length; ++i) {
+      // Make the start time and RRule pretty.
+      var startTime = calendarmailer.RfcDateFormatter.getInstance().
+          parse(eventArray[i].startTime);
+      if (eventArray[i].startTime) {
+        eventArray[i].startTime = dateTimeFormatter.format(startTime);
+      }
+      var rruleFormatter = calendarmailer.RRuleFormatter.getInstance();
+      for (var j = 0; j < eventArray[i].recurrence.length; ++j) {
+        var original = eventArray[i].recurrence[j];
+        eventArray[i].recurrence[j] = rruleFormatter.prettyPrint(original);
+      }
       goog.array.insert(this.userToEventArray_[email], eventArray[i]);
     }
   }, this);
@@ -223,15 +240,16 @@ calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
 
   var tableEl = document.getElementById('userlist-table').firstChild;
   goog.object.forEach(this.userToEventArray_, function(eventArray, email) {
-    // Render the table row.
-    tableEl.appendChild(goog.soy.renderAsFragment(
+    // Render the table rows.
+    var rows = goog.soy.renderAsFragment(
         calendarmailer.soy.userlist.wrappedRow, {
           'user': {
             'name': email,
             'num_events': eventArray.length,
             'events': eventArray
           }
-        }).firstChild.firstChild);
+        }).firstChild.childNodes;
+    goog.dom.append(tableEl, rows);
     // Store the calendar IDs.
     for (var i = 0; i < eventArray.length; ++i) {
       this.calendarIds_.push(eventArray[i]['calendar_id']);

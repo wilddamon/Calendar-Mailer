@@ -15,7 +15,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>Name</th><th>Number of events</th><th>Events</th></tr>');
+  output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>Name</th><th>Total events</th><th>Event name</th><th>Event location</th><th>Start time</th><th>Event recurrence</th><th>User action</th></tr>');
   var userList53 = opt_data.users;
   var userListLen53 = userList53.length;
   for (var userIndex53 = 0; userIndex53 < userListLen53; userIndex53++) {
@@ -36,14 +36,19 @@ calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
  */
 calendarmailer.soy.userlist.row = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<tr><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><table><tbody>');
-  var eventList65 = opt_data.user.events;
-  var eventListLen65 = eventList65.length;
-  for (var eventIndex65 = 0; eventIndex65 < eventListLen65; eventIndex65++) {
-    var eventData65 = eventList65[eventIndex65];
-    output.append('<tr><td>', soy.$$escapeHtml(eventData65.summary), '</td><td>', soy.$$escapeHtml(eventData65.state), '</td></tr>');
+  var eventList60 = opt_data.user.events;
+  var eventListLen60 = eventList60.length;
+  for (var eventIndex60 = 0; eventIndex60 < eventListLen60; eventIndex60++) {
+    var eventData60 = eventList60[eventIndex60];
+    output.append('<tr ', (opt_data.user.num_events == 1) ? '' : (opt_data.user.num_events == 2) ? 'class="userlist-two"' : (opt_data.user.num_events <= 4) ? 'class="userlist-four"' : (opt_data.user.num_events > 4) ? 'class="userlist-lots"' : '', '><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><a href="', soy.$$escapeHtml(eventData60.link), '">', soy.$$escapeHtml(eventData60.summary), '</a></td><td>', soy.$$escapeHtml(eventData60.location), '</td><td>', (eventData60.startTime) ? soy.$$escapeHtml(eventData60.startTime) : 'All day', '</td><td><ul>');
+    var recurStrList87 = eventData60.recurrence;
+    var recurStrListLen87 = recurStrList87.length;
+    for (var recurStrIndex87 = 0; recurStrIndex87 < recurStrListLen87; recurStrIndex87++) {
+      var recurStrData87 = recurStrList87[recurStrIndex87];
+      output.append('<li>', soy.$$escapeHtml(recurStrData87), '</li>');
+    }
+    output.append('</ul></td><td>', soy.$$escapeHtml(eventData60.state), '</td></tr>');
   }
-  output.append('</tbody></table></td></tr>');
   return opt_sb ? '' : output.toString();
 };
 
@@ -73,11 +78,11 @@ calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<ul id="userlist-calendarlist">');
   if (opt_data.calendars) {
-    var calendarList81 = calendars;
-    var calendarListLen81 = calendarList81.length;
-    for (var calendarIndex81 = 0; calendarIndex81 < calendarListLen81; calendarIndex81++) {
-      var calendarData81 = calendarList81[calendarIndex81];
-      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData81}, output);
+    var calendarList104 = calendars;
+    var calendarListLen104 = calendarList104.length;
+    for (var calendarIndex104 = 0; calendarIndex104 < calendarListLen104; calendarIndex104++) {
+      var calendarData104 = calendarList104[calendarIndex104];
+      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData104}, output);
     }
   }
   output.append('</ul>');

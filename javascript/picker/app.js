@@ -338,6 +338,8 @@ calendarmailer.picker.App.prototype.handleNamelistSubmit_ = function() {
  *   "calendarId": calendarId,
  *   "eventId": event["id"]
  *   "summary": event["summary"]
+ *   "location": event["location"]
+ *   "recurrence": event["recurrence"]
  * }
  * @param {string} calendarId The id of the calendar the events are from.
  * @param {!Array.<!Object>} events The calendar events to translate.
@@ -360,7 +362,11 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
       'owner': owner,
       'calendarId': calendarId,
       'eventId': event.id,
-      'summary': event.summary
+      'summary': event.summary,
+      'location': event.location || 'unknown',
+      'recurrence': event.recurrence || [],
+      'startTime': event.start.dateTime,
+      'link': event.htmlLink
     });
   }, this);
   return result;

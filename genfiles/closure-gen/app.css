@@ -89,6 +89,15 @@
   border-width: 0 1px 1px 0;
   border-style: solid;
 }
+.userlist-two {
+  background-color: antiquewhite;
+}
+.userlist-four {
+  background-color: orange;
+}
+.userlist-lots {
+  background-color: lightcoral;
+}
 .email-preview-outer {
   border: 1px solid #ccc;
   padding: 10px;

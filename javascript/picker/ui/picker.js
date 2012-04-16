@@ -279,6 +279,10 @@ calendarmailer.picker.ui.Picker.prototype.selectAll = function(select) {
 
 /** @override */
 calendarmailer.picker.ui.Picker.prototype.setEnabled = function(enabled) {
+  if (enabled) {
+    goog.base(this, 'setEnabled', enabled);
+  }
+
   for (var i = 0; i < this.checkboxes.length; ++i) {
     this.checkboxes[i].setEnabled(enabled);
   }
@@ -287,7 +291,9 @@ calendarmailer.picker.ui.Picker.prototype.setEnabled = function(enabled) {
   this.selectNoneButton_.setEnabled(enabled);
   this.submitButton_.setEnabled(enabled);
 
-  goog.base(this, 'setEnabled', enabled);
+  if (!enabled) {
+    goog.base(this, 'setEnabled', enabled);
+  }
 };
 
 

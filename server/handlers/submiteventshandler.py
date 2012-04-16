@@ -45,7 +45,7 @@ class SubmitEventsHandler(webapp.RequestHandler):
 
     # Create the user db entries
     for event in events:
-      #logging.info("event: " + str(event))
+      logging.info("event: " + str(event))
       creator = event["owner"]
       if (not creator in names):
         logging.info("skipped due to creator being unselected: " + creator)
@@ -62,6 +62,10 @@ class SubmitEventsHandler(webapp.RequestHandler):
             calendar_id = event["calendarId"],
             event_id = event["eventId"],
             summary = event["summary"],
+            event_location = event["location"],
+            recurrence = event["recurrence"],
+            start_time = event["startTime"],
+            link = event["link"],
             state = "Pending")
         db_event.put()
         logging.info("created event: " + event["eventId"])

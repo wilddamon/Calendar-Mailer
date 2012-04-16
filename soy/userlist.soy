@@ -12,8 +12,12 @@
   <tbody>
     <tr>
       <th>Name</th>
-      <th>Number of events</th>
-      <th>Events</th>
+      <th>Total events</th>
+      <th>Event name</th>
+      <th>Event location</th>
+      <th>Start time</th>
+      <th>Event recurrence</th>
+      <th>User action</th>
     </tr>
     {foreach $user in $users}
       {call .row}
@@ -31,26 +35,40 @@
  * @param user The user object {name: string, num_events: number, events: array}
  */
 {template .row}
-<tr>
-  <td>{$user.name}</td>
-  <td>{$user.num_events}</td>
-  <td>
-    <table>
-      <tbody>
-        {foreach $event in $user.events}
-          <tr>
-            <td>
-              {$event.summary}
-            </td>
-            <td>
-              {$event.state}
-            </td>
-          </tr>
+{foreach $event in $user.events}
+  <tr {if $user.num_events == 1}
+      {elseif $user.num_events == 2}
+         class="userlist-two"
+      {elseif $user.num_events <= 4}
+         class="userlist-four"
+      {elseif $user.num_events > 4}
+         class="userlist-lots"
+      {/if}>
+    <td>{$user.name}</td>
+    <td>{$user.num_events}</td>
+    <td>
+      <a href="{$event.link}">{$event.summary}</a>
+    </td>
+    <td>{$event.location}</td>
+    <td>
+      {if $event.startTime}
+        {$event.startTime}
+      {else}
+        All day
+      {/if}
+    </td>
+    <td>
+      <ul>
+        {foreach $recurStr in $event.recurrence}
+          <li>{$recurStr}</li>
         {/foreach}
-      </tbody>
-    </table>
-  </td>
-</tr>
+      </ul>
+    </td>
+    <td>
+      {$event.state}
+    </td>
+  </tr>
+{/foreach}
 {/template}
 
 

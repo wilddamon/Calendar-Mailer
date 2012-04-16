@@ -152,7 +152,7 @@ calendarmailer.CalendarApi.prototype.checkAuth_ = function() {
  * @private
  */
 calendarmailer.CalendarApi.prototype.handleAuthResult_ = function(opt_result) {
-  if (result) {
+  if (opt_result) {
     this.loadApi_();
   } else {
     var authorize = goog.getObjectByName(

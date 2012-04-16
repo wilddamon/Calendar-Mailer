@@ -2,7 +2,8 @@
 
 goog.provide('calendarmailer.Config');
 
-goog.require('rfctimestamp');
+goog.require('calendarmailer.RfcDateFormatter');
+goog.require('goog.date.DateTime');
 
 
 
@@ -51,7 +52,8 @@ calendarmailer.Config = function() {
    * @type {string}
    * @private
    */
-  this.minDate_ = rfctimestamp();
+  this.minDate_ = calendarmailer.RfcDateFormatter.getInstance().format(
+      new goog.date.DateTime());
 
   var query = window.location.href.split('?');
   if (query.length > 1) {

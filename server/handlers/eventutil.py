@@ -37,10 +37,16 @@ class util:
         email = event.owner
         if (not email in user_event_map):
           user_event_map[email] = []
-        eventJson = {}
-        eventJson["summary"] = event.summary
-        eventJson["state"] = event.state
-        eventJson["calendar_id"] = event.calendar_id
+        eventJson = {
+          "id": event.event_id,
+          "summary": event.summary,
+          "state": event.state,
+          "calendar_id": event.calendar_id,
+          "location": event.event_location,
+          "recurrence": event.recurrence,
+          "startTime": event.start_time,
+          "link": event.link
+        }
         user_event_map[email].append(eventJson)
     logging.info("user_event_map: " + str(user_event_map))
     return {
