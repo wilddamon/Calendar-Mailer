@@ -159,6 +159,15 @@ calendarmailer.picker.ui.Picker.prototype.enterDocument = function() {
 
 
 /**
+ * Gets the title of the picker.
+ * @return {string} The title.
+ */
+calendarmailer.picker.ui.Picker.prototype.getTitle = function() {
+  return this.title_;
+};
+
+
+/**
  * Adds an item to the picker. Subclasses should override this function.
  * @param {{id: string, summary: string}} item The item.
  * @param {boolean=} opt_checked Whether the item should start out checked.

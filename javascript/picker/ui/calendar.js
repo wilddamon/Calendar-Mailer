@@ -50,7 +50,8 @@ calendarmailer.picker.ui.Calendar.prototype.setListObject = function(obj) {
   var items = [];
   for (var i = 0; i < obj.items.length; ++i) {
     var item = obj.items[i];
-    if (!(item.status && item.status == 'cancelled')) {
+    if (!(item.status && item.status == 'cancelled') &&
+        !this.checkNotDeclined_(item)) {
       items.push(item);
     }
   }
@@ -59,6 +60,30 @@ calendarmailer.picker.ui.Calendar.prototype.setListObject = function(obj) {
     return item1.created < item2.created;
   });
   this.events_ = items;
+};
+
+
+/**
+ * Checks whether the event is declined.
+ * @param {!Object} item The item to check.
+ * @return {boolean} Whether the event is declined by the calendar
+ *     this represents.
+ * @private
+ */
+calendarmailer.picker.ui.Calendar.prototype.checkNotDeclined_ = function(item) {
+  var attendees = item.attendees || [];
+  for (var i = 0; i < attendees.length; ++i) {
+    var attendee = attendees[i];
+    if (attendee.self) {
+      var status = attendee.responseStatus;
+      if (status == 'declined') {
+        return true;
+      } else if (status == 'accepted') {
+        return false;
+      }
+    }
+  }
+  return false;
 };
 
 
