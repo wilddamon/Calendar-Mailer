@@ -14,6 +14,7 @@
       <th>Name</th>
       <th>Total events</th>
       <th>Event name</th>
+      <th>Event link</th>
       <th>Event location</th>
       <th>Start time</th>
       <th>Event recurrence</th>
@@ -48,6 +49,9 @@
     <td>{$user.num_events}</td>
     <td>
       <a href="{$event.link}">{$event.summary}</a>
+    </td>
+    <td>
+      {$event.link}
     </td>
     <td>{$event.location}</td>
     <td>
