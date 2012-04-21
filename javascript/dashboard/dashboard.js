@@ -87,11 +87,12 @@ calendarmailer.dashboard.App = function() {
       'individual-add-button'));
 
   /**
-   * An array of the ids of all the calendars events fetched are from.
-   * @type {!Array.<string>}
+   * A map of the ids of the calendars events were pulled from, along with the
+   * number of events for that calendar.
+   * @type {!Object.<number>}
    * @private
    */
-  this.calendarIds_ = [];
+  this.calendarIds_ = {};
 
   /**
    * A map of username to array of events.
@@ -136,7 +137,6 @@ calendarmailer.dashboard.App.prototype.currentCycle_ = null;
 calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
   if (e.target.id != this.currentCycle_) {
     this.currentCycle_ = e.target.id;
-    this.calendarIds_ = [];
     this.userToEventArray_ = {};
     // Start sending a request to the server to get the cycle contents.
     goog.net.XhrIo.send(
@@ -252,19 +252,22 @@ calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
     goog.dom.append(tableEl, rows);
     // Store the calendar IDs.
     for (var i = 0; i < eventArray.length; ++i) {
-      this.calendarIds_.push(eventArray[i]['calendar_id']);
+      var calendarId = eventArray[i]['calendar_id'];
+      if (!this.calendarIds_[calendarId]) {
+        this.calendarIds_[calendarId] = 0;
+      }
+      this.calendarIds_[calendarId]++;
     }
   }, this);
 
-  goog.array.removeDuplicates(this.calendarIds_);
-
+  var keys = goog.object.getKeys(this.calendarIds_);
   if (this.calendar_.isInitialized()) {
-    this.calendar_.getCalendarSummary(this.calendarIds_[0],
+    this.calendar_.getCalendarSummary(keys[0],
         goog.bind(this.handleCalendarResult_, this));
   } else {
     this.eventHandler_.listenOnce(this.calendar_,
         calendarmailer.CalendarApi.EventType.LOADED, function() {
-          this.calendar_.getCalendarSummary(this.calendarIds_[0],
+          this.calendar_.getCalendarSummary(keys[0],
               goog.bind(this.handleCalendarResult_, this));
         });
   }
@@ -280,10 +283,14 @@ calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
     result) {
   var listEl = document.getElementById('userlist-calendarlist');
   listEl.appendChild(goog.soy.renderAsFragment(
-      calendarmailer.soy.userlist.calendarListRow, {'calendar': result}));
-  var index = goog.array.indexOf(this.calendarIds_, result.id);
+      calendarmailer.soy.userlist.wrappedCalendarListRow, {
+        'calendar': result,
+        'numEvents': this.calendarIds_[result['id']]
+      }).firstChild.firstChild);
+  var keys = goog.object.getKeys(this.calendarIds_);
+  var index = goog.array.indexOf(keys, result.id);
   if (++index < this.calendarIds_.length) {
-    this.calendar_.getCalendarSummary(this.calendarIds_[index],
+    this.calendar_.getCalendarSummary(keys[index],
         goog.bind(this.handleCalendarResult_, this));
   }
 };

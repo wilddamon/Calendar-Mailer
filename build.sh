@@ -42,7 +42,6 @@ echo "***Running closurebuilder***"
 
 echo "***Running css compiler***"
 java -jar ../css-compiler/closure-stylesheets-20111230.jar \
-    ../closure-library/closure/goog/css/button.css \
     ../closure-library/closure/goog/css/checkbox.css \
     ../closure-library/closure/goog/css/common.css \
     ${css_files[@]} \

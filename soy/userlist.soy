@@ -89,25 +89,35 @@
 
 /**
  * The list of calendars that goes under the user list.
- * @param? calendars An array of calendar objects.
  */
 {template .calendarList}
-<ul id="userlist-calendarlist">
-  {if $calendars}
-    {foreach $calendar in calendars}
-      {call .calendarListRow}
-        {param calendar: $calendar /}
-      {/call}
-    {/foreach}
-  {/if}
-</ul>
+<table class="userlist">
+  <tbody id="userlist-calendarlist">
+    <th>
+      Calendar name
+    </th>
+    <th>
+      Number of events
+    </th>
+  </tbody>
+</table>
 {/template}
 
 
 /**
  * A row for the list of calendars.
  * @param calendar A calendar object {summary: string}
+ * @param numEvents The number of events.
  */
-{template .calendarListRow}
-  <li>{$calendar.summary}</li>
+{template .wrappedCalendarListRow}
+<table>
+  <tbody>
+    <td>
+      {$calendar.summary}
+    </td>
+    <td>
+      {$numEvents}
+    </td>
+  </tbody>
+</table>
 {/template}

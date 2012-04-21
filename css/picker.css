@@ -1,25 +1,48 @@
 
 
 .picker-base {
-  background: #F8F8F8;
+  background-color: #efefef;
   border: 1px solid grey;
   float: left;
+  font-family: arial, sans-serif;
   margin: 2px;
-  padding: 5px;
+  padding: 15px;
 }
 
 .picker-base.picker-selected {
-  background: #E8FABB;
+  background: #ffc;
 }
 
 .picker-base.goog-control-disabled {
   opacity: 0.4;
 }
 
+.picker-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+  padding-left: 8px;
+}
+
+.picker-boxes {
+  background: #efefef;
+  border-top: 1px solid grey;
+  margin: 15px 0;
+}
+
+.picker-row { 
+  border: 1px solid grey;
+  border-top: none;
+  padding: 2px 5px 7px 7px;
+}
+
 .picker-label-hidden, .picker-title-hidden {
   display: none;
 }
 
-.picker-boxes {
-  margin-bottom: 8px;
+.picker-label {
+  color: #222;
+}
+
+.goog-checkbox {
+  margin-right: 8px;
 }

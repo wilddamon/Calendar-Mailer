@@ -76,16 +76,7 @@ calendarmailer.soy.userlist.wrappedRow = function(opt_data, opt_sb) {
  */
 calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<ul id="userlist-calendarlist">');
-  if (opt_data.calendars) {
-    var calendarList105 = calendars;
-    var calendarListLen105 = calendarList105.length;
-    for (var calendarIndex105 = 0; calendarIndex105 < calendarListLen105; calendarIndex105++) {
-      var calendarData105 = calendarList105[calendarIndex105];
-      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData105}, output);
-    }
-  }
-  output.append('</ul>');
+  output.append('<table class="userlist"><tbody id="userlist-calendarlist"><th>Calendar name</th><th>Number of events</th></tbody></table>');
   return opt_sb ? '' : output.toString();
 };
 
@@ -96,8 +87,8 @@ calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
  * @return {string}
  * @notypecheck
  */
-calendarmailer.soy.userlist.calendarListRow = function(opt_data, opt_sb) {
+calendarmailer.soy.userlist.wrappedCalendarListRow = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<li>', soy.$$escapeHtml(opt_data.calendar.summary), '</li>');
+  output.append('<table><tbody><td>', soy.$$escapeHtml(opt_data.calendar.summary), '</td><td>', soy.$$escapeHtml(opt_data.numEvents), '</td></tbody></table>');
   return opt_sb ? '' : output.toString();
 };
