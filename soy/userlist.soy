@@ -62,11 +62,9 @@
       {/if}
     </td>
     <td>
-      <ul>
         {foreach $recurStr in $event.recurrence}
-          <li>{$recurStr}</li>
+          {$recurStr},
         {/foreach}
-      </ul>
     </td>
     <td>
       {$event.state}

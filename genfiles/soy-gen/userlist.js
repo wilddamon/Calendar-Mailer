@@ -40,14 +40,14 @@ calendarmailer.soy.userlist.row = function(opt_data, opt_sb) {
   var eventListLen60 = eventList60.length;
   for (var eventIndex60 = 0; eventIndex60 < eventListLen60; eventIndex60++) {
     var eventData60 = eventList60[eventIndex60];
-    output.append('<tr ', (opt_data.user.num_events == 1) ? '' : (opt_data.user.num_events == 2) ? 'class="userlist-two"' : (opt_data.user.num_events <= 4) ? 'class="userlist-four"' : (opt_data.user.num_events > 4) ? 'class="userlist-lots"' : '', '><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><a href="', soy.$$escapeHtml(eventData60.link), '">', soy.$$escapeHtml(eventData60.summary), '</a></td><td>', soy.$$escapeHtml(eventData60.link), '</td><td>', soy.$$escapeHtml(eventData60.location), '</td><td>', (eventData60.startTime) ? soy.$$escapeHtml(eventData60.startTime) : 'All day', '</td><td><ul>');
+    output.append('<tr ', (opt_data.user.num_events == 1) ? '' : (opt_data.user.num_events == 2) ? 'class="userlist-two"' : (opt_data.user.num_events <= 4) ? 'class="userlist-four"' : (opt_data.user.num_events > 4) ? 'class="userlist-lots"' : '', '><td>', soy.$$escapeHtml(opt_data.user.name), '</td><td>', soy.$$escapeHtml(opt_data.user.num_events), '</td><td><a href="', soy.$$escapeHtml(eventData60.link), '">', soy.$$escapeHtml(eventData60.summary), '</a></td><td>', soy.$$escapeHtml(eventData60.link), '</td><td>', soy.$$escapeHtml(eventData60.location), '</td><td>', (eventData60.startTime) ? soy.$$escapeHtml(eventData60.startTime) : 'All day', '</td><td>');
     var recurStrList89 = eventData60.recurrence;
     var recurStrListLen89 = recurStrList89.length;
     for (var recurStrIndex89 = 0; recurStrIndex89 < recurStrListLen89; recurStrIndex89++) {
       var recurStrData89 = recurStrList89[recurStrIndex89];
-      output.append('<li>', soy.$$escapeHtml(recurStrData89), '</li>');
+      output.append(soy.$$escapeHtml(recurStrData89), ',');
     }
-    output.append('</ul></td><td>', soy.$$escapeHtml(eventData60.state), '</td></tr>');
+    output.append('</td><td>', soy.$$escapeHtml(eventData60.state), '</td></tr>');
   }
   return opt_sb ? '' : output.toString();
 };
@@ -78,11 +78,11 @@ calendarmailer.soy.userlist.calendarList = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
   output.append('<ul id="userlist-calendarlist">');
   if (opt_data.calendars) {
-    var calendarList106 = calendars;
-    var calendarListLen106 = calendarList106.length;
-    for (var calendarIndex106 = 0; calendarIndex106 < calendarListLen106; calendarIndex106++) {
-      var calendarData106 = calendarList106[calendarIndex106];
-      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData106}, output);
+    var calendarList105 = calendars;
+    var calendarListLen105 = calendarList105.length;
+    for (var calendarIndex105 = 0; calendarIndex105 < calendarListLen105; calendarIndex105++) {
+      var calendarData105 = calendarList105[calendarIndex105];
+      calendarmailer.soy.userlist.calendarListRow({calendar: calendarData105}, output);
     }
   }
   output.append('</ul>');
