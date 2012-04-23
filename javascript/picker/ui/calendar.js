@@ -47,6 +47,10 @@ calendarmailer.picker.ui.Calendar.prototype.enterDocument = function() {
  * @param {!Object} obj The object.
  */
 calendarmailer.picker.ui.Calendar.prototype.addListObject = function(obj) {
+  // TODO: This is a defensive fix, make it better.
+  if (!obj.items) {
+    return;
+  }
   var items = [];
   for (var i = 0; i < obj.items.length; ++i) {
     var item = obj.items[i];
