@@ -204,7 +204,7 @@ calendarmailer.picker.App.prototype.getNextEvents_ = function(calendars) {
   for (var i = 0; i < calendars.length; ++i) {
     if (!this.calendarEventUis_[calendars[i].id]) {
       this.calendar_.getCalendarEvents(calendars[i].id, calendars[i].title);
-      break;
+      return;
     }
   }
   this.calendarListUi_.setVisible(false);
