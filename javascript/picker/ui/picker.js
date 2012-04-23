@@ -315,8 +315,8 @@ calendarmailer.picker.ui.Picker.prototype.setEnabled = function(enabled) {
 calendarmailer.picker.ui.Picker.prototype.showBox = function(box, show) {
   box.setVisible(show);
   var label = this.getDomHelper().getElement(
-      this.getId() + '-' + box.getId() + '-label');
-  goog.dom.classes.enable(label, 'picker-label-hidden', !show);
+      this.getId() + '-' + box.getId() + '-label').parentElement;
+  goog.dom.classes.enable(label, 'picker-row-hidden', !show);
 
   if (!show && box.isChecked()) {
     box.setChecked(false);

@@ -117,7 +117,7 @@
   border-top: none;
   padding: 2px 5px 7px 7px;
 }
-.picker-label-hidden, .picker-title-hidden {
+.picker-title-hidden, .picker-row-hidden {
   display: none;
 }
 .picker-label {
