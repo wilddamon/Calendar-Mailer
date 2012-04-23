@@ -129,7 +129,7 @@ calendarmailer.RRuleFormatter.prototype.prettyPrint = function(rruleStr) {
     if (dayStr) {
       var weeknum, day;
       if (dayStr.length > 3) {
-        weeknum = parseInt(dayStr.substr(0, 1), 10);
+        weeknum = parseInt(dayStr.substr(0, 2), 10);
         day = dayStr.substr(2, 3);
       } else {
         var weeknum = parseInt(dayStr[0], 10);
