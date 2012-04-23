@@ -10,6 +10,7 @@ goog.provide('calendarmailer.picker.ui.Picker.EventType');
 goog.require('calendarmailer.soy.picker');
 goog.require('goog.dom.classes');
 goog.require('goog.events.Event');
+goog.require('goog.soy');
 goog.require('goog.ui.Button');
 goog.require('goog.ui.Checkbox');
 goog.require('goog.ui.Component');
@@ -106,7 +107,7 @@ calendarmailer.picker.ui.Picker.prototype.createDom = function() {
   var dom = this.getDomHelper();
   var items = this.getItems();
 
-  var el = soy.renderAsElement(calendarmailer.soy.picker.all, {
+  var el = goog.soy.renderAsElement(calendarmailer.soy.picker.all, {
     idprefix: this.getId(),
     items: items,
     title: this.title_

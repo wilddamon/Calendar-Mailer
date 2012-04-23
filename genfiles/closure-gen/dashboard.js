@@ -1351,7 +1351,7 @@ goog.getMsg = function(str, opt_values) {
  * <p>Also handy for making public items that are defined in anonymous
  * closures.
  *
- * ex. goog.exportSymbol('Foo', Foo);
+ * ex. goog.exportSymbol('public.path.Foo', Foo);
  *
  * ex. goog.exportSymbol('public.path.Foo.staticFunction',
  *                       Foo.staticFunction);
@@ -1496,6 +1496,161 @@ goog.scope = function(fn) {
 };
 
 
+// Copyright 2006 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Utility for fast string concatenation.
+ */
+
+goog.provide('goog.string.StringBuffer');
+
+
+
+/**
+ * Utility class to facilitate string concatenation.
+ *
+ * @param {Object|number|string|boolean=} opt_a1 Optional first initial item
+ *     to append.
+ * @param {...Object|number|string|boolean} var_args Other initial items to
+ *     append, e.g., new goog.string.StringBuffer('foo', 'bar').
+ * @constructor
+ */
+goog.string.StringBuffer = function(opt_a1, var_args) {
+  if (opt_a1 != null) {
+    this.append.apply(this, arguments);
+  }
+};
+
+
+/**
+ * Internal buffer for the string to be concatenated.
+ * @type {string}
+ * @private
+ */
+goog.string.StringBuffer.prototype.buffer_ = '';
+
+
+/**
+ * Sets the contents of the string buffer object, replacing what's currently
+ * there.
+ *
+ * @param {Object|number|string|boolean} s String to set.
+ */
+goog.string.StringBuffer.prototype.set = function(s) {
+  this.buffer_ = '' + s;
+};
+
+
+/**
+ * Appends one or more items to the buffer.
+ *
+ * Calling this with null, undefined, or empty arguments is an error.
+ *
+ * @param {Object|number|string|boolean} a1 Required first string.
+ * @param {Object|number|string|boolean=} opt_a2 Optional second string.
+ * @param {...Object|number|string|boolean} var_args Other items to append,
+ *     e.g., sb.append('foo', 'bar', 'baz').
+ * @return {goog.string.StringBuffer} This same StringBuffer object.
+ * @suppress {duplicate}
+ */
+goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
+  // Use a1 directly to avoid arguments instantiation for single-arg case.
+  this.buffer_ += a1;
+  if (opt_a2 != null) { // second argument is undefined (null == undefined)
+    for (var i = 1; i < arguments.length; i++) {
+      this.buffer_ += arguments[i];
+    }
+  }
+  return this;
+};
+
+
+/**
+ * Clears the internal buffer.
+ */
+goog.string.StringBuffer.prototype.clear = function() {
+  this.buffer_ = '';
+};
+
+
+/**
+ * @return {number} the length of the current contents of the buffer.
+ */
+goog.string.StringBuffer.prototype.getLength = function() {
+  return this.buffer_.length;
+};
+
+
+/**
+ * @return {string} The concatenated string.
+ */
+goog.string.StringBuffer.prototype.toString = function() {
+  return this.buffer_;
+};
+
+// Copyright 2009 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Provides a base class for custom Error objects such that the
+ * stack is correctly maintained.
+ *
+ * You should never need to throw goog.debug.Error(msg) directly, Error(msg) is
+ * sufficient.
+ *
+ */
+
+goog.provide('goog.debug.Error');
+
+
+
+/**
+ * Base class for custom error objects.
+ * @param {*=} opt_msg The message associated with the error.
+ * @constructor
+ * @extends {Error}
+ */
+goog.debug.Error = function(opt_msg) {
+
+  // Ensure there is a stack trace.
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, goog.debug.Error);
+  } else {
+    this.stack = new Error().stack || '';
+  }
+
+  if (opt_msg) {
+    this.message = String(opt_msg);
+  }
+};
+goog.inherits(goog.debug.Error, Error);
+
+
+/** @override */
+goog.debug.Error.prototype.name = 'CustomError';
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1901,14 +2056,6 @@ goog.string.numerateCompare = function(str1, str2) {
 
 
 /**
- * Regular expression used for determining if a string needs to be encoded.
- * @type {RegExp}
- * @private
- */
-goog.string.encodeUriRegExp_ = /^[a-zA-Z0-9\-_.!~*'()]*$/;
-
-
-/**
  * URL-encodes a string
  * @param {*} str The string to url-encode.
  * @return {string} An encoded copy of {@code str} that is safe for urls.
@@ -1916,15 +2063,7 @@ goog.string.encodeUriRegExp_ = /^[a-zA-Z0-9\-_.!~*'()]*$/;
  *     of URLs *will* be encoded.
  */
 goog.string.urlEncode = function(str) {
-  str = String(str);
-  // Checking if the search matches before calling encodeURIComponent avoids an
-  // extra allocation in IE6. This adds about 10us time in FF and a similiar
-  // over head in IE6 for lower working set apps, but for large working set
-  // apps like Gmail, it saves about 70us per call.
-  if (!goog.string.encodeUriRegExp_.test(str)) {
-    return encodeURIComponent(str);
-  }
-  return str;
+  return encodeURIComponent(String(str));
 };
 
 
@@ -2398,7 +2537,7 @@ goog.string.toMap = function(s) {
 
 
 /**
- * Checks whether a string contains a given character.
+ * Checks whether a string contains a given substring.
  * @param {string} s The string to test.
  * @param {string} ss The substring to test for.
  * @return {boolean} True if {@code s} contains {@code ss}.
@@ -2707,14 +2846,6 @@ goog.string.toNumber = function(str) {
 
 
 /**
- * A memoized cache for goog.string.toCamelCase.
- * @type {Object.<string>}
- * @private
- */
-goog.string.toCamelCaseCache_ = {};
-
-
-/**
  * Converts a string from selector-case to camelCase (e.g. from
  * "multi-part-string" to "multiPartString"), useful for converting
  * CSS selectors and HTML dataset keys to their equivalent JS properties.
@@ -2722,20 +2853,10 @@ goog.string.toCamelCaseCache_ = {};
  * @return {string} The string in camelCase form.
  */
 goog.string.toCamelCase = function(str) {
-  return goog.string.toCamelCaseCache_[str] ||
-      (goog.string.toCamelCaseCache_[str] =
-          String(str).replace(/\-([a-z])/g, function(all, match) {
-            return match.toUpperCase();
-          }));
+  return String(str).replace(/\-([a-z])/g, function(all, match) {
+    return match.toUpperCase();
+  });
 };
-
-
-/**
- * A memoized cache for goog.string.toSelectorCase.
- * @type {Object.<string>}
- * @private
- */
-goog.string.toSelectorCaseCache_ = {};
 
 
 /**
@@ -2746,319 +2867,54 @@ goog.string.toSelectorCaseCache_ = {};
  * @return {string} The string in selector-case form.
  */
 goog.string.toSelectorCase = function(str) {
-  return goog.string.toSelectorCaseCache_[str] ||
-      (goog.string.toSelectorCaseCache_[str] =
-          String(str).replace(/([A-Z])/g, '-$1').toLowerCase());
+  return String(str).replace(/([A-Z])/g, '-$1').toLowerCase();
 };
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+
 
 /**
- * @fileoverview Detection of JScript version.
+ * Converts a string into TitleCase. First character of the string is always
+ * capitalized in addition to the first letter of every subsequent word.
+ * Words are delimited by one or more whitespaces by default. Custom delimiters
+ * can optionally be specified to replace the default, which doesn't preserve
+ * whitespace delimiters and instead must be explicitly included if needed.
  *
- * @author arv@google.com (Erik Arvidsson)
- */
-
-
-goog.provide('goog.userAgent.jscript');
-
-goog.require('goog.string');
-
-
-/**
- * @define {boolean} True if it is known at compile time that the runtime
- *     environment will not be using JScript.
- */
-goog.userAgent.jscript.ASSUME_NO_JSCRIPT = false;
-
-
-/**
- * Initializer for goog.userAgent.jscript.  Detects if the user agent is using
- * Microsoft JScript and which version of it.
+ * Default delimiter => " ":
+ *    goog.string.toTitleCase('oneTwoThree')    => 'OneTwoThree'
+ *    goog.string.toTitleCase('one two three')  => 'One Two Three'
+ *    goog.string.toTitleCase('  one   two   ') => '  One   Two   '
+ *    goog.string.toTitleCase('one_two_three')  => 'One_two_three'
+ *    goog.string.toTitleCase('one-two-three')  => 'One-two-three'
  *
- * This is a named function so that it can be stripped via the jscompiler
- * option for stripping types.
- * @private
- */
-goog.userAgent.jscript.init_ = function() {
-  var hasScriptEngine = 'ScriptEngine' in goog.global;
-
-  /**
-   * @type {boolean}
-   * @private
-   */
-  goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ =
-      hasScriptEngine && goog.global['ScriptEngine']() == 'JScript';
-
-  /**
-   * @type {string}
-   * @private
-   */
-  goog.userAgent.jscript.DETECTED_VERSION_ =
-      goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ ?
-      (goog.global['ScriptEngineMajorVersion']() + '.' +
-       goog.global['ScriptEngineMinorVersion']() + '.' +
-       goog.global['ScriptEngineBuildVersion']()) :
-      '0';
-};
-
-if (!goog.userAgent.jscript.ASSUME_NO_JSCRIPT) {
-  goog.userAgent.jscript.init_();
-}
-
-
-/**
- * Whether we detect that the user agent is using Microsoft JScript.
- * @type {boolean}
- */
-goog.userAgent.jscript.HAS_JSCRIPT = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
-    false : goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_;
-
-
-/**
- * The installed version of JScript.
- * @type {string}
- */
-goog.userAgent.jscript.VERSION = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
-    '0' : goog.userAgent.jscript.DETECTED_VERSION_;
-
-
-/**
- * Whether the installed version of JScript is as new or newer than a given
- * version.
- * @param {string} version The version to check.
- * @return {boolean} Whether the installed version of JScript is as new or
- *     newer than the given version.
- */
-goog.userAgent.jscript.isVersion = function(version) {
-  return goog.string.compareVersions(goog.userAgent.jscript.VERSION,
-                                     version) >= 0;
-};
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Utility for fast string concatenation.
- */
-
-goog.provide('goog.string.StringBuffer');
-
-goog.require('goog.userAgent.jscript');
-
-
-
-/**
- * Utility class to facilitate much faster string concatenation in IE,
- * using Array.join() rather than the '+' operator.  For other browsers
- * we simply use the '+' operator.
+ * Custom delimiter => "_-.":
+ *    goog.string.toTitleCase('oneTwoThree', '_-.')       => 'OneTwoThree'
+ *    goog.string.toTitleCase('one two three', '_-.')     => 'One two three'
+ *    goog.string.toTitleCase('  one   two   ', '_-.')    => '  one   two   '
+ *    goog.string.toTitleCase('one_two_three', '_-.')     => 'One_Two_Three'
+ *    goog.string.toTitleCase('one-two-three', '_-.')     => 'One-Two-Three'
+ *    goog.string.toTitleCase('one...two...three', '_-.') => 'One...Two...Three'
+ *    goog.string.toTitleCase('one. two. three', '_-.')   => 'One. two. three'
+ *    goog.string.toTitleCase('one-two.three', '_-.')     => 'One-Two.Three'
  *
- * @param {Object|number|string|boolean=} opt_a1 Optional first initial item
- *     to append.
- * @param {...Object|number|string|boolean} var_args Other initial items to
- *     append, e.g., new goog.string.StringBuffer('foo', 'bar').
- * @constructor
+ * @param {string} str String value in camelCase form.
+ * @param {string=} opt_delimiters Custom delimiter character set used to
+ *      distinguish words in the string value. Each character represents a
+ *      single delimiter. When provided, default whitespace delimiter is
+ *      overridden and must be explicitly included if needed.
+ * @return {string} String value in TitleCase form.
  */
-goog.string.StringBuffer = function(opt_a1, var_args) {
-  /**
-   * Internal buffer for the string to be concatenated.
-   * @type {string|Array}
-   * @private
-   */
-  this.buffer_ = goog.userAgent.jscript.HAS_JSCRIPT ? [] : '';
+goog.string.toTitleCase = function(str, opt_delimiters) {
+  var delimiters = goog.isString(opt_delimiters) ?
+      goog.string.regExpEscape(opt_delimiters) : '\\s';
 
-  if (opt_a1 != null) {
-    this.append.apply(this, arguments);
-  }
+  // For IE8, we need to prevent using an empty character set. Otherwise,
+  // incorrect matching will occur.
+  delimiters = delimiters ? '|[' + delimiters + ']+' : '';
+
+  var regexp = new RegExp('(^' + delimiters + ')([a-z])', 'g');
+  return str.replace(regexp, function(all, p1, p2) {
+    return p1 + p2.toUpperCase();
+  });
 };
-
-
-/**
- * Sets the contents of the string buffer object, replacing what's currently
- * there.
- *
- * @param {string} s String to set.
- */
-goog.string.StringBuffer.prototype.set = function(s) {
-  this.clear();
-  this.append(s);
-};
-
-
-if (goog.userAgent.jscript.HAS_JSCRIPT) {
-  /**
-   * Length of internal buffer (faster than calling buffer_.length).
-   * Only used if buffer_ is an array.
-   * @type {number}
-   * @private
-   */
-  goog.string.StringBuffer.prototype.bufferLength_ = 0;
-
-  /**
-   * Appends one or more items to the buffer.
-   *
-   * Calling this with null, undefined, or empty arguments is an error.
-   *
-   * @param {Object|number|string|boolean} a1 Required first string.
-   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
-   * @param {...Object|number|string|boolean} var_args Other items to append,
-   *     e.g., sb.append('foo', 'bar', 'baz').
-   * @return {goog.string.StringBuffer} This same StringBuffer object.
-   */
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    // IE version.
-
-    if (opt_a2 == null) { // second argument is undefined (null == undefined)
-      // Array assignment is 2x faster than Array push.  Also, use a1
-      // directly to avoid arguments instantiation, another 2x improvement.
-      this.buffer_[this.bufferLength_++] = a1;
-    } else {
-      this.buffer_.push.apply(/** @type {Array} */ (this.buffer_), arguments);
-      this.bufferLength_ = this.buffer_.length;
-    }
-    return this;
-  };
-} else {
-
-  /**
-   * Appends one or more items to the buffer.
-   *
-   * Calling this with null, undefined, or empty arguments is an error.
-   *
-   * @param {Object|number|string|boolean} a1 Required first string.
-   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
-   * @param {...Object|number|string|boolean} var_args Other items to append,
-   *     e.g., sb.append('foo', 'bar', 'baz').
-   * @return {goog.string.StringBuffer} This same StringBuffer object.
-   * @suppress {duplicate}
-   */
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    // W3 version.
-
-    // Use a1 directly to avoid arguments instantiation for single-arg case.
-    this.buffer_ += a1;
-    if (opt_a2 != null) { // second argument is undefined (null == undefined)
-      for (var i = 1; i < arguments.length; i++) {
-        this.buffer_ += arguments[i];
-      }
-    }
-    return this;
-  };
-}
-
-
-/**
- * Clears the internal buffer.
- */
-goog.string.StringBuffer.prototype.clear = function() {
-  if (goog.userAgent.jscript.HAS_JSCRIPT) {
-     this.buffer_.length = 0;  // Reuse the array to avoid creating new object.
-     this.bufferLength_ = 0;
-   } else {
-     this.buffer_ = '';
-   }
-};
-
-
-/**
- * Returns the length of the current contents of the buffer.  In IE, this is
- * O(n) where n = number of appends, so to avoid quadratic behavior, do not call
- * this after every append.
- *
- * @return {number} the length of the current contents of the buffer.
- */
-goog.string.StringBuffer.prototype.getLength = function() {
-   return this.toString().length;
-};
-
-
-/**
- * Returns the concatenated string.
- *
- * @return {string} The concatenated string.
- */
-goog.string.StringBuffer.prototype.toString = function() {
-  if (goog.userAgent.jscript.HAS_JSCRIPT) {
-    var str = this.buffer_.join('');
-    // Given a string with the entire contents, simplify the StringBuffer by
-    // setting its contents to only be this string, rather than many fragments.
-    this.clear();
-    if (str) {
-      this.append(str);
-    }
-    return str;
-  } else {
-    return /** @type {string} */ (this.buffer_);
-  }
-};
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Provides a base class for custom Error objects such that the
- * stack is correctly maintained.
- *
- * You should never need to throw goog.debug.Error(msg) directly, Error(msg) is
- * sufficient.
- *
- */
-
-goog.provide('goog.debug.Error');
-
-
-
-/**
- * Base class for custom error objects.
- * @param {*=} opt_msg The message associated with the error.
- * @constructor
- * @extends {Error}
- */
-goog.debug.Error = function(opt_msg) {
-
-  // Ensure there is a stack trace.
-  this.stack = new Error().stack || '';
-
-  if (opt_msg) {
-    this.message = String(opt_msg);
-  }
-};
-goog.inherits(goog.debug.Error, Error);
-
-
-/** @override */
-goog.debug.Error.prototype.name = 'CustomError';
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -4023,25 +3879,6 @@ goog.array.concat = function(var_args) {
 
 
 /**
- * Does a shallow copy of an array.
- * @param {goog.array.ArrayLike} arr  Array or array-like object to clone.
- * @return {!Array} Clone of the input array.
- */
-goog.array.clone = function(arr) {
-  if (goog.isArray(arr)) {
-    return goog.array.concat(/** @type {!Array} */ (arr));
-  } else { // array like
-    // Concat does not work with non arrays.
-    var rv = [];
-    for (var i = 0, len = arr.length; i < len; i++) {
-      rv[i] = arr[i];
-    }
-    return rv;
-  }
-};
-
-
-/**
  * Converts an object to an array.
  * @param {goog.array.ArrayLike} object  The object to convert to an array.
  * @return {!Array} The object converted into an array. If object has a
@@ -4050,15 +3887,28 @@ goog.array.clone = function(arr) {
  *     have a length property, an empty array will be returned.
  */
 goog.array.toArray = function(object) {
-  if (goog.isArray(object)) {
-    // This fixes the JS compiler warning and forces the Object to an Array type
-    return goog.array.concat(/** @type {!Array} */ (object));
+  var length = object.length;
+
+  // If length is not a number the following it false. This case is kept for
+  // backwards compatibility since there are callers that pass objects that are
+  // not array like.
+  if (length > 0) {
+    var rv = new Array(length);
+    for (var i = 0; i < length; i++) {
+      rv[i] = object[i];
+    }
+    return rv;
   }
-  // Clone what we hope to be an array-like object to an array.
-  // We could check isArrayLike() first, but no check we perform would be as
-  // reliable as simply making the call.
-  return goog.array.clone(/** @type {Array} */ (object));
+  return [];
 };
+
+
+/**
+ * Does a shallow copy of an array.
+ * @param {goog.array.ArrayLike} arr  Array or array-like object to clone.
+ * @return {!Array} Clone of the input array.
+ */
+goog.array.clone = goog.array.toArray;
 
 
 /**
@@ -4567,7 +4417,7 @@ goog.array.bucket = function(array, sorter) {
  *
  * @param {*} value The value to repeat.
  * @param {number} n The repeat count.
- * @return {!Array.<*>} An array with the repeated value.
+ * @return {!Array} An array with the repeated value.
  */
 goog.array.repeat = function(value, n) {
   var array = [];
@@ -6718,18 +6568,13 @@ goog.dom.getElementByClass = function(className, opt_el) {
 
 /**
  * Prefer the standardized (http://www.w3.org/TR/selectors-api/), native and
- * fast W3C Selectors API. However, the version of WebKit that shipped with
- * Safari 3.1 and Chrome has a bug where it will not correctly match mixed-
- * case class name selectors in quirks mode.
+ * fast W3C Selectors API.
  * @param {!(Element|Document)} parent The parent document object.
  * @return {boolean} whether or not we can use parent.querySelector* APIs.
  * @private
  */
 goog.dom.canUseQuerySelector_ = function(parent) {
-  return parent.querySelectorAll &&
-         parent.querySelector &&
-         (!goog.userAgent.WEBKIT || goog.dom.isCss1CompatMode_(document) ||
-          goog.userAgent.isVersion('528'));
+  return !!(parent.querySelectorAll && parent.querySelector);
 };
 
 
@@ -6937,29 +6782,7 @@ goog.dom.getViewportSize = function(opt_window) {
  */
 goog.dom.getViewportSize_ = function(win) {
   var doc = win.document;
-
-  if (goog.userAgent.WEBKIT && !goog.userAgent.isVersion('500') &&
-      !goog.userAgent.MOBILE) {
-    // TODO(doughtie): Sometimes we get something that isn't a valid window
-    // object. In this case we just revert to the current window. We need to
-    // figure out when this happens and find a real fix for it.
-    // See the comments on goog.dom.getWindow.
-    if (typeof win.innerHeight == 'undefined') {
-      win = window;
-    }
-    var innerHeight = win.innerHeight;
-    var scrollHeight = win.document.documentElement.scrollHeight;
-
-    if (win == win.top) {
-      if (scrollHeight < innerHeight) {
-        innerHeight -= 15; // Scrollbars are 15px wide on Mac
-      }
-    }
-    return new goog.math.Size(win.innerWidth, innerHeight);
-  }
-
   var el = goog.dom.isCss1CompatMode_(doc) ? doc.documentElement : doc.body;
-
   return new goog.math.Size(el.clientWidth, el.clientHeight);
 };
 
@@ -7235,7 +7058,7 @@ goog.dom.append_ = function(doc, parent, args, startIndex) {
       // If the argument is a node list, not a real array, use a clone,
       // because forEach can't be used to mutate a NodeList.
       goog.array.forEach(goog.dom.isNodeList(arg) ?
-          goog.array.clone(arg) : arg,
+          goog.array.toArray(arg) : arg,
           childHandler);
     } else {
       childHandler(arg);
@@ -12945,6 +12768,44 @@ goog.math.Box.contains = function(box, other) {
 
 
 /**
+ * Returns the relative x position of a coordinate compared to a box.  Returns
+ * zero if the coordinate is inside the box.
+ *
+ * @param {goog.math.Box} box A Box.
+ * @param {goog.math.Coordinate} coord A Coordinate.
+ * @return {number} The x position of {@code coord} relative to the nearest
+ *     side of {@code box}, or zero if {@code coord} is inside {@code box}.
+ */
+goog.math.Box.relativePositionX = function(box, coord) {
+  if (coord.x < box.left) {
+    return coord.x - box.left;
+  } else if (coord.x > box.right) {
+    return coord.x - box.right;
+  }
+  return 0;
+};
+
+
+/**
+ * Returns the relative y position of a coordinate compared to a box.  Returns
+ * zero if the coordinate is inside the box.
+ *
+ * @param {goog.math.Box} box A Box.
+ * @param {goog.math.Coordinate} coord A Coordinate.
+ * @return {number} The y position of {@code coord} relative to the nearest
+ *     side of {@code box}, or zero if {@code coord} is inside {@code box}.
+ */
+goog.math.Box.relativePositionY = function(box, coord) {
+  if (coord.y < box.top) {
+    return coord.y - box.top;
+  } else if (coord.y > box.bottom) {
+    return coord.y - box.bottom;
+  }
+  return 0;
+};
+
+
+/**
  * Returns the distance between a coordinate and the nearest corner/side of a
  * box. Returns zero if the coordinate is inside the box.
  *
@@ -12955,20 +12816,9 @@ goog.math.Box.contains = function(box, other) {
  *     {@code box}.
  */
 goog.math.Box.distance = function(box, coord) {
-  if (coord.x >= box.left && coord.x <= box.right) {
-    if (coord.y >= box.top && coord.y <= box.bottom) {
-      return 0;
-    }
-    return coord.y < box.top ? box.top - coord.y : coord.y - box.bottom;
-  }
-
-  if (coord.y >= box.top && coord.y <= box.bottom) {
-    return coord.x < box.left ? box.left - coord.x : coord.x - box.right;
-  }
-
-  return goog.math.Coordinate.distance(coord,
-      new goog.math.Coordinate(coord.x < box.left ? box.left : box.right,
-                               coord.y < box.top ? box.top : box.bottom));
+  var x = goog.math.Box.relativePositionX(box, coord);
+  var y = goog.math.Box.relativePositionY(box, coord);
+  return Math.sqrt(x * x + y * y);
 };
 
 
@@ -13572,7 +13422,9 @@ goog.style.getComputedCursor = function(element) {
 
 /**
  * Sets the top/left values of an element.  If no unit is specified in the
- * argument then it will add px.
+ * argument then it will add px. The second argument is required if the first
+ * argument is a string or number and is ignored if the first argument
+ * is a coordinate.
  * @param {Element} el Element to move.
  * @param {string|number|goog.math.Coordinate} arg1 Left position or coordinate.
  * @param {string|number=} opt_arg2 Top position.
@@ -15163,7 +15015,7 @@ goog.style.getScrollbarWidth = function(opt_className) {
   if (opt_className) {
     outerDiv.className = opt_className;
   }
-  outerDiv.style.cssText = 'visiblity:hidden;overflow:auto;' +
+  outerDiv.style.cssText = 'overflow:auto;' +
       'position:absolute;top:0;width:100px;height:100px';
   var innerDiv = goog.dom.createElement('div');
   goog.style.setSize(innerDiv, '200px', '200px');
@@ -15779,6 +15631,11 @@ goog.events.EventType = {
   BEFORECUT: 'beforecut',
   BEFOREPASTE: 'beforepaste',
 
+  // HTML5 online/offline events.
+  // http://www.w3.org/TR/offline-webapps/#related
+  ONLINE: 'online',
+  OFFLINE: 'offline',
+
   // HTML 5 worker events
   MESSAGE: 'message',
   CONNECT: 'connect',
@@ -16130,6 +15987,16 @@ goog.events.Event.prototype.propagationStopped_ = false;
 
 
 /**
+ * Whether the default action has been prevented.
+ * This is a property to match the W3C specification at {@link
+ * http://www.w3.org/TR/DOM-Level-3-Events/#events-event-type-defaultPrevented}.
+ * Must be treated as read-only outside the class.
+ * @type {boolean}
+ */
+goog.events.Event.prototype.defaultPrevented = false;
+
+
+/**
  * Return value for in internal capture/bubble processing for IE.
  * @type {boolean}
  * @suppress {underscore} Technically public, but referencing this outside
@@ -16150,6 +16017,7 @@ goog.events.Event.prototype.stopPropagation = function() {
  * Prevents the default action, for example a link redirecting to a url.
  */
 goog.events.Event.prototype.preventDefault = function() {
+  this.defaultPrevented = true;
   this.returnValue_ = false;
 };
 
@@ -16287,6 +16155,7 @@ goog.reflect.canAccessProperty = function(obj, prop) {
  * - altKey         {boolean}   Was alt key depressed
  * - shiftKey       {boolean}   Was shift key depressed
  * - metaKey        {boolean}   Was meta key depressed
+ * - defaultPrevented {boolean} Whether the default action has been prevented
  * - state          {Object}    History state object
  *
  * NOTE: The keyCode member contains the raw browser keyCode. For normalized
@@ -16543,7 +16412,9 @@ goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
   this.platformModifierKey = goog.userAgent.MAC ? e.metaKey : e.ctrlKey;
   this.state = e.state;
   this.event_ = e;
-  delete this.returnValue_;
+  if (e.defaultPrevented) {
+    this.preventDefault();
+  }
   delete this.propagationStopped_;
 };
 
@@ -16730,14 +16601,6 @@ goog.require('goog.events.EventWrapper');
 goog.require('goog.events.Listener');
 goog.require('goog.object');
 goog.require('goog.userAgent');
-
-
-/**
- * @define {boolean} Whether to always assume the garbage collector is good.
- * @deprecated This is no longer needed and will be removed once apps are
- * updated.
- */
-goog.events.ASSUME_GOOD_GC = false;
 
 
 /**
@@ -17942,7 +17805,8 @@ goog.events.EventHandler.prototype.listenOnce = function(src, type, opt_fn,
  */
 goog.events.EventHandler.prototype.listenWithWrapper = function(src, wrapper,
     listener, opt_capt, opt_handler) {
-  wrapper.listen(src, listener, opt_capt, opt_handler || this.handler_, this);
+  wrapper.listen(src, listener, opt_capt, opt_handler || this.handler_ || this,
+                 this);
   return this;
 };
 
@@ -18004,7 +17868,8 @@ goog.events.EventHandler.prototype.unlisten = function(src, type, opt_fn,
  */
 goog.events.EventHandler.prototype.unlistenWithWrapper = function(src, wrapper,
     listener, opt_capt, opt_handler) {
-  wrapper.unlisten(src, listener, opt_capt, opt_handler || this.handler_, this);
+  wrapper.unlisten(src, listener, opt_capt,
+                   opt_handler || this.handler_ || this, this);
   return this;
 };
 
@@ -19515,16 +19380,19 @@ goog.ui.Component.prototype.removeChildAt = function(index, opt_unrender) {
 
 
 /**
- * Removes every child component attached to this one.
+ * Removes every child component attached to this one and returns them.
  *
  * @see goog.ui.Component#removeChild
  * @param {boolean=} opt_unrender If true, calls {@link #exitDocument} on the
  *    removed child components, and detaches their DOM from the document.
+ * @return {!Array.<goog.ui.Component>|undefined} The removed components if any.
  */
 goog.ui.Component.prototype.removeChildren = function(opt_unrender) {
+  var removedChildren = [];
   while (this.hasChildren()) {
-    this.removeChildAt(0, opt_unrender);
+    removedChildren.push(this.removeChildAt(0, opt_unrender));
   }
+  return removedChildren;
 };
 // Copyright 2007 Bob Ippolito. All Rights Reserved.
 // Modifications Copyright 2009 The Closure Library Authors. All Rights
@@ -19550,6 +19418,7 @@ goog.ui.Component.prototype.removeChildren = function(opt_unrender) {
 goog.provide('goog.async.Deferred');
 goog.provide('goog.async.Deferred.AlreadyCalledError');
 goog.provide('goog.async.Deferred.CancelledError');
+goog.provide('goog.async.Deferred.UnhandledError');
 
 goog.require('goog.array');
 goog.require('goog.asserts');
@@ -20038,17 +19907,11 @@ goog.async.Deferred.prototype.fire_ = function() {
   }
 
   if (unhandledException) {
-    // Rethrow the unhandled error after a timeout. Execution will continue, but
-    // the error will be seen by global handlers and the user. The rethrow will
+    // Throw an UnhandledError after a timeout. Execution will continue, but
+    // the error will be seen by global handlers and the user. The throw will
     // be canceled if another errback is appended before the timeout executes.
     this.unhandledExceptionTimeoutId_ = goog.global.setTimeout(function() {
-      // The stack trace is clobbered when the error is rethrown. Append the
-      // stack trace to the message if available. Since no one is capturing this
-      // error, the stack trace will be printed to the debug console.
-      if (goog.DEBUG && goog.isDef(res.message) && res.stack) {
-        res.message += '\n' + res.stack;
-      }
-      throw res;
+      throw new goog.async.Deferred.UnhandledError(/** @type {!Error} */ (res));
     }, 0);
   }
 };
@@ -20181,6 +20044,34 @@ goog.inherits(goog.async.Deferred.CancelledError, goog.debug.Error);
  * @override
  */
 goog.async.Deferred.CancelledError.prototype.message = 'Deferred was cancelled';
+
+
+
+/**
+ * An error thrown when an exception is raised from a Deferred callback chain
+ * and there are no errbacks left to handle it.
+ * @param {!Error} cause The original unhandled error.
+ * @constructor
+ * @extends {goog.debug.Error}
+ */
+goog.async.Deferred.UnhandledError = function(cause) {
+  goog.debug.Error.call(this);
+
+  /**
+   * The original error.
+   * @type {!Error}
+   */
+  this.cause = cause;
+
+  /**
+   * Message text.
+   * @type {string}
+   * @override
+   */
+  this.message = 'Unhandled Error in Deferred: ' +
+      (cause.message || '[No message]');
+};
+goog.inherits(goog.async.Deferred.UnhandledError, goog.debug.Error);
 // Copyright 2011 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21294,7 +21185,9 @@ goog.provide('goog.i18n.DateTimeSymbols_ar');
 goog.provide('goog.i18n.DateTimeSymbols_bg');
 goog.provide('goog.i18n.DateTimeSymbols_bn');
 goog.provide('goog.i18n.DateTimeSymbols_ca');
+goog.provide('goog.i18n.DateTimeSymbols_chr');
 goog.provide('goog.i18n.DateTimeSymbols_cs');
+goog.provide('goog.i18n.DateTimeSymbols_cy');
 goog.provide('goog.i18n.DateTimeSymbols_da');
 goog.provide('goog.i18n.DateTimeSymbols_de');
 goog.provide('goog.i18n.DateTimeSymbols_de_AT');
@@ -21321,6 +21214,7 @@ goog.provide('goog.i18n.DateTimeSymbols_fr_CA');
 goog.provide('goog.i18n.DateTimeSymbols_gl');
 goog.provide('goog.i18n.DateTimeSymbols_gsw');
 goog.provide('goog.i18n.DateTimeSymbols_gu');
+goog.provide('goog.i18n.DateTimeSymbols_haw');
 goog.provide('goog.i18n.DateTimeSymbols_he');
 goog.provide('goog.i18n.DateTimeSymbols_hi');
 goog.provide('goog.i18n.DateTimeSymbols_hr');
@@ -21682,6 +21576,50 @@ goog.i18n.DateTimeSymbols_ca = {
 
 
 /**
+ * Date/time formatting symbols for locale chr.
+ */
+goog.i18n.DateTimeSymbols_chr = {
+  ERAS: ['ᎤᏓᎷᎸ', 'ᎤᎶᏐᏅ'],
+  ERANAMES: ['Ꮟ ᏥᏌ ᎾᏕᎲᏍᎬᎾ',
+      'ᎠᎩᏃᎮᎵᏓᏍᏗᏱ ᎠᏕᏘᏱᏍᎬ ᏱᎰᏩ ᏧᏓᏂᎸᎢᏍᏗ'],
+  NARROWMONTHS: ['Ꭴ', 'Ꭷ', 'Ꭰ', 'Ꭷ', 'Ꭰ', 'Ꮥ', 'Ꭻ', 'Ꭶ', 'Ꮪ',
+      'Ꮪ', 'Ꮕ', 'Ꭴ'],
+  STANDALONENARROWMONTHS: ['Ꭴ', 'Ꭷ', 'Ꭰ', 'Ꭷ', 'Ꭰ', 'Ꮥ', 'Ꭻ',
+      'Ꭶ', 'Ꮪ', 'Ꮪ', 'Ꮕ', 'Ꭴ'],
+  MONTHS: ['ᎤᏃᎸᏔᏅ', 'ᎧᎦᎵ', 'ᎠᏅᏱ', 'ᎧᏬᏂ',
+      'ᎠᏂᏍᎬᏘ', 'ᏕᎭᎷᏱ', 'ᎫᏰᏉᏂ', 'ᎦᎶᏂ',
+      'ᏚᎵᏍᏗ', 'ᏚᏂᏅᏗ', 'ᏅᏓᏕᏆ', 'ᎤᏍᎩᏱ'],
+  STANDALONEMONTHS: ['ᎤᏃᎸᏔᏅ', 'ᎧᎦᎵ', 'ᎠᏅᏱ', 'ᎧᏬᏂ',
+      'ᎠᏂᏍᎬᏘ', 'ᏕᎭᎷᏱ', 'ᎫᏰᏉᏂ', 'ᎦᎶᏂ',
+      'ᏚᎵᏍᏗ', 'ᏚᏂᏅᏗ', 'ᏅᏓᏕᏆ', 'ᎤᏍᎩᏱ'],
+  SHORTMONTHS: ['ᎤᏃ', 'ᎧᎦ', 'ᎠᏅ', 'ᎧᏬ', 'ᎠᏂ', 'ᏕᎭ',
+      'ᎫᏰ', 'ᎦᎶ', 'ᏚᎵ', 'ᏚᏂ', 'ᏅᏓ', 'ᎤᏍ'],
+  STANDALONESHORTMONTHS: ['ᎤᏃ', 'ᎧᎦ', 'ᎠᏅ', 'ᎧᏬ', 'ᎠᏂ',
+      'ᏕᎭ', 'ᎫᏰ', 'ᎦᎶ', 'ᏚᎵ', 'ᏚᏂ', 'ᏅᏓ', 'ᎤᏍ'],
+  WEEKDAYS: ['ᎤᎾᏙᏓᏆᏍᎬ', 'ᎤᎾᏙᏓᏉᏅᎯ',
+      'ᏔᎵᏁᎢᎦ', 'ᏦᎢᏁᎢᎦ', 'ᏅᎩᏁᎢᎦ',
+      'ᏧᎾᎩᎶᏍᏗ', 'ᎤᎾᏙᏓᏈᏕᎾ'],
+  STANDALONEWEEKDAYS: ['ᎤᎾᏙᏓᏆᏍᎬ', 'ᎤᎾᏙᏓᏉᏅᎯ',
+      'ᏔᎵᏁᎢᎦ', 'ᏦᎢᏁᎢᎦ', 'ᏅᎩᏁᎢᎦ',
+      'ᏧᎾᎩᎶᏍᏗ', 'ᎤᎾᏙᏓᏈᏕᎾ'],
+  SHORTWEEKDAYS: ['ᏆᏍᎬ', 'ᏉᏅᎯ', 'ᏔᎵᏁ', 'ᏦᎢᏁ',
+      'ᏅᎩᏁ', 'ᏧᎾᎩ', 'ᏈᏕᎾ'],
+  STANDALONESHORTWEEKDAYS: ['ᏆᏍᎬ', 'ᏉᏅᎯ', 'ᏔᎵᏁ', 'ᏦᎢᏁ',
+      'ᏅᎩᏁ', 'ᏧᎾᎩ', 'ᏈᏕᎾ'],
+  NARROWWEEKDAYS: ['Ꮖ', 'Ꮙ', 'Ꮤ', 'Ꮶ', 'Ꮕ', 'Ꮷ', 'Ꭴ'],
+  STANDALONENARROWWEEKDAYS: ['Ꮖ', 'Ꮙ', 'Ꮤ', 'Ꮶ', 'Ꮕ', 'Ꮷ', 'Ꭴ'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  AMPMS: ['ᏌᎾᎴ', 'ᏒᎯᏱᎢᏗᏢ'],
+  DATEFORMATS: ['EEEE, MMMM d, y', 'MMMM d, y', 'MMM d, y', 'M/d/yy'],
+  TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  FIRSTDAYOFWEEK: 0,
+  WEEKENDRANGE: [5, 6],
+  FIRSTWEEKCUTOFFDAY: 6
+};
+
+
+/**
  * Date/time formatting symbols for locale cs.
  */
 goog.i18n.DateTimeSymbols_cs = {
@@ -21712,6 +21650,42 @@ goog.i18n.DateTimeSymbols_cs = {
   AMPMS: ['dop.', 'odp.'],
   DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'd.M.yyyy', 'dd.MM.yy'],
   TIMEFORMATS: ['H:mm:ss zzzz', 'H:mm:ss z', 'H:mm:ss', 'H:mm'],
+  FIRSTDAYOFWEEK: 0,
+  WEEKENDRANGE: [5, 6],
+  FIRSTWEEKCUTOFFDAY: 3
+};
+
+
+/**
+ * Date/time formatting symbols for locale cy.
+ */
+goog.i18n.DateTimeSymbols_cy = {
+  ERAS: ['CC', 'OC'],
+  ERANAMES: ['Cyn Crist', 'Oed Crist'],
+  NARROWMONTHS: ['I', 'C', 'M', 'E', 'M', 'M', 'G', 'A', 'M', 'H', 'T', 'R'],
+  STANDALONENARROWMONTHS: ['I', 'C', 'M', 'E', 'M', 'M', 'G', 'A', 'M', 'H',
+      'T', 'R'],
+  MONTHS: ['Ionawr', 'Chwefror', 'Mawrth', 'Ebrill', 'Mai', 'Mehefin',
+      'Gorffenaf', 'Awst', 'Medi', 'Hydref', 'Tachwedd', 'Rhagfyr'],
+  STANDALONEMONTHS: ['Ionawr', 'Chwefror', 'Mawrth', 'Ebrill', 'Mai', 'Mehefin',
+      'Gorffennaf', 'Awst', 'Medi', 'Hydref', 'Tachwedd', 'Rhagfyr'],
+  SHORTMONTHS: ['Ion', 'Chwef', 'Mawrth', 'Ebrill', 'Mai', 'Meh', 'Gorff',
+      'Awst', 'Medi', 'Hyd', 'Tach', 'Rhag'],
+  STANDALONESHORTMONTHS: ['Ion', 'Chwe', 'Maw', 'Ebr', 'Mai', 'Meh', 'Gor',
+      'Awst', 'Medi', 'Hyd', 'Tach', 'Rhag'],
+  WEEKDAYS: ['Dydd Sul', 'Dydd Llun', 'Dydd Mawrth', 'Dydd Mercher', 'Dydd Iau',
+      'Dydd Gwener', 'Dydd Sadwrn'],
+  STANDALONEWEEKDAYS: ['Dydd Sul', 'Dydd Llun', 'Dydd Mawrth', 'Dydd Mercher',
+      'Dydd Iau', 'Dydd Gwener', 'Dydd Sadwrn'],
+  SHORTWEEKDAYS: ['Sul', 'Llun', 'Maw', 'Mer', 'Iau', 'Gwen', 'Sad'],
+  STANDALONESHORTWEEKDAYS: ['Sul', 'Llun', 'Maw', 'Mer', 'Iau', 'Gwe', 'Sad'],
+  NARROWWEEKDAYS: ['S', 'L', 'M', 'M', 'I', 'G', 'S'],
+  STANDALONENARROWWEEKDAYS: ['S', 'L', 'M', 'M', 'I', 'G', 'S'],
+  SHORTQUARTERS: ['Ch1', 'Ch2', 'Ch3', 'Ch4'],
+  QUARTERS: ['Chwarter 1af', '2il chwarter', '3ydd chwarter', '4ydd chwarter'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yyyy'],
+  TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -22604,6 +22578,43 @@ goog.i18n.DateTimeSymbols_gu = {
   TIMEFORMATS: ['hh:mm:ss a zzzz', 'hh:mm:ss a z', 'hh:mm:ss a', 'hh:mm a'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
+  FIRSTWEEKCUTOFFDAY: 5
+};
+
+
+/**
+ * Date/time formatting symbols for locale haw.
+ */
+goog.i18n.DateTimeSymbols_haw = {
+  ERAS: ['BCE', 'CE'],
+  ERANAMES: ['BCE', 'CE'],
+  NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+  STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+      '11', '12'],
+  MONTHS: ['Ianuali', 'Pepeluali', 'Malaki', 'ʻApelila', 'Mei', 'Iune',
+      'Iulai', 'ʻAukake', 'Kepakemapa', 'ʻOkakopa', 'Nowemapa', 'Kekemapa'],
+  STANDALONEMONTHS: ['Ianuali', 'Pepeluali', 'Malaki', 'ʻApelila', 'Mei',
+      'Iune', 'Iulai', 'ʻAukake', 'Kepakemapa', 'ʻOkakopa', 'Nowemapa',
+      'Kekemapa'],
+  SHORTMONTHS: ['Ian.', 'Pep.', 'Mal.', 'ʻAp.', 'Mei', 'Iun.', 'Iul.', 'ʻAu.',
+      'Kep.', 'ʻOk.', 'Now.', 'Kek.'],
+  STANDALONESHORTMONTHS: ['Ian.', 'Pep.', 'Mal.', 'ʻAp.', 'Mei', 'Iun.',
+      'Iul.', 'ʻAu.', 'Kep.', 'ʻOk.', 'Now.', 'Kek.'],
+  WEEKDAYS: ['Lāpule', 'Poʻakahi', 'Poʻalua', 'Poʻakolu', 'Poʻahā',
+      'Poʻalima', 'Poʻaono'],
+  STANDALONEWEEKDAYS: ['Lāpule', 'Poʻakahi', 'Poʻalua', 'Poʻakolu',
+      'Poʻahā', 'Poʻalima', 'Poʻaono'],
+  SHORTWEEKDAYS: ['LP', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'],
+  STANDALONESHORTWEEKDAYS: ['LP', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'],
+  NARROWWEEKDAYS: ['1', '2', '3', '4', '5', '6', '7'],
+  STANDALONENARROWWEEKDAYS: ['1', '2', '3', '4', '5', '6', '7'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'd/M/yy'],
+  TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  FIRSTDAYOFWEEK: 6,
+  WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
 };
 
@@ -24526,8 +24537,12 @@ if (goog.LOCALE == 'af') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_bn;
 } else if (goog.LOCALE == 'ca') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_ca;
+} else if (goog.LOCALE == 'chr') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_chr;
 } else if (goog.LOCALE == 'cs') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_cs;
+} else if (goog.LOCALE == 'cy') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_cy;
 } else if (goog.LOCALE == 'da') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_da;
 } else if (goog.LOCALE == 'de') {
@@ -24578,6 +24593,8 @@ if (goog.LOCALE == 'af') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_gsw;
 } else if (goog.LOCALE == 'gu') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_gu;
+} else if (goog.LOCALE == 'haw') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_haw;
 } else if (goog.LOCALE == 'he') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_he;
 } else if (goog.LOCALE == 'hi') {
@@ -38350,18 +38367,21 @@ goog.net.XhrIo.prototype.onReadyStateChangeHelper_ = function() {
 
       this.active_ = false;
 
-      // Call the specific callbacks for success or failure. Only call the
-      // success if the status is 200 (HTTP_OK) or 304 (HTTP_CACHED)
-      if (this.isSuccess()) {
-        this.dispatchEvent(goog.net.EventType.COMPLETE);
-        this.dispatchEvent(goog.net.EventType.SUCCESS);
-      } else {
-        this.lastErrorCode_ = goog.net.ErrorCode.HTTP_ERROR;
-        this.lastError_ = this.getStatusText() + ' [' + this.getStatus() + ']';
-        this.dispatchErrors_();
+      try {
+        // Call the specific callbacks for success or failure. Only call the
+        // success if the status is 200 (HTTP_OK) or 304 (HTTP_CACHED)
+        if (this.isSuccess()) {
+          this.dispatchEvent(goog.net.EventType.COMPLETE);
+          this.dispatchEvent(goog.net.EventType.SUCCESS);
+        } else {
+          this.lastErrorCode_ = goog.net.ErrorCode.HTTP_ERROR;
+          this.lastError_ =
+              this.getStatusText() + ' [' + this.getStatus() + ']';
+          this.dispatchErrors_();
+        }
+      } finally {
+        this.cleanUpXhr_();
       }
-
-      this.cleanUpXhr_();
     }
   }
 };

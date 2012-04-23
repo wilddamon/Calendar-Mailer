@@ -61,27 +61,6 @@
 .goog-button:hover {
   border-color: #c6c6c6;
 }
-.spinner {
-  height: 200px;
-  width: 200px;
-  text-indent: 250px;
-  white-space: nowrap;
-  overflow: hidden;
-  -webkit-mask-image: url(../img/spinner.png);
-  background-color: #000;
-  -webkit-animation-name: spinnerRotate;
-  -webkit-animation-duration: 2s;
-  -webkit-animation-iteration-count: infinite;
-  -webkit-animation-timing-function: linear;
-}
-@-webkit-keyframes spinnerRotate {
-  0% {
-    -webkit-transform: rotate(0deg);
-  }
-  to {
-    -webkit-transform: rotate(360deg);
-  }
-}
 .email-preview-outer {
   border: 1px solid #ccc;
   padding: 10px;
@@ -147,21 +126,11 @@
 .goog-checkbox {
   margin-right: 8px;
 }
-.userlist {
-  margin-top: 50px;
-}
-.userlist tbody tr:nth-child(odd) {
-  background-color: #efefef;
-}
-.userlist tbody tr:nth-child(2n) {
-  background-color: #fff;
-}
 .userlist td, .userlist th {
   border-color: gray;
   border-width: 0 1px 1px 0;
   border-style: solid;
   max-width: 400px;
-  padding: 5px;
   word-wrap: break-word;
 }
 .userlist-two {
