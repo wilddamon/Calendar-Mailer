@@ -20,6 +20,7 @@ goog.require('goog.net.EventType');
 goog.require('goog.net.XhrIo');
 goog.require('goog.object');
 goog.require('goog.soy');
+goog.require('goog.style');
 
 
 
@@ -131,8 +132,9 @@ calendarmailer.picker.App = function() {
  * @private
  */
 calendarmailer.picker.App.prototype.handleCalendarApiReady_ = function() {
-  window.console.log('getting list...');
   this.calendar_.getCalendarList();
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', '');
 };
 
 
@@ -142,9 +144,14 @@ calendarmailer.picker.App.prototype.handleCalendarApiReady_ = function() {
  * @private
  */
 calendarmailer.picker.App.prototype.handleGetCalendarsResult_ = function(e) {
-  this.calendarListUi_.setListObject(e.result);
-  this.calendarListUi_.render(document.getElementById('calendars'));
-  this.calendarListUi_.setSubmitCaption('Get events for these calendars!');
+  this.calendarListUi_.addListObject(e.result);
+  if (e.result['nextPageToken']) {
+    this.calendar_.getCalendarList(e.result['nextPageToken']);
+  } else {
+    goog.style.setStyle(spinner, 'display', 'none');
+    this.calendarListUi_.render(document.getElementById('calendars'));
+    this.calendarListUi_.setSubmitCaption('Get events for these calendars!');
+  }
 };
 
 
@@ -157,6 +164,8 @@ calendarmailer.picker.App.prototype.handleCalendarListSubmit_ = function(e) {
   this.calendarListUi_.setEnabled(false);
   // Start loading the first calendar which is not loaded yet.
   this.getNextEvents_(e.items);
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', '');
 };
 
 
@@ -166,18 +175,22 @@ calendarmailer.picker.App.prototype.handleCalendarListSubmit_ = function(e) {
  * @private
  */
 calendarmailer.picker.App.prototype.handleGetEventsResult_ = function(e) {
-  this.calendarListUi_.setVisible(false);
-  this.filter_.setSectionVisible(
-      calendarmailer.picker.ui.FilteringWidget.SectionName.EVENTS);
+  var calendarUi = this.calendarEventUis_[e.id];
+  if (!calendarUi) {
+    calendarUi = new calendarmailer.picker.ui.Calendar(e.id, e.title);
+    this.calendarEventUis_[e.id] = calendarUi;
+  }
+  calendarUi.addListObject(e.result);
 
-  var calendarUi = new calendarmailer.picker.ui.Calendar(e.id, e.title);
-  calendarUi.setListObject(e.result);
-  this.calendarEventUis_[e.id] = calendarUi;
-  calendarUi.render(document.getElementById('eventpickers'));
-  calendarUi.setSubmitCaption('Mail the owners of these events!');
-  this.eventHandler_.listen(calendarUi,
-      calendarmailer.picker.ui.Picker.EventType.SUBMIT, this.handleAddNames_);
-  this.getNextEvents_(this.calendarListUi_.getSelectedItems());
+  if (e.result['nextPageToken']) {
+    this.calendar_.getCalendarEvents(e.id, e.title, e.result['nextPageToken']);
+  } else {
+    calendarUi.render(document.getElementById('eventpickers'));
+    calendarUi.setSubmitCaption('Mail the owners of these events!');
+    this.eventHandler_.listen(calendarUi,
+        calendarmailer.picker.ui.Picker.EventType.SUBMIT, this.handleAddNames_);
+    this.getNextEvents_(this.calendarListUi_.getSelectedItems());
+  }
 };
 
 
@@ -194,6 +207,12 @@ calendarmailer.picker.App.prototype.getNextEvents_ = function(calendars) {
       break;
     }
   }
+  this.calendarListUi_.setVisible(false);
+  this.filter_.setSectionVisible(
+      calendarmailer.picker.ui.FilteringWidget.SectionName.EVENTS);
+
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', 'none');
 };
 
 

@@ -46,7 +46,7 @@ calendarmailer.picker.ui.Calendar.prototype.enterDocument = function() {
  * Sets the event list object.
  * @param {!Object} obj The object.
  */
-calendarmailer.picker.ui.Calendar.prototype.setListObject = function(obj) {
+calendarmailer.picker.ui.Calendar.prototype.addListObject = function(obj) {
   var items = [];
   for (var i = 0; i < obj.items.length; ++i) {
     var item = obj.items[i];
@@ -59,7 +59,9 @@ calendarmailer.picker.ui.Calendar.prototype.setListObject = function(obj) {
   goog.array.sort(items, function(item1, item2) {
     return item1.created < item2.created;
   });
-  this.events_ = items;
+
+  goog.array.extend(this.events_, items);
+  goog.array.removeDuplicates(this.events_);
 };
 
 

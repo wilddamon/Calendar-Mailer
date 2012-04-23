@@ -20785,10 +20785,10 @@ calendarmailer.CalendarApi.objectNames_ = {
 
 /**
  * The maximum number of results to be returned in a single request.
- * @type {number=}
+ * @type {number}
  * @private
  */
-calendarmailer.CalendarApi.MAX_RESULTS_;
+calendarmailer.CalendarApi.MAX_RESULTS_ = 50;
 
 
 /**
