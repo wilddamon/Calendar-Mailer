@@ -19,7 +19,7 @@ goog.require('goog.json');
 goog.require('goog.net.EventType');
 goog.require('goog.net.XhrIo');
 goog.require('goog.object');
-goog.require('soy');
+goog.require('goog.soy');
 
 
 
@@ -300,8 +300,8 @@ calendarmailer.picker.App.prototype.addNames_ = function(events) {
 calendarmailer.picker.App.prototype.showNameList_ = function() {
   if (!this.nameList_.isInDocument()) {
     this.nameList_.render(document.getElementById('namelist'));
-    document.getElementById('email-preview').appendChild(soy.renderAsElement(
-        calendarmailer.soy.email.all, {}));
+    document.getElementById('email-preview').appendChild(
+        goog.soy.renderAsElement(calendarmailer.soy.email.all, {}));
   }
 };
 

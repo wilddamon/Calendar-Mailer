@@ -15,7 +15,6 @@ goog.require('goog.ui.Button');
 goog.require('goog.ui.Checkbox');
 goog.require('goog.ui.Component');
 goog.require('goog.ui.Control');
-goog.require('soy');
 
 
 
@@ -178,7 +177,7 @@ calendarmailer.picker.ui.Picker.prototype.addItem = function(item,
   var dom = this.getDomHelper();
 
   var pickerBoxes = dom.getElementByClass('picker-boxes', this.getElement());
-  var row = soy.renderAsElement(calendarmailer.soy.picker.row, {
+  var row = goog.soy.renderAsElement(calendarmailer.soy.picker.row, {
     idprefix: this.getId(),
     item: item
   });
