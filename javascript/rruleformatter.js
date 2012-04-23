@@ -136,9 +136,10 @@ calendarmailer.RRuleFormatter.prototype.prettyPrint = function(rruleStr) {
         var day = dayStr.substr(1, 2);
       }
       buf.append(' on the ').
-          append(weeknum > 0 ?
-              calendarmailer.RRuleFormatter.XTH_STR_[weeknum] :
-              calendarmailer.RRuleFormatter.MINUS_XTH_STR_[-weeknum]).
+          append(weeknum >= 0 ?
+              // Subtract 1 so we are zero-indexed for strings.
+              calendarmailer.RRuleFormatter.XTH_STR_[weeknum - 1] :
+              calendarmailer.RRuleFormatter.MINUS_XTH_STR_[-(weeknum + 1)]).
           append(' ').
           append(calendarmailer.RRuleFormatter.DAY_STR_[day]);
     }
