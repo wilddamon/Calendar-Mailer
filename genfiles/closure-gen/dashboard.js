@@ -12493,7 +12493,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>Name</th><th>Total events</th><th>Event name</th><th>Event link</th><th>Event location</th><th>Start time</th><th>Event recurrence</th><th>User action</th></tr>');
+  output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>email</th><th>TotalEvents</th><th>EventName</th><th>EventLink</th><th>EventLocation</th><th>StartTime</th><th>EventRecurrence</th><th>UserAction</th></tr>');
   var userList53 = opt_data.users;
   var userListLen53 = userList53.length;
   for (var userIndex53 = 0; userIndex53 < userListLen53; userIndex53++) {
