@@ -1,5 +1,0 @@
-#mac ds store
-*.DS_Store
-
-#python generated files
-*.pyc
