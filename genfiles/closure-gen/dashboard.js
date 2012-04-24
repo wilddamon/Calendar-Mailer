@@ -39005,6 +39005,7 @@ calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
   }, this);
 
   var keys = goog.object.getKeys(this.calendarIds_);
+  index = 0;
   if (this.calendar_.isInitialized()) {
     this.calendar_.getCalendarSummary(keys[0],
         goog.bind(this.handleCalendarResult_, this));
@@ -39025,18 +39026,20 @@ calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
  */
 calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
     result) {
-  var listEl = document.getElementById('userlist-calendarlist');
-  listEl.appendChild(goog.soy.renderAsFragment(
-      calendarmailer.soy.userlist.wrappedCalendarListRow, {
-        'calendar': result,
-        'numEvents': this.calendarIds_[result['id']]
-      }).firstChild.firstChild);
-  var keys = goog.object.getKeys(this.calendarIds_);
-  var index = goog.array.indexOf(keys, result.id);
-  if (++index < keys.length) {
-    this.calendar_.getCalendarSummary(keys[index],
-        goog.bind(this.handleCalendarResult_, this));
+  if (!result.status) {
+    var listEl = document.getElementById('userlist-calendarlist');
+    listEl.appendChild(goog.soy.renderAsFragment(
+        calendarmailer.soy.userlist.wrappedCalendarListRow, {
+          'calendar': result,
+          'numEvents': this.calendarIds_[result['id']]
+        }).firstChild.firstChild);
   }
+  var keys = goog.object.getKeys(this.calendarIds_);
+    //var index = goog.array.indexOf(keys, result.id);
+  if (++index < keys.length) {
+      this.calendar_.getCalendarSummary(keys[index],
+          goog.bind(this.handleCalendarResult_, this));
+    }
 };
 
 
