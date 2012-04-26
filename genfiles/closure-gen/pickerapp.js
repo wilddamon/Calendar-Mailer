@@ -40246,11 +40246,27 @@ calendarmailer.picker.App.prototype.handleAddNames_ = function(e) {
 calendarmailer.picker.App.prototype.addNames_ = function(events) {
   for (var i = 0; i < events.length; ++i) {
     var event = events[i];
-    var displayName = event.creator.displayName ?
-        event.creator.displayName + ' (' + event.creator.email + ')' :
-        event.creator.email;
+    // Sometimes events don't appear to have a creator. If this is the case,
+    // log an error and continue. TODO: Log somewhere persistent and/or show a
+    // prompt for the admins to investigate.
+    if (!event.creator) {
+      window.console.log('event without creator! ID: ' + event.id);
+      return;
+    }
+    var displayName, id;
+    if (event.organizer) {
+      id = event.organizer.email;
+      displayName = event.organizer.displayName ?
+          event.organizer.displayName + ' (' + event.organizer.email + ')' :
+          event.organizer.email;
+    } else {
+      id = event.creator.email;
+      displayName = event.creator.displayName ?
+          event.creator.displayName + ' (' + event.creator.email + ')' :
+          event.creator.email;
+    }
     this.nameList_.addItem({
-      id: event.creator.email,
+      id: id,
       summary: displayName
     });
   }
@@ -40321,7 +40337,7 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
       window.console.log('event without creator! ID: ' + event.id);
       return;
     }
-    var owner = event.creator.email;
+    var owner = event.organizer ? event.organizer.email : event.creator.email;
     result.push({
       'owner': owner,
       'calendarId': calendarId,

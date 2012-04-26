@@ -291,11 +291,10 @@ calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
         }).firstChild.firstChild);
   }
   var keys = goog.object.getKeys(this.calendarIds_);
-    //var index = goog.array.indexOf(keys, result.id);
   if (++index < keys.length) {
-      this.calendar_.getCalendarSummary(keys[index],
-          goog.bind(this.handleCalendarResult_, this));
-    }
+    this.calendar_.getCalendarSummary(keys[index],
+        goog.bind(this.handleCalendarResult_, this));
+  }
 };
 
 
