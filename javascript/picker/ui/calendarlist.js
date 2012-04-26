@@ -37,11 +37,11 @@ goog.inherits(calendarmailer.picker.ui.CalendarList,
  */
 calendarmailer.picker.ui.CalendarList.prototype.addListObject = function(obj) {
   var items = obj.items;
-  goog.array.sort(items, function(item1, item2) {
-    return goog.string.caseInsensitiveCompare(item1.summary, item2.summary);
-  });
   goog.array.extend(this.calendarFeedEntries_, items);
   goog.array.removeDuplicates(this.calendarFeedEntries_);
+  goog.array.sort(this.calendarFeedEntries_, function(item1, item2) {
+    return goog.string.caseInsensitiveCompare(item1.summary, item2.summary);
+  });
 };
 
 
