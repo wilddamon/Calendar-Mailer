@@ -33701,7 +33701,7 @@ calendarmailer.picker.ui.Calendar.prototype.getUnendingRecurrence_ =
   }
   for (var i = 0; i < opt_recurrence.length; ++i) {
     if (!goog.string.contains(opt_recurrence[i], 'COUNT') &&
-        !goog.string.contains(opt_recurrence[i], 'UTNTIL')) {
+        !goog.string.contains(opt_recurrence[i], 'UNTIL')) {
       return true;
     }
   }
