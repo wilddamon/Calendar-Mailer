@@ -15,7 +15,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title picker-title-hidden">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all">Select all</button><button class="picker-select picker-select-none">Select none</button><div class="picker-boxes">');
+  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title picker-title-hidden">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all action-button">Select all</button><button class="picker-select picker-select-none action-button">Select none</button><div class="picker-boxes">');
   var itemList16 = opt_data.items;
   var itemListLen16 = itemList16.length;
   for (var itemIndex16 = 0; itemIndex16 < itemListLen16; itemIndex16++) {
@@ -24,7 +24,7 @@ calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
       calendarmailer.soy.picker.row({idprefix: opt_data.idprefix, item: itemData16}, output);
     }
   }
-  output.append('</div><button class="picker-submit">Go!</button></div>');
+  output.append('</div><button class="picker-submit primary-button">Go!</button></div>');
   return opt_sb ? '' : output.toString();
 };
 

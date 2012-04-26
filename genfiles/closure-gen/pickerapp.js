@@ -30982,7 +30982,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title picker-title-hidden">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all">Select all</button><button class="picker-select picker-select-none">Select none</button><div class="picker-boxes">');
+  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title picker-title-hidden">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all action-button">Select all</button><button class="picker-select picker-select-none action-button">Select none</button><div class="picker-boxes">');
   var itemList16 = opt_data.items;
   var itemListLen16 = itemList16.length;
   for (var itemIndex16 = 0; itemIndex16 < itemListLen16; itemIndex16++) {
@@ -30991,7 +30991,7 @@ calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
       calendarmailer.soy.picker.row({idprefix: opt_data.idprefix, item: itemData16}, output);
     }
   }
-  output.append('</div><button class="picker-submit">Go!</button></div>');
+  output.append('</div><button class="picker-submit primary-button">Go!</button></div>');
   return opt_sb ? '' : output.toString();
 };
 
@@ -31884,7 +31884,7 @@ goog.require('calendarmailer.picker.ui.Picker');
  * @extends {calendarmailer.picker.ui.Picker}
  */
 calendarmailer.picker.ui.NameList = function() {
-  goog.base(this);
+  goog.base(this, 'Select people to mail');
 
   /**
    * The items in the list.
@@ -31895,6 +31895,14 @@ calendarmailer.picker.ui.NameList = function() {
 };
 goog.inherits(calendarmailer.picker.ui.NameList,
     calendarmailer.picker.ui.Picker);
+
+
+/** @override */
+calendarmailer.picker.ui.NameList.prototype.enterDocument = function() {
+  goog.base(this, 'enterDocument');
+
+  this.showTitle(true);
+};
 
 
 /** @override */
@@ -31929,7 +31937,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.filteringwidget.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="filter-base"><div id="filter-calendars" class="filter-section"><div class="filter-title">Filter calendars</div><textarea class="filter-textbox" rows="1"></textarea></div><div id="filter-events" class="filter-section"><div class="filter-title">Filter events</div><div id="repeatingfilter" name="repeatingfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div><label id="repeatingfilter-label" for="repeatingfilter" class="checkbox-label">Show repeating events only.</label></div><div id="filter-select-control" class="filter-section"><div class="filter-title">Event selection global control</div><button class="filter-selectall">Select all visible events</button><button class="filter-selectnone">Deselect all visible events</button><button class="filter-submit">Add owners of all selected events to be mailed.</button></div></div>');
+  output.append('<div class="filter-base"><div id="filter-calendars" class="filter-section"><div class="filter-title">Filter calendars</div><textarea class="filter-textbox" rows="1"></textarea></div><div id="filter-events" class="filter-section"><div class="filter-title">Filter events</div><div class="filter-box-row"><div id="repeatingfilter" name="repeatingfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div><label id="repeatingfilter-label" for="repeatingfilter" class="checkbox-label">Show repeating events only.</label></div></div><div id="filter-select-control" class="filter-section"><div class="filter-title">Event selection global control</div><button class="filter-selectall filter-button action-button">Select all visible events</button><button class="filter-selectnone filter-button action-button">Deselect all visible events</button><button class="filter-submit filter-button primary-button">Add owners of all selected events to be mailed.</button></div></div>');
   return opt_sb ? '' : output.toString();
 };
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
