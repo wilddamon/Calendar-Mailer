@@ -40251,7 +40251,7 @@ calendarmailer.picker.App.prototype.addNames_ = function(events) {
     // prompt for the admins to investigate.
     if (!event.creator) {
       window.console.log('event without creator! ID: ' + event.id);
-      return;
+      continue;
     }
     var displayName, id;
     if (event.organizer) {
