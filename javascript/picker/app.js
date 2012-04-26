@@ -304,8 +304,8 @@ calendarmailer.picker.App.prototype.addNames_ = function(events) {
     // Sometimes events don't appear to have a creator. If this is the case,
     // log an error and continue. TODO: Log somewhere persistent and/or show a
     // prompt for the admins to investigate.
-    if (!event.creator) {
-      window.console.log('event without creator! ID: ' + event.id);
+    if (!event.creator && !event.organizer) {
+      window.console.log('event without creator or organizer! ID: ' + event.id);
       continue;
     }
     var displayName, id;
@@ -388,8 +388,8 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
     // Sometimes events don't appear to have a creator. If this is the case,
     // log an error and continue. TODO: Log somewhere persistent and/or show a
     // prompt for the admins to investigate.
-    if (!event.creator) {
-      window.console.log('event without creator! ID: ' + event.id);
+    if (!event.creator && !event.organizer) {
+      window.console.log('event without creator or organizer! ID: ' + event.id);
       return;
     }
     var owner = event.organizer ? event.organizer.email : event.creator.email;
