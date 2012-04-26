@@ -60,12 +60,12 @@ calendarmailer.picker.ui.Calendar.prototype.addListObject = function(obj) {
     }
   }
 
-  goog.array.sort(items, function(item1, item2) {
-    return item1.created < item2.created;
-  });
-
   goog.array.extend(this.events_, items);
   goog.array.removeDuplicates(this.events_);
+
+  goog.array.sort(this.events_, function(item1, item2) {
+    return item1.created < item2.created;
+  });
 };
 
 
