@@ -19,6 +19,7 @@ goog.require('goog.json');
 goog.require('goog.net.EventType');
 goog.require('goog.net.XhrIo');
 goog.require('goog.object');
+goog.require('goog.string');
 goog.require('soy');
 
 
@@ -363,7 +364,7 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
       'calendarId': calendarId,
       'eventId': event.id,
       'summary': event.summary,
-      'location': event.location || 'unknown',
+      'location': goog.string.truncate(event.location, 500) || 'unknown',
       'recurrence': event.recurrence || [],
       'startTime': event.start.dateTime,
       'link': event.htmlLink

@@ -1,0 +1,33 @@
+.userlist {
+  margin-top: 50px;
+}
+
+.userlist tbody tr:nth-child(odd) {
+  background-color: #efefef;
+}
+
+.userlist tbody tr:nth-child(even) {
+  background-color: #fff;
+}
+
+.userlist td,
+.userlist th {
+  border-color: gray;
+  border-width: 0 1px 1px 0;
+  border-style: solid;
+  max-width: 400px;
+  padding: 5px;
+  word-wrap: break-word;
+}
+
+.userlist-two {
+  background-color: antiquewhite;
+}
+
+.userlist-four {
+  background-color: orange;
+}
+
+.userlist-lots {
+  background-color: lightcoral;
+}
