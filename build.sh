@@ -25,6 +25,7 @@ java -jar ../soy-latest/SoyToJsSrcCompiler.jar \
 echo "***Running closurebuilder***"
 ../closure-library/closure/bin/build/closurebuilder.py \
     --root=../closure-library/ \
+    --root=../soy-latest/ \
     --root=javascript/ \
     --root=genfiles/soy-gen \
     --namespace="calendarmailer.picker.App" \
@@ -33,6 +34,7 @@ echo "***Running closurebuilder***"
     > genfiles/closure-gen/pickerapp.js
 ../closure-library/closure/bin/build/closurebuilder.py \
     --root=../closure-library/ \
+    --root=../soy-latest/ \
     --root=javascript/ \
     --root=genfiles/soy-gen \
     --namespace="calendarmailer.dashboard.App" \

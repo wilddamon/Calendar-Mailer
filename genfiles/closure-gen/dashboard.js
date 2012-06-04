@@ -12670,7 +12670,7 @@ goog.require('soy.StringBuilder');
  */
 calendarmailer.soy.userlist.all = function(opt_data, opt_sb) {
   var output = opt_sb || new soy.StringBuilder();
-  output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>Name</th><th>Total events</th><th>Event name</th><th>Event link</th><th>Event location</th><th>Start time</th><th>Event recurrence</th><th>User action</th></tr>');
+  output.append('<table id="userlist-table" class="userlist"><tbody><tr><th>email</th><th>TotalEvents</th><th>EventName</th><th>EventLink</th><th>EventLocation</th><th>StartTime</th><th>EventRecurrence</th><th>UserAction</th></tr>');
   var userList53 = opt_data.users;
   var userListLen53 = userList53.length;
   for (var userIndex53 = 0; userIndex53 < userListLen53; userIndex53++) {
@@ -20894,10 +20894,10 @@ calendarmailer.CalendarApi.objectNames_ = {
 
 /**
  * The maximum number of results to be returned in a single request.
- * @type {number=}
+ * @type {number}
  * @private
  */
-calendarmailer.CalendarApi.MAX_RESULTS_;
+calendarmailer.CalendarApi.MAX_RESULTS_ = 50;
 
 
 /**
@@ -21205,6 +21205,18 @@ calendarmailer.RRuleFormatter.XTH_STR_ = [
 
 
 /**
+ * String transform from a number to a string for the '-xth' (last, second to
+ * last).
+ * @type {!Array.<string>}
+ * @private
+ */
+calendarmailer.RRuleFormatter.MINUS_XTH_STR_ = [
+  'last',
+  'second to last'
+];
+
+
+/**
  * Prints a pretty version of the given rrule string.
  * @param {string} rruleStr The rrule string.
  * @return {string} The pretty human-readable version.
@@ -21245,10 +21257,19 @@ calendarmailer.RRuleFormatter.prototype.prettyPrint = function(rruleStr) {
   } else if (frequency ==
       calendarmailer.RRuleFormatter.FREQUENCY_STR_.MONTHLY) {
     if (dayStr) {
-      var weeknum = parseInt(dayStr[0], 10);
-      var day = dayStr.substr(1, 2);
+      var weeknum, day;
+      if (dayStr.length > 3) {
+        weeknum = parseInt(dayStr.substr(0, 2), 10);
+        day = dayStr.substr(2, 3);
+      } else {
+        var weeknum = parseInt(dayStr[0], 10);
+        var day = dayStr.substr(1, 2);
+      }
       buf.append(' on the ').
-          append(calendarmailer.RRuleFormatter.XTH_STR_[weeknum]).
+          append(weeknum >= 0 ?
+              // Subtract 1 so we are zero-indexed for strings.
+              calendarmailer.RRuleFormatter.XTH_STR_[weeknum - 1] :
+              calendarmailer.RRuleFormatter.MINUS_XTH_STR_[-(weeknum + 1)]).
           append(' ').
           append(calendarmailer.RRuleFormatter.DAY_STR_[day]);
     }
@@ -38964,6 +38985,7 @@ calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
   }, this);
 
   var keys = goog.object.getKeys(this.calendarIds_);
+  index = 0;
   if (this.calendar_.isInitialized()) {
     this.calendar_.getCalendarSummary(keys[0],
         goog.bind(this.handleCalendarResult_, this));
@@ -38984,15 +39006,16 @@ calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
  */
 calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
     result) {
-  var listEl = document.getElementById('userlist-calendarlist');
-  listEl.appendChild(goog.soy.renderAsFragment(
-      calendarmailer.soy.userlist.wrappedCalendarListRow, {
-        'calendar': result,
-        'numEvents': this.calendarIds_[result['id']]
-      }).firstChild.firstChild);
+  if (!result.status) {
+    var listEl = document.getElementById('userlist-calendarlist');
+    listEl.appendChild(goog.soy.renderAsFragment(
+        calendarmailer.soy.userlist.wrappedCalendarListRow, {
+          'calendar': result,
+          'numEvents': this.calendarIds_[result['id']]
+        }).firstChild.firstChild);
+  }
   var keys = goog.object.getKeys(this.calendarIds_);
-  var index = goog.array.indexOf(keys, result.id);
-  if (++index < this.calendarIds_.length) {
+  if (++index < keys.length) {
     this.calendar_.getCalendarSummary(keys[index],
         goog.bind(this.handleCalendarResult_, this));
   }

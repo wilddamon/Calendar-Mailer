@@ -23,6 +23,7 @@ class DashboardHandler(webapp.RequestHandler):
         cycle.cycle_id = cycle.key().name()
         cycles.append(cycle)
 
+    cycles.sort(key=lambda cycle: cycle.start_date, reverse=True)
     logging.info("Got cycles: " + str(cycles))
 
     template_values = {

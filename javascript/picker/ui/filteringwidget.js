@@ -12,11 +12,11 @@ goog.require('calendarmailer.soy.filteringwidget');
 goog.require('goog.dom.classes');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventType');
+goog.require('goog.soy');
 goog.require('goog.ui.Button');
 goog.require('goog.ui.Checkbox');
 goog.require('goog.ui.Component');
 goog.require('goog.ui.Textarea');
-goog.require('soy');
 
 
 
@@ -146,7 +146,7 @@ calendarmailer.picker.ui.FilteringWidget.prototype.textModified_ = false;
 calendarmailer.picker.ui.FilteringWidget.prototype.createDom = function() {
   var dom = this.getDomHelper();
 
-  var el = soy.renderAsElement(calendarmailer.soy.filteringwidget.all, {
+  var el = goog.soy.renderAsElement(calendarmailer.soy.filteringwidget.all, {
   });
   this.setElementInternal(el);
 

@@ -15,7 +15,7 @@ goog.require('calendarmailer.picker.ui.Picker');
  * @extends {calendarmailer.picker.ui.Picker}
  */
 calendarmailer.picker.ui.NameList = function() {
-  goog.base(this);
+  goog.base(this, 'Select people to mail');
 
   /**
    * The items in the list.
@@ -26,6 +26,14 @@ calendarmailer.picker.ui.NameList = function() {
 };
 goog.inherits(calendarmailer.picker.ui.NameList,
     calendarmailer.picker.ui.Picker);
+
+
+/** @override */
+calendarmailer.picker.ui.NameList.prototype.enterDocument = function() {
+  goog.base(this, 'enterDocument');
+
+  this.showTitle(true);
+};
 
 
 /** @override */

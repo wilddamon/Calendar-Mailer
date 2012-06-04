@@ -46,7 +46,11 @@ calendarmailer.picker.ui.Calendar.prototype.enterDocument = function() {
  * Sets the event list object.
  * @param {!Object} obj The object.
  */
-calendarmailer.picker.ui.Calendar.prototype.setListObject = function(obj) {
+calendarmailer.picker.ui.Calendar.prototype.addListObject = function(obj) {
+  // TODO: This is a defensive fix, make it better.
+  if (!obj.items) {
+    return;
+  }
   var items = [];
   for (var i = 0; i < obj.items.length; ++i) {
     var item = obj.items[i];
@@ -56,10 +60,12 @@ calendarmailer.picker.ui.Calendar.prototype.setListObject = function(obj) {
     }
   }
 
-  goog.array.sort(items, function(item1, item2) {
+  goog.array.extend(this.events_, items);
+  goog.array.removeDuplicates(this.events_);
+
+  goog.array.sort(this.events_, function(item1, item2) {
     return item1.created < item2.created;
   });
-  this.events_ = items;
 };
 
 
@@ -138,7 +144,7 @@ calendarmailer.picker.ui.Calendar.prototype.getUnendingRecurrence_ =
   }
   for (var i = 0; i < opt_recurrence.length; ++i) {
     if (!goog.string.contains(opt_recurrence[i], 'COUNT') &&
-        !goog.string.contains(opt_recurrence[i], 'UTNTIL')) {
+        !goog.string.contains(opt_recurrence[i], 'UNTIL')) {
       return true;
     }
   }

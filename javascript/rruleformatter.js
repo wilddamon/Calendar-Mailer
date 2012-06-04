@@ -75,6 +75,18 @@ calendarmailer.RRuleFormatter.XTH_STR_ = [
 
 
 /**
+ * String transform from a number to a string for the '-xth' (last, second to
+ * last).
+ * @type {!Array.<string>}
+ * @private
+ */
+calendarmailer.RRuleFormatter.MINUS_XTH_STR_ = [
+  'last',
+  'second to last'
+];
+
+
+/**
  * Prints a pretty version of the given rrule string.
  * @param {string} rruleStr The rrule string.
  * @return {string} The pretty human-readable version.
@@ -115,10 +127,19 @@ calendarmailer.RRuleFormatter.prototype.prettyPrint = function(rruleStr) {
   } else if (frequency ==
       calendarmailer.RRuleFormatter.FREQUENCY_STR_.MONTHLY) {
     if (dayStr) {
-      var weeknum = parseInt(dayStr[0], 10);
-      var day = dayStr.substr(1, 2);
+      var weeknum, day;
+      if (dayStr.length > 3) {
+        weeknum = parseInt(dayStr.substr(0, 2), 10);
+        day = dayStr.substr(2, 3);
+      } else {
+        var weeknum = parseInt(dayStr[0], 10);
+        var day = dayStr.substr(1, 2);
+      }
       buf.append(' on the ').
-          append(calendarmailer.RRuleFormatter.XTH_STR_[weeknum]).
+          append(weeknum >= 0 ?
+              // Subtract 1 so we are zero-indexed for strings.
+              calendarmailer.RRuleFormatter.XTH_STR_[weeknum - 1] :
+              calendarmailer.RRuleFormatter.MINUS_XTH_STR_[-(weeknum + 1)]).
           append(' ').
           append(calendarmailer.RRuleFormatter.DAY_STR_[day]);
     }

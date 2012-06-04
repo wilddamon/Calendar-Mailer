@@ -10,11 +10,11 @@ goog.provide('calendarmailer.picker.ui.Picker.EventType');
 goog.require('calendarmailer.soy.picker');
 goog.require('goog.dom.classes');
 goog.require('goog.events.Event');
+goog.require('goog.soy');
 goog.require('goog.ui.Button');
 goog.require('goog.ui.Checkbox');
 goog.require('goog.ui.Component');
 goog.require('goog.ui.Control');
-goog.require('soy');
 
 
 
@@ -106,7 +106,7 @@ calendarmailer.picker.ui.Picker.prototype.createDom = function() {
   var dom = this.getDomHelper();
   var items = this.getItems();
 
-  var el = soy.renderAsElement(calendarmailer.soy.picker.all, {
+  var el = goog.soy.renderAsElement(calendarmailer.soy.picker.all, {
     idprefix: this.getId(),
     items: items,
     title: this.title_
@@ -177,7 +177,7 @@ calendarmailer.picker.ui.Picker.prototype.addItem = function(item,
   var dom = this.getDomHelper();
 
   var pickerBoxes = dom.getElementByClass('picker-boxes', this.getElement());
-  var row = soy.renderAsElement(calendarmailer.soy.picker.row, {
+  var row = goog.soy.renderAsElement(calendarmailer.soy.picker.row, {
     idprefix: this.getId(),
     item: item
   });
@@ -315,8 +315,8 @@ calendarmailer.picker.ui.Picker.prototype.setEnabled = function(enabled) {
 calendarmailer.picker.ui.Picker.prototype.showBox = function(box, show) {
   box.setVisible(show);
   var label = this.getDomHelper().getElement(
-      this.getId() + '-' + box.getId() + '-label');
-  goog.dom.classes.enable(label, 'picker-label-hidden', !show);
+      this.getId() + '-' + box.getId() + '-label').parentElement;
+  goog.dom.classes.enable(label, 'picker-row-hidden', !show);
 
   if (!show && box.isChecked()) {
     box.setChecked(false);

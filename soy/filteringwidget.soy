@@ -14,18 +14,24 @@
   </div>
   <div id="filter-events" class="filter-section">
     <div class="filter-title">Filter events</div>
-    <div id="repeatingfilter" name="repeatingfilter"{sp}
-        class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div>
-    <label id="repeatingfilter-label" for="repeatingfilter"{sp}
-        class="checkbox-label">
-      Show repeating events only.
-    </label>
+    <div class="filter-box-row">
+      <div id="repeatingfilter" name="repeatingfilter"{sp}
+          class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div>
+      <label id="repeatingfilter-label" for="repeatingfilter"{sp}
+          class="checkbox-label">
+        Show repeating events only.
+      </label>
+    </div>
   </div>
   <div id="filter-select-control" class="filter-section">
     <div class="filter-title">Event selection global control</div>
-    <button class="filter-selectall">Select all visible events</button>
-    <button class="filter-selectnone">Deselect all visible events</button>
-    <button class="filter-submit">
+    <button class="filter-selectall filter-button action-button">
+      Select all visible events
+    </button>
+    <button class="filter-selectnone filter-button action-button">
+      Deselect all visible events
+    </button>
+    <button class="filter-submit filter-button primary-button">
       Add owners of all selected events to be mailed.
     </button>
   </div>

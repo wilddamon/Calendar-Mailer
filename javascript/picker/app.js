@@ -19,8 +19,9 @@ goog.require('goog.json');
 goog.require('goog.net.EventType');
 goog.require('goog.net.XhrIo');
 goog.require('goog.object');
+goog.require('goog.soy');
 goog.require('goog.string');
-goog.require('soy');
+goog.require('goog.style');
 
 
 
@@ -132,8 +133,9 @@ calendarmailer.picker.App = function() {
  * @private
  */
 calendarmailer.picker.App.prototype.handleCalendarApiReady_ = function() {
-  window.console.log('getting list...');
   this.calendar_.getCalendarList();
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', '');
 };
 
 
@@ -143,9 +145,14 @@ calendarmailer.picker.App.prototype.handleCalendarApiReady_ = function() {
  * @private
  */
 calendarmailer.picker.App.prototype.handleGetCalendarsResult_ = function(e) {
-  this.calendarListUi_.setListObject(e.result);
-  this.calendarListUi_.render(document.getElementById('calendars'));
-  this.calendarListUi_.setSubmitCaption('Get events for these calendars!');
+  this.calendarListUi_.addListObject(e.result);
+  if (e.result['nextPageToken']) {
+    this.calendar_.getCalendarList(e.result['nextPageToken']);
+  } else {
+    goog.style.setStyle(spinner, 'display', 'none');
+    this.calendarListUi_.render(document.getElementById('calendars'));
+    this.calendarListUi_.setSubmitCaption('Get events for these calendars!');
+  }
 };
 
 
@@ -158,6 +165,8 @@ calendarmailer.picker.App.prototype.handleCalendarListSubmit_ = function(e) {
   this.calendarListUi_.setEnabled(false);
   // Start loading the first calendar which is not loaded yet.
   this.getNextEvents_(e.items);
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', '');
 };
 
 
@@ -167,18 +176,22 @@ calendarmailer.picker.App.prototype.handleCalendarListSubmit_ = function(e) {
  * @private
  */
 calendarmailer.picker.App.prototype.handleGetEventsResult_ = function(e) {
-  this.calendarListUi_.setVisible(false);
-  this.filter_.setSectionVisible(
-      calendarmailer.picker.ui.FilteringWidget.SectionName.EVENTS);
+  var calendarUi = this.calendarEventUis_[e.id];
+  if (!calendarUi) {
+    calendarUi = new calendarmailer.picker.ui.Calendar(e.id, e.title);
+    this.calendarEventUis_[e.id] = calendarUi;
+  }
+  calendarUi.addListObject(e.result);
 
-  var calendarUi = new calendarmailer.picker.ui.Calendar(e.id, e.title);
-  calendarUi.setListObject(e.result);
-  this.calendarEventUis_[e.id] = calendarUi;
-  calendarUi.render(document.getElementById('eventpickers'));
-  calendarUi.setSubmitCaption('Mail the owners of these events!');
-  this.eventHandler_.listen(calendarUi,
-      calendarmailer.picker.ui.Picker.EventType.SUBMIT, this.handleAddNames_);
-  this.getNextEvents_(this.calendarListUi_.getSelectedItems());
+  if (e.result['nextPageToken']) {
+    this.calendar_.getCalendarEvents(e.id, e.title, e.result['nextPageToken']);
+  } else {
+    calendarUi.render(document.getElementById('eventpickers'));
+    calendarUi.setSubmitCaption('Mail the owners of these events!');
+    this.eventHandler_.listen(calendarUi,
+        calendarmailer.picker.ui.Picker.EventType.SUBMIT, this.handleAddNames_);
+    this.getNextEvents_(this.calendarListUi_.getSelectedItems());
+  }
 };
 
 
@@ -192,9 +205,15 @@ calendarmailer.picker.App.prototype.getNextEvents_ = function(calendars) {
   for (var i = 0; i < calendars.length; ++i) {
     if (!this.calendarEventUis_[calendars[i].id]) {
       this.calendar_.getCalendarEvents(calendars[i].id, calendars[i].title);
-      break;
+      return;
     }
   }
+  this.calendarListUi_.setVisible(false);
+  this.filter_.setSectionVisible(
+      calendarmailer.picker.ui.FilteringWidget.SectionName.EVENTS);
+
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', 'none');
 };
 
 
@@ -283,11 +302,27 @@ calendarmailer.picker.App.prototype.handleAddNames_ = function(e) {
 calendarmailer.picker.App.prototype.addNames_ = function(events) {
   for (var i = 0; i < events.length; ++i) {
     var event = events[i];
-    var displayName = event.creator.displayName ?
-        event.creator.displayName + ' (' + event.creator.email + ')' :
-        event.creator.email;
+    // Sometimes events don't appear to have a creator. If this is the case,
+    // log an error and continue. TODO: Log somewhere persistent and/or show a
+    // prompt for the admins to investigate.
+    if (!event.creator && !event.organizer) {
+      window.console.log('event without creator or organizer! ID: ' + event.id);
+      continue;
+    }
+    var displayName, id;
+    if (event.organizer) {
+      id = event.organizer.email;
+      displayName = event.organizer.displayName ?
+          event.organizer.displayName + ' (' + event.organizer.email + ')' :
+          event.organizer.email;
+    } else {
+      id = event.creator.email;
+      displayName = event.creator.displayName ?
+          event.creator.displayName + ' (' + event.creator.email + ')' :
+          event.creator.email;
+    }
     this.nameList_.addItem({
-      id: event.creator.email,
+      id: id,
       summary: displayName
     });
   }
@@ -301,8 +336,8 @@ calendarmailer.picker.App.prototype.addNames_ = function(events) {
 calendarmailer.picker.App.prototype.showNameList_ = function() {
   if (!this.nameList_.isInDocument()) {
     this.nameList_.render(document.getElementById('namelist'));
-    document.getElementById('email-preview').appendChild(soy.renderAsElement(
-        calendarmailer.soy.email.all, {}));
+    document.getElementById('email-preview').appendChild(
+        goog.soy.renderAsElement(calendarmailer.soy.email.all, {}));
   }
 };
 
@@ -354,11 +389,11 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
     // Sometimes events don't appear to have a creator. If this is the case,
     // log an error and continue. TODO: Log somewhere persistent and/or show a
     // prompt for the admins to investigate.
-    if (!event.creator) {
-      window.console.log('event without creator! ID: ' + event.id);
+    if (!event.creator && !event.organizer) {
+      window.console.log('event without creator or organizer! ID: ' + event.id);
       return;
     }
-    var owner = event.creator.email;
+    var owner = event.organizer ? event.organizer.email : event.creator.email;
     result.push({
       'owner': owner,
       'calendarId': calendarId,
