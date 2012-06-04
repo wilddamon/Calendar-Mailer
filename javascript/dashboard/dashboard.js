@@ -13,6 +13,9 @@ goog.require('goog.array');
 goog.require('goog.dom');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
+goog.require('goog.fs');
+goog.require('goog.fs.DirectoryEntry');
+goog.require('goog.fs.FileSaver');
 goog.require('goog.i18n.DateTimeFormat');
 goog.require('goog.json');
 goog.require('goog.net.XhrIo');
@@ -65,8 +68,6 @@ calendarmailer.dashboard.App = function() {
    */
   this.createCycleButton_ = new goog.ui.Button(null /* content */);
   this.createCycleButton_.decorate(document.getElementById('new-cycle-button'));
-  this.eventHandler_.listen(this.createCycleButton_,
-      goog.ui.Component.EventType.ACTION, this.handleNewCycleClick_);
 
   /**
    * The back button.
@@ -87,6 +88,15 @@ calendarmailer.dashboard.App = function() {
       'individual-add-button'));
 
   /**
+   * The export button.
+   * @type {!goog.ui.Button}
+   * @private
+   */
+  this.exportButton_ = new goog.ui.Button(null /* content */);
+  this.exportButton_.decorate(document.getElementById(
+      'export-csv'));
+
+  /**
    * A map of the ids of the calendars events were pulled from, along with the
    * number of events for that calendar.
    * @type {!Object.<number>}
@@ -105,7 +115,11 @@ calendarmailer.dashboard.App = function() {
       listen(this.backButton_, goog.ui.Component.EventType.ACTION,
           this.handleBackClick_).
       listen(this.addEventsButton_, goog.ui.Component.EventType.ACTION,
-          this.handleAddClick_);
+          this.handleAddClick_).
+      listen(this.createCycleButton_,
+          goog.ui.Component.EventType.ACTION, this.handleNewCycleClick_).
+      listen(this.exportButton_, goog.ui.Component.EventType.ACTION,
+          this.handleExport_);
 
   var cyclenodes = document.getElementsByClassName('cycle');
   for (var i = 0; i < cyclenodes.length; ++i) {
@@ -155,7 +169,6 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
 
   goog.style.setStyle(this.allCyclesEl_, 'display', 'none');
   goog.style.setStyle(this.oneCycleEl_, 'display', '');
-
 };
 
 
@@ -295,6 +308,70 @@ calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
     this.calendar_.getCalendarSummary(keys[index],
         goog.bind(this.handleCalendarResult_, this));
   }
+};
+
+
+/**
+ * Handles a click on the export button.
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.handleExport_ = function() {
+  //this.userToEventArray_
+  var resultArr = [];
+  resultArr.push('email,TotalEvents,EventName,EventLink,EventLocation,' +
+      'StartTime,EventRecurrence,UserAction');
+
+  goog.object.forEach(this.userToEventArray_, function(eventArr, email) {
+    var row = [];
+    var length = eventArr.length;
+    goog.array.forEach(eventArr, function(event) {
+      row.push(email);
+      row.push(length);
+      row.push(event['summary']);
+      row.push(event['link']);
+      row.push(event['location']);
+      row.push(event['startTime']);
+      row.push(event['recurrence'].join(','));
+      row.push(event['state']);
+    }, this);
+    resultArr.push('"' + row.join('","') + '"');
+  }, this);
+
+  var result = resultArr.join('\n');
+  var fs = goog.fs.getTemporary(1024 * 1024);
+  fs.addCallback(function(fs) {
+    var fileEntry = fs.getRoot().getFile('calendarmailer-data.csv',
+        goog.fs.DirectoryEntry.Behavior.CREATE);
+    fileEntry.addCallback(function(file) {
+      var fileWriter = file.createWriter();
+      fileWriter.addCallback(
+          goog.bind(this.handleWriterReady_, this, result, file));
+    }, this);
+    fileEntry.addErrback(function(er) {
+      // TODO: Display this to the user.
+      window.console.log(er);
+    });
+  }, this);
+};
+
+
+/**
+ * Handles the file writer becoming ready.
+ * @param {string} result The contents to write to the file.
+ * @param {!goog.fs.FileEntry} file The file entry for the file.
+ * @param {!goog.fs.FileWriter} writer The file writer.
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.
+    handleWriterReady_ = function(result, file, writer) {
+  var bb = window.BlobBuilder ? new BlobBuilder() : new WebKitBlobBuilder();
+  bb.append(result);
+  writer.truncate(1);
+  this.eventHandler_.listenOnce(writer, goog.fs.FileSaver.EventType.WRITE_END,
+      function() {
+        writer.write(bb.getBlob('text/plain'));
+        window.location.href = file.toUrl();
+      }, this);
 };
 
 

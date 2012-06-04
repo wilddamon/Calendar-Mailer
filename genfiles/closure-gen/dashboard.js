@@ -31170,6 +31170,1798 @@ goog.ui.registry.setDecoratorByClassName(goog.ui.ButtonRenderer.CSS_CLASS,
     function() {
       return new goog.ui.Button(null);
     });
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A wrapper for the HTML5 FileError object.
+ *
+ */
+
+goog.provide('goog.fs.Error');
+goog.provide('goog.fs.Error.ErrorCode');
+
+goog.require('goog.debug.Error');
+goog.require('goog.string');
+
+
+
+/**
+ * A filesystem error. Since the filesystem API is asynchronous, stack traces
+ * are less useful for identifying where errors come from, so this includes a
+ * large amount of metadata in the message.
+ *
+ * @param {number} code The error code for the error.
+ * @param {string} action The action being undertaken when the error was raised.
+ * @constructor
+ * @extends {goog.debug.Error}
+ */
+goog.fs.Error = function(code, action) {
+  goog.base(this, goog.string.subs('Error %s: %s', action,
+                                   goog.fs.Error.getDebugMessage(code)));
+  this.code = /** @type {goog.fs.Error.ErrorCode} */ (code);
+};
+goog.inherits(goog.fs.Error, goog.debug.Error);
+
+
+/**
+ * Error codes for file errors.
+ * @see http://www.w3.org/TR/file-system-api/#idl-def-FileException
+ *
+ * @enum {number}
+ */
+goog.fs.Error.ErrorCode = {
+  NOT_FOUND: 1,
+  SECURITY: 2,
+  ABORT: 3,
+  NOT_READABLE: 4,
+  ENCODING: 5,
+  NO_MODIFICATION_ALLOWED: 6,
+  INVALID_STATE: 7,
+  SYNTAX: 8,
+  INVALID_MODIFICATION: 9,
+  QUOTA_EXCEEDED: 10,
+  TYPE_MISMATCH: 11,
+  PATH_EXISTS: 12
+};
+
+
+/**
+ * @param {number} errorCode The error code for the error.
+ * @return {string} A debug message for the given error code. These messages are
+ *     for debugging only and are not localized.
+ */
+goog.fs.Error.getDebugMessage = function(errorCode) {
+  switch (errorCode) {
+    case goog.fs.Error.ErrorCode.NOT_FOUND:
+      return 'File or directory not found';
+    case goog.fs.Error.ErrorCode.SECURITY:
+      return 'Insecure or disallowed operation';
+    case goog.fs.Error.ErrorCode.ABORT:
+      return 'Operation aborted';
+    case goog.fs.Error.ErrorCode.NOT_READABLE:
+      return 'File or directory not readable';
+    case goog.fs.Error.ErrorCode.ENCODING:
+      return 'Invalid encoding';
+    case goog.fs.Error.ErrorCode.NO_MODIFICATION_ALLOWED:
+      return 'Cannot modify file or directory';
+    case goog.fs.Error.ErrorCode.INVALID_STATE:
+      return 'Invalid state';
+    case goog.fs.Error.ErrorCode.SYNTAX:
+      return 'Invalid line-ending specifier';
+    case goog.fs.Error.ErrorCode.INVALID_MODIFICATION:
+      return 'Invalid modification';
+    case goog.fs.Error.ErrorCode.QUOTA_EXCEEDED:
+      return 'Quota exceeded';
+    case goog.fs.Error.ErrorCode.TYPE_MISMATCH:
+      return 'Invalid filetype';
+    case goog.fs.Error.ErrorCode.PATH_EXISTS:
+      return 'File or directory already exists at specified path';
+    default:
+      return 'Unrecognized error';
+  }
+};
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A wrapper for the HTML5 File ProgressEvent objects.
+ *
+ */
+goog.provide('goog.fs.ProgressEvent');
+
+goog.require('goog.events.Event');
+
+
+
+/**
+ * A wrapper for the progress events emitted by the File APIs.
+ *
+ * @param {!ProgressEvent} event The underlying event object.
+ * @param {!Object} target The file access object emitting the event.
+ * @extends {goog.events.Event}
+ * @constructor
+ */
+goog.fs.ProgressEvent = function(event, target) {
+  goog.base(this, event.type, target);
+
+  /**
+   * The underlying event object.
+   * @type {!ProgressEvent}
+   * @private
+   */
+  this.event_ = event;
+};
+goog.inherits(goog.fs.ProgressEvent, goog.events.Event);
+
+
+/**
+ * @return {boolean} Whether or not the total size of the of the file being
+ *     saved is known.
+ */
+goog.fs.ProgressEvent.prototype.isLengthComputable = function() {
+  return this.event_.lengthComputable;
+};
+
+
+/**
+ * @return {number} The number of bytes saved so far.
+ */
+goog.fs.ProgressEvent.prototype.getLoaded = function() {
+  return this.event_.loaded;
+};
+
+
+/**
+ * @return {number} The total number of bytes in the file being saved.
+ */
+goog.fs.ProgressEvent.prototype.getTotal = function() {
+  return this.event_.total;
+};
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A wrapper for the HTML5 FileSaver object.
+ *
+ */
+
+goog.provide('goog.fs.FileSaver');
+goog.provide('goog.fs.FileSaver.EventType');
+goog.provide('goog.fs.FileSaver.ProgressEvent');
+goog.provide('goog.fs.FileSaver.ReadyState');
+
+goog.require('goog.events.Event');
+goog.require('goog.events.EventTarget');
+goog.require('goog.fs.Error');
+goog.require('goog.fs.ProgressEvent');
+
+
+
+/**
+ * An object for monitoring the saving of files. This emits ProgressEvents of
+ * the types listed in {@link goog.fs.FileSaver.EventType}.
+ *
+ * This should not be instantiated directly. Instead, its subclass
+ * {@link goog.fs.FileWriter} should be accessed via
+ * {@link goog.fs.FileEntry#createWriter}.
+ *
+ * @param {!FileSaver} fileSaver The underlying FileSaver object.
+ * @constructor
+ * @extends {goog.events.EventTarget}
+ */
+goog.fs.FileSaver = function(fileSaver) {
+  goog.base(this);
+
+  /**
+   * The underlying FileSaver object.
+   *
+   * @type {!FileSaver}
+   * @private
+   */
+  this.saver_ = fileSaver;
+
+  this.saver_.onwritestart = goog.bind(this.dispatchProgressEvent_, this);
+  this.saver_.onprogress = goog.bind(this.dispatchProgressEvent_, this);
+  this.saver_.onwrite = goog.bind(this.dispatchProgressEvent_, this);
+  this.saver_.onabort = goog.bind(this.dispatchProgressEvent_, this);
+  this.saver_.onerror = goog.bind(this.dispatchProgressEvent_, this);
+  this.saver_.onwriteend = goog.bind(this.dispatchProgressEvent_, this);
+};
+goog.inherits(goog.fs.FileSaver, goog.events.EventTarget);
+
+
+/**
+ * Possible states for a FileSaver.
+ *
+ * @enum {number}
+ */
+goog.fs.FileSaver.ReadyState = {
+  /**
+   * The object has been constructed, but there is no pending write.
+   */
+  INIT: 0,
+  /**
+   * Data is being written.
+   */
+  WRITING: 1,
+  /**
+   * The data has been written to the file, the write was aborted, or an error
+   * occurred.
+   */
+  DONE: 2
+};
+
+
+/**
+ * Events emitted by a FileSaver.
+ *
+ * @enum {string}
+ */
+goog.fs.FileSaver.EventType = {
+  /**
+   * Emitted when the writing begins. readyState will be WRITING.
+   */
+  WRITE_START: 'writestart',
+  /**
+   * Emitted when progress has been made in saving the file. readyState will be
+   * WRITING.
+   */
+  PROGRESS: 'progress',
+  /**
+   * Emitted when the data has been successfully written. readyState will be
+   * WRITING.
+   */
+  WRITE: 'write',
+  /**
+   * Emitted when the writing has been aborted. readyState will be WRITING.
+   */
+  ABORT: 'abort',
+  /**
+   * Emitted when an error is encountered or the writing has been aborted.
+   * readyState will be WRITING.
+   */
+  ERROR: 'error',
+  /**
+   * Emitted when the writing is finished, whether successfully or not.
+   * readyState will be DONE.
+   */
+  WRITE_END: 'writeend'
+};
+
+
+/**
+ * Abort the writing of the file.
+ */
+goog.fs.FileSaver.prototype.abort = function() {
+  try {
+    this.saver_.abort();
+  } catch (e) {
+    throw new goog.fs.Error(e.code, 'aborting save');
+  }
+};
+
+
+/**
+ * @return {goog.fs.FileSaver.ReadyState} The current state of the FileSaver.
+ */
+goog.fs.FileSaver.prototype.getReadyState = function() {
+  return /** @type {goog.fs.FileSaver.ReadyState} */ (this.saver_.readyState);
+};
+
+
+/**
+ * @return {goog.fs.Error} The error encountered while writing, if any.
+ */
+goog.fs.FileSaver.prototype.getError = function() {
+  return this.saver_.error &&
+      new goog.fs.Error(this.saver_.error.code, 'saving file');
+};
+
+
+/**
+ * Wrap a progress event emitted by the underlying file saver and re-emit it.
+ *
+ * @param {!ProgressEvent} event The underlying event.
+ * @private
+ */
+goog.fs.FileSaver.prototype.dispatchProgressEvent_ = function(event) {
+  this.dispatchEvent(new goog.fs.ProgressEvent(event, this));
+};
+
+
+/** @override */
+goog.fs.FileSaver.prototype.disposeInternal = function() {
+  delete this.saver_;
+  goog.base(this, 'disposeInternal');
+};
+
+
+/**
+ * A wrapper for the progress events emitted by the FileSaver.
+ *
+ * @deprecated Use {goog.fs.ProgressEvent}.
+ */
+goog.fs.FileSaver.ProgressEvent = goog.fs.ProgressEvent;
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A wrapper for the HTML5 FileWriter object.
+ *
+ * When adding or modifying functionality in this namespace, be sure to update
+ * the mock counterparts in goog.testing.fs.
+ *
+ */
+
+goog.provide('goog.fs.FileWriter');
+
+goog.require('goog.fs.Error');
+goog.require('goog.fs.FileSaver');
+
+
+
+/**
+ * An object for monitoring the saving of files, as well as other fine-grained
+ * writing operations.
+ *
+ * This should not be instantiated directly. Instead, it should be accessed via
+ * {@link goog.fs.FileEntry#createWriter}.
+ *
+ * @param {!FileWriter} writer The underlying FileWriter object.
+ * @constructor
+ * @extends {goog.fs.FileSaver}
+ */
+goog.fs.FileWriter = function(writer) {
+  goog.base(this, writer);
+
+  /**
+   * The underlying FileWriter object.
+   *
+   * @type {!FileWriter}
+   * @private
+   */
+  this.writer_ = writer;
+};
+goog.inherits(goog.fs.FileWriter, goog.fs.FileSaver);
+
+
+/**
+ * @return {number} The byte offset at which the next write will occur.
+ */
+goog.fs.FileWriter.prototype.getPosition = function() {
+  return this.writer_.position;
+};
+
+
+/**
+ * @return {number} The length of the file.
+ */
+goog.fs.FileWriter.prototype.getLength = function() {
+  return this.writer_.length;
+};
+
+
+/**
+ * Write data to the file.
+ *
+ * @param {!Blob} blob The data to write.
+ */
+goog.fs.FileWriter.prototype.write = function(blob) {
+  try {
+    this.writer_.write(blob);
+  } catch (e) {
+    throw new goog.fs.Error(e.code, 'writing file');
+  }
+};
+
+
+/**
+ * Set the file position at which the next write will occur.
+ *
+ * @param {number} offset An absolute byte offset into the file.
+ */
+goog.fs.FileWriter.prototype.seek = function(offset) {
+  try {
+    this.writer_.seek(offset);
+  } catch (e) {
+    throw new goog.fs.Error(e.code, 'seeking in file');
+  }
+};
+
+
+/**
+ * Changes the length of the file to that specified.
+ *
+ * @param {number} size The new size of the file, in bytes.
+ */
+goog.fs.FileWriter.prototype.truncate = function(size) {
+  try {
+    this.writer_.truncate(size);
+  } catch (e) {
+    throw new goog.fs.Error(e.code, 'truncating file');
+  }
+};
+// Copyright 2008 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Utilities for creating functions. Loosely inspired by the
+ * java classes: http://go/functions.java and http://go/predicate.java.
+ *
+ * @author nicksantos@google.com (Nick Santos)
+ */
+
+
+goog.provide('goog.functions');
+
+
+/**
+ * Creates a function that always returns the same value.
+ * @param {*} retValue The value to return.
+ * @return {!Function} The new function.
+ */
+goog.functions.constant = function(retValue) {
+  return function() {
+    return retValue;
+  };
+};
+
+
+/**
+ * Always returns false.
+ * @type {function(...): boolean}
+ */
+goog.functions.FALSE = goog.functions.constant(false);
+
+
+/**
+ * Always returns true.
+ * @type {function(...): boolean}
+ */
+goog.functions.TRUE = goog.functions.constant(true);
+
+
+/**
+ * Always returns NULL.
+ * @type {function(...): null}
+ */
+goog.functions.NULL = goog.functions.constant(null);
+
+
+/**
+ * A simple function that returns the first argument of whatever is passed
+ * into it.
+ * @param {*=} opt_returnValue The single value that will be returned.
+ * @param {...*} var_args Optional trailing arguments. These are ignored.
+ * @return {?} The first argument passed in, or undefined if nothing was passed.
+ *     We can't know the type -- just pass it along without type.
+ */
+goog.functions.identity = function(opt_returnValue, var_args) {
+  return opt_returnValue;
+};
+
+
+/**
+ * Creates a function that always throws an error with the given message.
+ * @param {string} message The error message.
+ * @return {!Function} The error-throwing function.
+ */
+goog.functions.error = function(message) {
+  return function() {
+    throw Error(message);
+  };
+};
+
+
+/**
+ * Given a function, create a function that silently discards all additional
+ * arguments.
+ * @param {Function} f The original function.
+ * @return {!Function} A version of f that discards its arguments.
+ */
+goog.functions.lock = function(f) {
+  return function() {
+    return f.call(this);
+  };
+};
+
+
+/**
+ * Given a function, create a new function that swallows its return value
+ * and replaces it with a new one.
+ * @param {Function} f A function.
+ * @param {*} retValue A new return value.
+ * @return {!Function} A new function.
+ */
+goog.functions.withReturnValue = function(f, retValue) {
+  return goog.functions.sequence(f, goog.functions.constant(retValue));
+};
+
+
+/**
+ * Creates the composition of the functions passed in.
+ * For example, (goog.functions.compose(f, g))(a) is equivalent to f(g(a)).
+ * @param {...Function} var_args A list of functions.
+ * @return {!Function} The composition of all inputs.
+ */
+goog.functions.compose = function(var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    var result;
+    if (length) {
+      result = functions[length - 1].apply(this, arguments);
+    }
+
+    for (var i = length - 2; i >= 0; i--) {
+      result = functions[i].call(this, result);
+    }
+    return result;
+  };
+};
+
+
+/**
+ * Creates a function that calls the functions passed in in sequence, and
+ * returns the value of the last function. For example,
+ * (goog.functions.sequence(f, g))(x) is equivalent to f(x),g(x).
+ * @param {...Function} var_args A list of functions.
+ * @return {!Function} A function that calls all inputs in sequence.
+ */
+goog.functions.sequence = function(var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    var result;
+    for (var i = 0; i < length; i++) {
+      result = functions[i].apply(this, arguments);
+    }
+    return result;
+  };
+};
+
+
+/**
+ * Creates a function that returns true if each of its components evaluates
+ * to true. The components are evaluated in order, and the evaluation will be
+ * short-circuited as soon as a function returns false.
+ * For example, (goog.functions.and(f, g))(x) is equivalent to f(x) && g(x).
+ * @param {...Function} var_args A list of functions.
+ * @return {!Function} A function that ANDs its component functions.
+ */
+goog.functions.and = function(var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    for (var i = 0; i < length; i++) {
+      if (!functions[i].apply(this, arguments)) {
+        return false;
+      }
+    }
+    return true;
+  };
+};
+
+
+/**
+ * Creates a function that returns true if any of its components evaluates
+ * to true. The components are evaluated in order, and the evaluation will be
+ * short-circuited as soon as a function returns true.
+ * For example, (goog.functions.or(f, g))(x) is equivalent to f(x) || g(x).
+ * @param {...Function} var_args A list of functions.
+ * @return {!Function} A function that ORs its component functions.
+ */
+goog.functions.or = function(var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    for (var i = 0; i < length; i++) {
+      if (functions[i].apply(this, arguments)) {
+        return true;
+      }
+    }
+    return false;
+  };
+};
+
+
+/**
+ * Creates a function that returns the Boolean opposite of a provided function.
+ * For example, (goog.functions.not(f))(x) is equivalent to !f(x).
+ * @param {!Function} f The original function.
+ * @return {!Function} A function that delegates to f and returns opposite.
+ */
+goog.functions.not = function(f) {
+  return function() {
+    return !f.apply(this, arguments);
+  };
+};
+
+
+/**
+ * Generic factory function to construct an object given the constructor
+ * and the arguments. Intended to be bound to create object factories.
+ *
+ * Callers should cast the result to the appropriate type for proper type
+ * checking by the compiler.
+ * @param {!Function} constructor The constructor for the Object.
+ * @param {...*} var_args The arguments to be passed to the constructor.
+ * @return {!Object} A new instance of the class given in {@code constructor}.
+ */
+goog.functions.create = function(constructor, var_args) {
+  /** @constructor */
+  var temp = function() {};
+  temp.prototype = constructor.prototype;
+
+  // obj will have constructor's prototype in its chain and
+  // 'obj instanceof constructor' will be true.
+  var obj = new temp();
+
+  // obj is initialized by constructor.
+  // arguments is only array-like so lacks shift(), but can be used with
+  // the Array prototype function.
+  constructor.apply(obj, Array.prototype.slice.call(arguments, 1));
+  return obj;
+};
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Wrappers for HTML5 Entry objects. These are all in the same
+ * file to avoid circular dependency issues.
+ *
+ * When adding or modifying functionality in this namespace, be sure to update
+ * the mock counterparts in goog.testing.fs.
+ *
+ */
+
+goog.provide('goog.fs.DirectoryEntry');
+goog.provide('goog.fs.DirectoryEntry.Behavior');
+goog.provide('goog.fs.Entry');
+goog.provide('goog.fs.FileEntry');
+
+goog.require('goog.array');
+goog.require('goog.async.Deferred');
+goog.require('goog.fs.Error');
+goog.require('goog.fs.FileWriter');
+goog.require('goog.functions');
+goog.require('goog.string');
+
+
+/**
+ * The abstract class for entries in the filesystem.
+ *
+ * @param {!goog.fs.FileSystem} fs The wrapped filesystem.
+ * @param {!Entry} entry The underlying Entry object.
+ * @constructor
+ */
+goog.fs.Entry = function(fs, entry) {
+  /**
+   * The wrapped filesystem.
+   *
+   * @type {!goog.fs.FileSystem}
+   * @private
+   */
+  this.fs_ = fs;
+
+  /**
+   * The underlying Entry object.
+   *
+   * @type {!Entry}
+   * @private
+   */
+  this.entry_ = entry;
+};
+
+
+/**
+ * @return {boolean} Whether or not this entry is a file.
+ */
+goog.fs.Entry.prototype.isFile = function() {
+  return this.entry_.isFile;
+};
+
+
+/**
+ * @return {boolean} Whether or not this entry is a directory.
+ */
+goog.fs.Entry.prototype.isDirectory = function() {
+  return this.entry_.isDirectory;
+};
+
+
+/**
+ * @return {string} The name of this entry.
+ */
+goog.fs.Entry.prototype.getName = function() {
+  return this.entry_.name;
+};
+
+
+/**
+ * @return {string} The full path to this entry.
+ */
+goog.fs.Entry.prototype.getFullPath = function() {
+  return this.entry_.fullPath;
+};
+
+
+/**
+ * @return {!goog.fs.FileSystem} The filesystem backing this entry.
+ */
+goog.fs.Entry.prototype.getFileSystem = function() {
+  return this.fs_;
+};
+
+
+/**
+ * Retrieves the last modified date for this entry.
+ *
+ * @return {!goog.async.Deferred} The deferred Date for this entry. If an error
+ *     occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.Entry.prototype.getLastModified = function() {
+  var d = new goog.async.Deferred();
+
+  this.entry_.getMetadata(
+      function(metadata) { d.callback(metadata.modificationTime); },
+      goog.bind(function(err) {
+        var msg = 'retrieving last modified date for ' + this.getFullPath();
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Move this entry to a new location.
+ *
+ * @param {!goog.fs.DirectoryEntry} parent The new parent directory.
+ * @param {string=} opt_newName The new name of the entry. If omitted, the entry
+ *     retains its original name.
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.FileEntry} or
+ *     {@link goog.fs.DirectoryEntry} for the new entry. If an error occurs, the
+ *     errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.Entry.prototype.moveTo = function(parent, opt_newName) {
+  var d = new goog.async.Deferred();
+  this.entry_.moveTo(
+      parent.dir_, opt_newName,
+      goog.bind(function(entry) { d.callback(this.wrapEntry(entry)); }, this),
+      goog.bind(function(err) {
+        var msg = 'moving ' + this.getFullPath() + ' into ' +
+            parent.getFullPath() +
+            (opt_newName ? ', renaming to ' + opt_newName : '');
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Copy this entry to a new location.
+ *
+ * @param {!goog.fs.DirectoryEntry} parent The new parent directory.
+ * @param {string=} opt_newName The name of the new entry. If omitted, the new
+ *     entry has the same name as the original.
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.FileEntry} or
+ *     {@link goog.fs.DirectoryEntry} for the new entry. If an error occurs, the
+ *     errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.Entry.prototype.copyTo = function(parent, opt_newName) {
+  var d = new goog.async.Deferred();
+  this.entry_.copyTo(
+      parent.dir_, opt_newName,
+      goog.bind(function(entry) { d.callback(this.wrapEntry(entry)); }, this),
+      goog.bind(function(err) {
+        var msg = 'copying ' + this.getFullPath() + ' into ' +
+            parent.getFullPath() +
+            (opt_newName ? ', renaming to ' + opt_newName : '');
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Wrap an HTML5 entry object in an appropriate subclass instance.
+ *
+ * @param {!Entry} entry The underlying Entry object.
+ * @return {!goog.fs.Entry} The appropriate subclass wrapper.
+ * @protected
+ */
+goog.fs.Entry.prototype.wrapEntry = function(entry) {
+  return entry.isFile ?
+      new goog.fs.FileEntry(this.fs_, /** @type {!FileEntry} */ (entry)) :
+      new goog.fs.DirectoryEntry(
+          this.fs_, /** @type {!DirectoryEntry} */ (entry));
+};
+
+
+/**
+ * Get the URL for this file.
+ *
+ * @param {string=} opt_mimeType The MIME type that will be served for the URL.
+ * @return {string} The URL.
+ */
+goog.fs.Entry.prototype.toUrl = function(opt_mimeType) {
+  return this.entry_.toURL(opt_mimeType);
+};
+
+
+/**
+ * Get the URI for this file.
+ *
+ * @deprecated Use {@link #toUrl} instead.
+ * @param {string=} opt_mimeType The MIME type that will be served for the URI.
+ * @return {string} The URI.
+ */
+goog.fs.Entry.prototype.toUri = goog.fs.Entry.prototype.toUrl;
+
+
+/**
+ * Remove this entry.
+ *
+ * @return {!goog.async.Deferred} A deferred object. If the removal succeeds,
+ *     the callback is valled with no value. If an error occurs, the errback is
+ *     called a {@link goog.fs.Error}.
+ */
+goog.fs.Entry.prototype.remove = function() {
+  var d = new goog.async.Deferred();
+  this.entry_.remove(
+      goog.bind(d.callback, d),
+      goog.bind(function(err) {
+        var msg = 'removing ' + this.getFullPath();
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Gets the parent directory.
+ *
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.DirectoryEntry}.
+ *     If an error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.Entry.prototype.getParent = function() {
+  var d = new goog.async.Deferred();
+  this.entry_.getParent(
+      goog.bind(function(parent) {
+        d.callback(new goog.fs.DirectoryEntry(this.fs_, parent));
+      }, this),
+      goog.bind(function(err) {
+        var msg = 'getting parent of ' + this.getFullPath();
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+
+/**
+ * A directory in a local FileSystem.
+ *
+ * This should not be instantiated directly. Instead, it should be accessed via
+ * {@link goog.fs.FileSystem#getRoot} or
+ * {@link goog.fs.DirectoryEntry#getDirectoryEntry}.
+ *
+ * @param {!goog.fs.FileSystem} fs The wrapped filesystem.
+ * @param {!DirectoryEntry} dir The underlying DirectoryEntry object.
+ * @constructor
+ * @extends {goog.fs.Entry}
+ */
+goog.fs.DirectoryEntry = function(fs, dir) {
+  goog.base(this, fs, dir);
+
+  /**
+   * The underlying DirectoryEntry object.
+   *
+   * @type {!DirectoryEntry}
+   * @private
+   */
+  this.dir_ = dir;
+};
+goog.inherits(goog.fs.DirectoryEntry, goog.fs.Entry);
+
+
+/**
+ * Behaviors for getting files and directories.
+ * @enum {number}
+ */
+goog.fs.DirectoryEntry.Behavior = {
+  /**
+   * Get the file if it exists, error out if it doesn't.
+   */
+  DEFAULT: 1,
+  /**
+   * Get the file if it exists, create it if it doesn't.
+   */
+  CREATE: 2,
+  /**
+   * Error out if the file exists, create it if it doesn't.
+   */
+  CREATE_EXCLUSIVE: 3
+};
+
+
+/**
+ * Get a file in the directory.
+ *
+ * @param {string} path The path to the file, relative to this directory.
+ * @param {goog.fs.DirectoryEntry.Behavior=} opt_behavior The behavior for
+ *     handling an existing file, or the lack thereof.
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.FileEntry}. If an
+ *     error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.DirectoryEntry.prototype.getFile = function(path, opt_behavior) {
+  var d = new goog.async.Deferred();
+  this.dir_.getFile(
+      path, this.getOptions_(opt_behavior),
+      goog.bind(function(entry) {
+        d.callback(new goog.fs.FileEntry(this.fs_, entry));
+      }, this),
+      goog.bind(function(err) {
+        var msg = 'loading file ' + path + ' from ' + this.getFullPath();
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Get a directory within this directory.
+ *
+ * @param {string} path The path to the directory, relative to this directory.
+ * @param {goog.fs.DirectoryEntry.Behavior=} opt_behavior The behavior for
+ *     handling an existing directory, or the lack thereof.
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.DirectoryEntry}.
+ *     If an error occurs, the errback is called a {@link goog.fs.Error}.
+ */
+goog.fs.DirectoryEntry.prototype.getDirectory = function(path, opt_behavior) {
+  var d = new goog.async.Deferred();
+  this.dir_.getDirectory(
+      path, this.getOptions_(opt_behavior),
+      goog.bind(function(entry) {
+        d.callback(new goog.fs.DirectoryEntry(this.fs_, entry));
+      }, this),
+      goog.bind(function(err) {
+        var msg = 'loading directory ' + path + ' from ' + this.getFullPath();
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Opens the directory for the specified path, creating the directory and any
+ * intermediate directories as necessary.
+ *
+ * @param {string} path The directory path to create. May be absolute or
+ *     relative to the current directory. The parent directory ".." and current
+ *     directory "." are supported.
+ * @return {!goog.async.Deferred} A deferred {@link goog.fs.DirectoryEntry} for
+ *     the requested path. If an error occurs, the errback is called with a
+ *     {@link goog.fs.Error}.
+ */
+goog.fs.DirectoryEntry.prototype.createPath = function(path) {
+  // If the path begins at the root, reinvoke createPath on the root directory.
+  if (goog.string.startsWith(path, '/')) {
+    var root = this.getFileSystem().getRoot();
+    if (this.getFullPath() != root.getFullPath()) {
+      return root.createPath(path);
+    }
+  }
+
+  // Filter out any empty path components caused by '//' or a leading slash.
+  var parts = goog.array.filter(path.split('/'), goog.functions.identity);
+  var existed = [];
+
+  function getNextDirectory(dir) {
+    if (!parts.length) {
+      return goog.async.Deferred.succeed(dir);
+    }
+
+    var def;
+    var nextDir = parts.shift();
+
+    if (nextDir == '..') {
+      def = dir.getParent();
+    } else if (nextDir == '.') {
+      def = goog.async.Deferred.succeed(dir);
+    } else {
+      def = dir.getDirectory(nextDir, goog.fs.DirectoryEntry.Behavior.CREATE);
+    }
+    return def.addCallback(getNextDirectory);
+  }
+
+  return getNextDirectory(this);
+};
+
+
+/**
+ * Gets a list of all entries in this directory.
+ *
+ * @return {!goog.async.Deferred} The deferred list of {@link goog.fs.Entry}
+ *     results. If an error occurs, the errback is called with a
+ *     {@link goog.fs.Error}.
+ */
+goog.fs.DirectoryEntry.prototype.listDirectory = function() {
+  var d = new goog.async.Deferred();
+  var reader = this.dir_.createReader();
+  var results = [];
+
+  var errorCallback = goog.bind(function(err) {
+    var msg = 'listing directory ' + this.getFullPath();
+    d.errback(new goog.fs.Error(err.code, msg));
+  }, this);
+
+  var successCallback = goog.bind(function(entries) {
+    if (entries.length) {
+      for (var i = 0, entry; entry = entries[i]; i++) {
+        results.push(this.wrapEntry(entry));
+      }
+      reader.readEntries(successCallback, errorCallback);
+    } else {
+      d.callback(results);
+    }
+  }, this);
+
+  reader.readEntries(successCallback, errorCallback);
+  return d;
+};
+
+
+/**
+ * Removes this directory and all its contents.
+ *
+ * @return {!goog.async.Deferred} A deferred object. If the removal succeeds,
+ *     the callback is valled with no value. If an error occurs, the errback is
+ *     called a {@link goog.fs.Error}.
+ */
+goog.fs.DirectoryEntry.prototype.removeRecursively = function() {
+  var d = new goog.async.Deferred();
+  this.dir_.removeRecursively(
+      goog.bind(d.callback, d),
+      goog.bind(function(err) {
+        var msg = 'removing ' + this.getFullPath() + ' recursively';
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Converts a value in the Behavior enum into an options object expected by the
+ * File API.
+ *
+ * @param {goog.fs.DirectoryEntry.Behavior=} opt_behavior The behavior for
+ *     existing files.
+ * @return {Object.<boolean>} The options object expected by the File API.
+ * @private
+ */
+goog.fs.DirectoryEntry.prototype.getOptions_ = function(opt_behavior) {
+  if (opt_behavior == goog.fs.DirectoryEntry.Behavior.CREATE) {
+    return {'create': true};
+  } else if (opt_behavior == goog.fs.DirectoryEntry.Behavior.CREATE_EXCLUSIVE) {
+    return {'create': true, 'exclusive': true};
+  } else {
+    return {};
+  }
+};
+
+
+
+/**
+ * A file in a local filesystem.
+ *
+ * This should not be instantiated directly. Instead, it should be accessed via
+ * {@link goog.fs.DirectoryEntry#getDirectoryEntry}.
+ *
+ * @param {!goog.fs.FileSystem} fs The wrapped filesystem.
+ * @param {!FileEntry} file The underlying FileEntry object.
+ * @constructor
+ * @extends {goog.fs.Entry}
+ */
+goog.fs.FileEntry = function(fs, file) {
+  goog.base(this, fs, file);
+
+  /**
+   * The underlying FileEntry object.
+   *
+   * @type {!FileEntry}
+   * @private
+   */
+  this.file_ = file;
+};
+goog.inherits(goog.fs.FileEntry, goog.fs.Entry);
+
+
+/**
+ * Create a writer for writing to the file.
+ *
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.FileWriter}. If an
+ *     error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.FileEntry.prototype.createWriter = function() {
+  var d = new goog.async.Deferred();
+  this.file_.createWriter(
+      function(w) { d.callback(new goog.fs.FileWriter(w)); },
+      goog.bind(function(err) {
+        var msg = 'creating writer for ' + this.getFullPath();
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+
+
+/**
+ * Get the file contents as a File blob.
+ *
+ * @return {!goog.async.Deferred} The deferred File. If an error occurs, the
+ *     errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.FileEntry.prototype.file = function() {
+  var d = new goog.async.Deferred();
+  this.file_.file(
+      function(f) { d.callback(f); },
+      goog.bind(function(err) {
+        var msg = 'getting file for ' + this.getFullPath();
+        d.errback(new goog.fs.Error(err.code, msg));
+      }, this));
+  return d;
+};
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A wrapper for the HTML5 FileSystem object.
+ *
+ */
+
+goog.provide('goog.fs.FileSystem');
+
+goog.require('goog.fs.DirectoryEntry');
+
+
+
+/**
+ * A local filesystem.
+ *
+ * This shouldn't be instantiated directly. Instead, it should be accessed via
+ * {@link goog.fs.getTemporary} or {@link goog.fs.getPersistent}.
+ *
+ * @param {!FileSystem} fs The underlying FileSystem object.
+ * @constructor
+ */
+goog.fs.FileSystem = function(fs) {
+  /**
+   * The underlying FileSystem object.
+   *
+   * @type {!FileSystem}
+   * @private
+   */
+  this.fs_ = fs;
+};
+
+
+/**
+ * @return {string} The name of the filesystem.
+ */
+goog.fs.FileSystem.prototype.getName = function() {
+  return this.fs_.name;
+};
+
+
+/**
+ * @return {!goog.fs.DirectoryEntry} The root directory of the filesystem.
+ */
+goog.fs.FileSystem.prototype.getRoot = function() {
+  return new goog.fs.DirectoryEntry(this, this.fs_.root);
+};
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview A wrapper for the HTML5 FileReader object.
+ *
+ */
+
+goog.provide('goog.fs.FileReader');
+goog.provide('goog.fs.FileReader.EventType');
+goog.provide('goog.fs.FileReader.ReadyState');
+
+goog.require('goog.async.Deferred');
+goog.require('goog.events.Event');
+goog.require('goog.events.EventTarget');
+goog.require('goog.fs.Error');
+goog.require('goog.fs.ProgressEvent');
+
+
+
+/**
+ * An object for monitoring the reading of files. This emits ProgressEvents of
+ * the types listed in {@link goog.fs.FileReader.EventType}.
+ *
+ * @constructor
+ * @extends {goog.events.EventTarget}
+ */
+goog.fs.FileReader = function() {
+  goog.base(this);
+
+  /**
+   * The underlying FileReader object.
+   *
+   * @type {!FileReader}
+   * @private
+   */
+  this.reader_ = new FileReader();
+
+  this.reader_.onloadstart = goog.bind(this.dispatchProgressEvent_, this);
+  this.reader_.onprogress = goog.bind(this.dispatchProgressEvent_, this);
+  this.reader_.onload = goog.bind(this.dispatchProgressEvent_, this);
+  this.reader_.onabort = goog.bind(this.dispatchProgressEvent_, this);
+  this.reader_.onerror = goog.bind(this.dispatchProgressEvent_, this);
+  this.reader_.onloadend = goog.bind(this.dispatchProgressEvent_, this);
+};
+goog.inherits(goog.fs.FileReader, goog.events.EventTarget);
+
+
+/**
+ * Possible states for a FileReader.
+ *
+ * @enum {number}
+ */
+goog.fs.FileReader.ReadyState = {
+  /**
+   * The object has been constructed, but there is no pending read.
+   */
+  INIT: 0,
+  /**
+   * Data is being read.
+   */
+  LOADING: 1,
+  /**
+   * The data has been read from the file, the read was aborted, or an error
+   * occurred.
+   */
+  DONE: 2
+};
+
+
+/**
+ * Events emitted by a FileReader.
+ *
+ * @enum {string}
+ */
+goog.fs.FileReader.EventType = {
+  /**
+   * Emitted when the reading begins. readyState will be LOADING.
+   */
+  LOAD_START: 'loadstart',
+  /**
+   * Emitted when progress has been made in reading the file. readyState will be
+   * LOADING.
+   */
+  PROGRESS: 'progress',
+  /**
+   * Emitted when the data has been successfully read. readyState will be
+   * LOADING.
+   */
+  LOAD: 'load',
+  /**
+   * Emitted when the reading has been aborted. readyState will be LOADING.
+   */
+  ABORT: 'abort',
+  /**
+   * Emitted when an error is encountered or the reading has been aborted.
+   * readyState will be LOADING.
+   */
+  ERROR: 'error',
+  /**
+   * Emitted when the reading is finished, whether successfully or not.
+   * readyState will be DONE.
+   */
+  LOAD_END: 'loadend'
+};
+
+
+/**
+ * Abort the reading of the file.
+ */
+goog.fs.FileReader.prototype.abort = function() {
+  try {
+    this.reader_.abort();
+  } catch (e) {
+    throw new goog.fs.Error(e.code, 'aborting read');
+  }
+};
+
+
+/**
+ * @return {goog.fs.FileReader.ReadyState} The current state of the FileReader.
+ */
+goog.fs.FileReader.prototype.getReadyState = function() {
+  return /** @type {goog.fs.FileReader.ReadyState} */ (this.reader_.readyState);
+};
+
+
+/**
+ * @return {*} The result of the file read.
+ */
+goog.fs.FileReader.prototype.getResult = function() {
+  return this.reader_.result;
+};
+
+
+/**
+ * @return {goog.fs.Error} The error encountered while reading, if any.
+ */
+goog.fs.FileReader.prototype.getError = function() {
+  return this.reader_.error &&
+      new goog.fs.Error(this.reader_.error.code, 'reading file');
+};
+
+
+/**
+ * Wrap a progress event emitted by the underlying file reader and re-emit it.
+ *
+ * @param {!ProgressEvent} event The underlying event.
+ * @private
+ */
+goog.fs.FileReader.prototype.dispatchProgressEvent_ = function(event) {
+  this.dispatchEvent(new goog.fs.ProgressEvent(event, this));
+};
+
+
+/** @override */
+goog.fs.FileReader.prototype.disposeInternal = function() {
+  goog.base(this, 'disposeInternal');
+  delete this.reader_;
+};
+
+
+/**
+ * Starts reading a blob as a binary string.
+ * @param {!Blob} blob The blob to read.
+ */
+goog.fs.FileReader.prototype.readAsBinaryString = function(blob) {
+  this.reader_.readAsBinaryString(blob);
+};
+
+
+/**
+ * Reads a blob as a binary string.
+ * @param {!Blob} blob The blob to read.
+ * @return {!goog.async.Deferred} The deferred Blob contents as a binary string.
+ *     If an error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.FileReader.readAsBinaryString = function(blob) {
+  var reader = new goog.fs.FileReader();
+  var d = goog.fs.FileReader.createDeferred_(reader);
+  reader.readAsBinaryString(blob);
+  return d;
+};
+
+
+/**
+ * Starts reading a blob as an array buffer.
+ * @param {!Blob} blob The blob to read.
+ */
+goog.fs.FileReader.prototype.readAsArrayBuffer = function(blob) {
+  this.reader_.readAsArrayBuffer(blob);
+};
+
+
+/**
+ * Reads a blob as an array buffer.
+ * @param {!Blob} blob The blob to read.
+ * @return {!goog.async.Deferred} The deferred Blob contents as an array buffer.
+ *     If an error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.FileReader.readAsArrayBuffer = function(blob) {
+  var reader = new goog.fs.FileReader();
+  var d = goog.fs.FileReader.createDeferred_(reader);
+  reader.readAsArrayBuffer(blob);
+  return d;
+};
+
+
+/**
+ * Starts reading a blob as text.
+ * @param {!Blob} blob The blob to read.
+ * @param {string=} opt_encoding The name of the encoding to use.
+ */
+goog.fs.FileReader.prototype.readAsText = function(blob, opt_encoding) {
+  this.reader_.readAsText(blob, opt_encoding);
+};
+
+
+/**
+ * Reads a blob as text.
+ * @param {!Blob} blob The blob to read.
+ * @param {string=} opt_encoding The name of the encoding to use.
+ * @return {!goog.async.Deferred} The deferred Blob contents as text.
+ *     If an error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.FileReader.readAsText = function(blob, opt_encoding) {
+  var reader = new goog.fs.FileReader();
+  var d = goog.fs.FileReader.createDeferred_(reader);
+  reader.readAsText(blob, opt_encoding);
+  return d;
+};
+
+
+/**
+ * Starts reading a blob as a data URL.
+ * @param {!Blob} blob The blob to read.
+ */
+goog.fs.FileReader.prototype.readAsDataUrl = function(blob) {
+  this.reader_.readAsDataURL(blob);
+};
+
+
+/**
+ * Reads a blob as a data URL.
+ * @param {!Blob} blob The blob to read.
+ * @return {!goog.async.Deferred} The deferred Blob contents as a data URL.
+ *     If an error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.FileReader.readAsDataUrl = function(blob) {
+  var reader = new goog.fs.FileReader();
+  var d = goog.fs.FileReader.createDeferred_(reader);
+  reader.readAsDataUrl(blob);
+  return d;
+};
+
+
+/**
+ * Creates a new deferred object for the results of a read method.
+ * @param {goog.fs.FileReader} reader The reader to create a deferred for.
+ * @return {!goog.async.Deferred} The deferred results.
+ * @private
+ */
+goog.fs.FileReader.createDeferred_ = function(reader) {
+  var deferred = new goog.async.Deferred();
+  reader.addEventListener(goog.fs.FileReader.EventType.LOAD_END,
+      goog.partial(function(d, r, e) {
+        var result = r.getResult();
+        if (result) {
+          d.callback(result);
+        } else {
+          d.errback(r.getError());
+        }
+        r.dispose();
+      }, deferred, reader));
+  return deferred;
+};
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Wrappers for the HTML5 File API. These wrappers closely mirror
+ * the underlying APIs, but use Closure-style events and Deferred return values.
+ * Their existence also makes it possible to mock the FileSystem API for testing
+ * in browsers that don't support it natively.
+ *
+ * When adding public functions to anything under this namespace, be sure to add
+ * its mock counterpart to goog.testing.fs.
+ *
+ */
+
+goog.provide('goog.fs');
+
+goog.require('goog.async.Deferred');
+goog.require('goog.events');
+goog.require('goog.fs.Error');
+goog.require('goog.fs.FileReader');
+goog.require('goog.fs.FileSystem');
+
+
+/**
+ * Get a wrapped FileSystem object.
+ *
+ * @param {goog.fs.FileSystemType_} type The type of the filesystem to get.
+ * @param {number} size The size requested for the filesystem, in bytes.
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.FileSystem}. If an
+ *     error occurs, the errback is called with a {@link goog.fs.Error}.
+ * @private
+ */
+goog.fs.get_ = function(type, size) {
+  var requestFileSystem = goog.global.requestFileSystem ||
+      goog.global.webkitRequestFileSystem;
+
+  if (!goog.isFunction(requestFileSystem)) {
+    return goog.async.Deferred.fail(new Error('File API unsupported'));
+  }
+
+  var d = new goog.async.Deferred();
+  requestFileSystem(type, size, function(fs) {
+    d.callback(new goog.fs.FileSystem(fs));
+  }, function(err) {
+    d.errback(new goog.fs.Error(err.code, 'requesting filesystem'));
+  });
+  return d;
+};
+
+
+/**
+ * The two types of filesystem.
+ *
+ * @enum {number}
+ * @private
+ */
+goog.fs.FileSystemType_ = {
+  /**
+   * A temporary filesystem may be deleted by the user agent at its discretion.
+   */
+  TEMPORARY: 0,
+  /**
+   * A persistent filesystem will never be deleted without the user's or
+   * application's authorization.
+   */
+  PERSISTENT: 1
+};
+
+
+/**
+ * Returns a temporary FileSystem object. A temporary filesystem may be deleted
+ * by the user agent at its discretion.
+ *
+ * @param {number} size The size requested for the filesystem, in bytes.
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.FileSystem}. If an
+ *     error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.getTemporary = function(size) {
+  return goog.fs.get_(goog.fs.FileSystemType_.TEMPORARY, size);
+};
+
+
+/**
+ * Returns a persistent FileSystem object. A persistent filesystem will never be
+ * deleted without the user's or application's authorization.
+ *
+ * @param {number} size The size requested for the filesystem, in bytes.
+ * @return {!goog.async.Deferred} The deferred {@link goog.fs.FileSystem}. If an
+ *     error occurs, the errback is called with a {@link goog.fs.Error}.
+ */
+goog.fs.getPersistent = function(size) {
+  return goog.fs.get_(goog.fs.FileSystemType_.PERSISTENT, size);
+};
+
+
+/**
+ * Creates a blob URL for a blob object.
+ *
+ * @param {!Blob} blob The object for which to create the URL.
+ * @return {string} The URL for the object.
+ */
+goog.fs.createObjectUrl = function(blob) {
+  return goog.fs.getUrlObject_().createObjectURL(blob);
+};
+
+
+/**
+ * Revokes a URL created by {@link goog.fs.createObjectUrl}.
+ *
+ * @param {string} url The URL to revoke.
+ */
+goog.fs.revokeObjectUrl = function(url) {
+  goog.fs.getUrlObject_().revokeObjectURL(url);
+};
+
+
+/**
+ * @typedef {!{createObjectURL: (function(!Blob): string),
+ *             revokeObjectURL: function(string): void}}
+ */
+goog.fs.UrlObject_;
+
+
+/**
+ * Get the object that has the createObjectURL and revokeObjectURL functions for
+ * this browser.
+ *
+ * @return {goog.fs.UrlObject_} The object for this browser.
+ * @private
+ */
+goog.fs.getUrlObject_ = function() {
+  // This is what the spec says to do
+  // http://dev.w3.org/2006/webapi/FileAPI/#dfn-createObjectURL
+  if (goog.isDef(goog.global.URL) &&
+      goog.isDef(goog.global.URL.createObjectURL)) {
+    return /** @type {goog.fs.UrlObject_} */ (goog.global.URL);
+  // This is what Chrome does (as of 10.0.648.6 dev)
+  } else if (goog.isDef(goog.global.webkitURL) &&
+             goog.isDef(goog.global.webkitURL.createObjectURL)) {
+    return /** @type {goog.fs.UrlObject_} */ (goog.global.webkitURL);
+  // This is what the spec used to say to do
+  } else if (goog.isDef(goog.global.createObjectURL)) {
+    return /** @type {goog.fs.UrlObject_} */ (goog.global);
+  } else {
+    throw Error('This browser doesn\'t seem to support blob URLs');
+  }
+};
+
+
+/**
+ * Concatenates one or more values together and converts them to a Blob.
+ *
+ * @param {...(string|!Blob|!ArrayBuffer)} var_args The values that will make up
+ *     the resulting blob.
+ * @return {!Blob} The blob.
+ */
+goog.fs.getBlob = function(var_args) {
+  var BlobBuilder = goog.global.BlobBuilder || goog.global.WebKitBlobBuilder;
+  var bb = new BlobBuilder();
+  for (var i = 0; i < arguments.length; i++) {
+    bb.append(arguments[i]);
+  }
+  return bb.getBlob();
+};
+
+
+/**
+ * Converts a Blob or a File into a string. This should only be used when the
+ * blob is known to be small.
+ *
+ * @param {!Blob} blob The blob to convert.
+ * @param {string=} opt_encoding The name of the encoding to use.
+ * @return {!goog.async.Deferred} The deferred string. If an error occurrs, the
+ *     errback is called with a {@link goog.fs.Error}.
+ * @deprecated Use {@link goog.fs.FileReader.readAsText} instead.
+ */
+goog.fs.blobToString = function(blob, opt_encoding) {
+  return goog.fs.FileReader.readAsText(blob, opt_encoding);
+};
+
+
+/**
+ * Slices the blob. The returned blob contains data from the start byte
+ * (inclusive) till the end byte (exclusive). Negative indices can be used
+ * to count bytes from the end of the blob (-1 == blob.size - 1). Indices
+ * are always clamped to blob range. If end is omitted, all the data till
+ * the end of the blob is taken.
+ *
+ * @param {!Blob} blob The blob to be sliced.
+ * @param {number} start Index of the starting byte.
+ * @param {number=} opt_end Index of the ending byte.
+ * @return {Blob} The blob slice or null if not supported.
+ */
+goog.fs.sliceBlob = function(blob, start, opt_end) {
+  if (!goog.isDef(opt_end)) {
+    opt_end = blob.size;
+  }
+  if (blob.webkitSlice) {
+    // Natively accepts negative indices, clamping to the blob range and
+    // range end is optional. See http://trac.webkit.org/changeset/83873
+    return blob.webkitSlice(start, opt_end);
+  } else if (blob.mozSlice) {
+    // Natively accepts negative indices, clamping to the blob range and
+    // range end is optional. See https://developer.mozilla.org/en/DOM/Blob
+    // and http://hg.mozilla.org/mozilla-central/rev/dae833f4d934
+    return blob.mozSlice(start, opt_end);
+  } else if (blob.slice) {
+    // This is the original specification. Negative indices are not accepted,
+    // only range end is clamped and range end specification is obligatory.
+    // See http://www.w3.org/TR/2009/WD-FileAPI-20091117/, this will be
+    // replaced by http://dev.w3.org/2006/webapi/FileAPI/ in the future.
+    if (start < 0) {
+      start += blob.size;
+    }
+    if (start < 0) {
+      start = 0;
+    }
+    if (opt_end < 0) {
+      opt_end += blob.size;
+    }
+    if (opt_end < start) {
+      opt_end = start;
+    }
+    return blob.slice(start, opt_end - start);
+  }
+  return null;
+};
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38737,6 +40529,9 @@ goog.require('goog.array');
 goog.require('goog.dom');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
+goog.require('goog.fs');
+goog.require('goog.fs.DirectoryEntry');
+goog.require('goog.fs.FileSaver');
 goog.require('goog.i18n.DateTimeFormat');
 goog.require('goog.json');
 goog.require('goog.net.XhrIo');
@@ -38789,8 +40584,6 @@ calendarmailer.dashboard.App = function() {
    */
   this.createCycleButton_ = new goog.ui.Button(null /* content */);
   this.createCycleButton_.decorate(document.getElementById('new-cycle-button'));
-  this.eventHandler_.listen(this.createCycleButton_,
-      goog.ui.Component.EventType.ACTION, this.handleNewCycleClick_);
 
   /**
    * The back button.
@@ -38811,6 +40604,15 @@ calendarmailer.dashboard.App = function() {
       'individual-add-button'));
 
   /**
+   * The export button.
+   * @type {!goog.ui.Button}
+   * @private
+   */
+  this.exportButton_ = new goog.ui.Button(null /* content */);
+  this.exportButton_.decorate(document.getElementById(
+      'export-csv'));
+
+  /**
    * A map of the ids of the calendars events were pulled from, along with the
    * number of events for that calendar.
    * @type {!Object.<number>}
@@ -38829,7 +40631,11 @@ calendarmailer.dashboard.App = function() {
       listen(this.backButton_, goog.ui.Component.EventType.ACTION,
           this.handleBackClick_).
       listen(this.addEventsButton_, goog.ui.Component.EventType.ACTION,
-          this.handleAddClick_);
+          this.handleAddClick_).
+      listen(this.createCycleButton_,
+          goog.ui.Component.EventType.ACTION, this.handleNewCycleClick_).
+      listen(this.exportButton_, goog.ui.Component.EventType.ACTION,
+          this.handleExport_);
 
   var cyclenodes = document.getElementsByClassName('cycle');
   for (var i = 0; i < cyclenodes.length; ++i) {
@@ -38879,7 +40685,6 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
 
   goog.style.setStyle(this.allCyclesEl_, 'display', 'none');
   goog.style.setStyle(this.oneCycleEl_, 'display', '');
-
 };
 
 
@@ -39019,6 +40824,70 @@ calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
     this.calendar_.getCalendarSummary(keys[index],
         goog.bind(this.handleCalendarResult_, this));
   }
+};
+
+
+/**
+ * Handles a click on the export button.
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.handleExport_ = function() {
+  //this.userToEventArray_
+  var resultArr = [];
+  resultArr.push('email,TotalEvents,EventName,EventLink,EventLocation,' +
+      'StartTime,EventRecurrence,UserAction');
+
+  goog.object.forEach(this.userToEventArray_, function(eventArr, email) {
+    var row = [];
+    var length = eventArr.length;
+    goog.array.forEach(eventArr, function(event) {
+      row.push(email);
+      row.push(length);
+      row.push(event['summary']);
+      row.push(event['link']);
+      row.push(event['location']);
+      row.push(event['startTime']);
+      row.push(event['recurrence'].join(','));
+      row.push(event['state']);
+    }, this);
+    resultArr.push('"' + row.join('","') + '"');
+  }, this);
+
+  var result = resultArr.join('\n');
+  var fs = goog.fs.getTemporary(1024 * 1024);
+  fs.addCallback(function(fs) {
+    var fileEntry = fs.getRoot().getFile('calendarmailer-data.csv',
+        goog.fs.DirectoryEntry.Behavior.CREATE);
+    fileEntry.addCallback(function(file) {
+      var fileWriter = file.createWriter();
+      fileWriter.addCallback(
+          goog.bind(this.handleWriterReady_, this, result, file));
+    }, this);
+    fileEntry.addErrback(function(er) {
+      // TODO: Display this to the user.
+      window.console.log(er);
+    });
+  }, this);
+};
+
+
+/**
+ * Handles the file writer becoming ready.
+ * @param {string} result The contents to write to the file.
+ * @param {!goog.fs.FileEntry} file The file entry for the file.
+ * @param {!goog.fs.FileWriter} writer The file writer.
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.
+    handleWriterReady_ = function(result, file, writer) {
+  var bb = window.BlobBuilder ? new BlobBuilder() : new WebKitBlobBuilder();
+  bb.append(result);
+  writer.truncate(1);
+  this.eventHandler_.listenOnce(writer, goog.fs.FileSaver.EventType.WRITE_END,
+      function() {
+        writer.write(bb.getBlob('text/plain'));
+        window.location.href = file.toUrl();
+      }, this);
 };
 
 
