@@ -19,6 +19,8 @@
  * global <code>CLOSURE_NO_DEPS</code> is set to true.  This allows projects to
  * include their own deps file(s) from different locations.
  *
+ *
+ * @provideGoog
  */
 
 
@@ -36,13 +38,95 @@ var COMPILED = false;
  *
  * @const
  */
-var goog = goog || {}; // Identifies this file as the Closure base.
+var goog = goog || {};
 
 
 /**
  * Reference to the global context.  In most cases this will be 'window'.
  */
 goog.global = this;
+
+
+/**
+ * A hook for overriding the define values in uncompiled mode.
+ *
+ * In uncompiled mode, {@code CLOSURE_DEFINES} may be defined before loading
+ * base.js.  If a key is defined in {@code CLOSURE_DEFINES}, {@code goog.define}
+ * will use the value instead of the default value.  This allows flags to be
+ * overwritten without compilation (this is normally accomplished with the
+ * compiler's "define" flag).
+ *
+ * Example:
+ * <pre>
+ *   var CLOSURE_DEFINES = {'goog.DEBUG', false};
+ * </pre>
+ *
+ * @type {Object.<string, (string|number|boolean)>|undefined}
+ */
+goog.global.CLOSURE_DEFINES;
+
+
+/**
+ * Builds an object structure for the provided namespace path,
+ * ensuring that names that already exist are not overwritten. For
+ * example:
+ * "a.b.c" -> a = {};a.b={};a.b.c={};
+ * Used by goog.provide and goog.exportSymbol.
+ * @param {string} name name of the object that this file defines.
+ * @param {*=} opt_object the object to expose at the end of the path.
+ * @param {Object=} opt_objectToExportTo The object to add the path to; default
+ *     is |goog.global|.
+ * @private
+ */
+goog.exportPath_ = function(name, opt_object, opt_objectToExportTo) {
+  var parts = name.split('.');
+  var cur = opt_objectToExportTo || goog.global;
+
+  // Internet Explorer exhibits strange behavior when throwing errors from
+  // methods externed in this manner.  See the testExportSymbolExceptions in
+  // base_test.html for an example.
+  if (!(parts[0] in cur) && cur.execScript) {
+    cur.execScript('var ' + parts[0]);
+  }
+
+  // Certain browsers cannot parse code in the form for((a in b); c;);
+  // This pattern is produced by the JSCompiler when it collapses the
+  // statement above into the conditional loop below. To prevent this from
+  // happening, use a for-loop and reserve the init logic as below.
+
+  // Parentheses added to eliminate strict JS warning in Firefox.
+  for (var part; parts.length && (part = parts.shift());) {
+    if (!parts.length && opt_object !== undefined) {
+      // last part and we have an object; use it
+      cur[part] = opt_object;
+    } else if (cur[part]) {
+      cur = cur[part];
+    } else {
+      cur = cur[part] = {};
+    }
+  }
+};
+
+
+/**
+ * Defines a named value. In uncompiled mode, the value is retreived from
+ * CLOSURE_DEFINES if the object is defined and has the property specified,
+ * and otherwise used the defined defaultValue. When compiled, the default
+ * can be overridden using compiler command-line options.
+ *
+ * @param {string} name The distinguished name to provide.
+ * @param {string|number|boolean} defaultValue
+ */
+goog.define = function(name, defaultValue) {
+  var value = defaultValue;
+  if (!COMPILED) {
+    if (goog.global.CLOSURE_DEFINES && Object.prototype.hasOwnProperty.call(
+        goog.global.CLOSURE_DEFINES, name)) {
+      value = goog.global.CLOSURE_DEFINES[name];
+    }
+  }
+  goog.exportPath_(name, value);
+};
 
 
 /**
@@ -75,7 +159,21 @@ goog.DEBUG = true;
  * this rule: the Hebrew language. For legacy reasons the old code (iw) should
  * be used instead of the new code (he), see http://wiki/Main/IIISynonyms.
  */
-goog.LOCALE = 'en';  // default to en
+goog.define('goog.LOCALE', 'en');  // default to en
+
+
+/**
+ * @define {boolean} Whether this code is running on trusted sites.
+ *
+ * On untrusted sites, several native functions can be defined or overridden by
+ * external libraries like Prototype, Datejs, and JQuery and setting this flag
+ * to false forces closure to use its own implementations when possible.
+ *
+ * If your javascript can be loaded by a third party site and you are wary about
+ * relying on non-standard implementations, specify
+ * "--define goog.TRUSTED_SITE=false" to the JSCompiler.
+ */
+goog.define('goog.TRUSTED_SITE', true);
 
 
 /**
@@ -115,6 +213,11 @@ goog.provide = function(name) {
 /**
  * Marks that the current file should only be used for testing, and never for
  * live code in production.
+ *
+ * In the case of unit tests, the message may optionally be an exact
+ * namespace for the test (e.g. 'goog.stringTest'). The linter will then
+ * ignore the extra provide (if not explicitly defined in the code).
+ *
  * @param {string=} opt_message Optional message to add to the error that's
  *     raised when used in production code.
  */
@@ -150,48 +253,6 @@ if (!COMPILED) {
    */
   goog.implicitNamespaces_ = {};
 }
-
-
-/**
- * Builds an object structure for the provided namespace path,
- * ensuring that names that already exist are not overwritten. For
- * example:
- * "a.b.c" -> a = {};a.b={};a.b.c={};
- * Used by goog.provide and goog.exportSymbol.
- * @param {string} name name of the object that this file defines.
- * @param {*=} opt_object the object to expose at the end of the path.
- * @param {Object=} opt_objectToExportTo The object to add the path to; default
- *     is |goog.global|.
- * @private
- */
-goog.exportPath_ = function(name, opt_object, opt_objectToExportTo) {
-  var parts = name.split('.');
-  var cur = opt_objectToExportTo || goog.global;
-
-  // Internet Explorer exhibits strange behavior when throwing errors from
-  // methods externed in this manner.  See the testExportSymbolExceptions in
-  // base_test.html for an example.
-  if (!(parts[0] in cur) && cur.execScript) {
-    cur.execScript('var ' + parts[0]);
-  }
-
-  // Certain browsers cannot parse code in the form for((a in b); c;);
-  // This pattern is produced by the JSCompiler when it collapses the
-  // statement above into the conditional loop below. To prevent this from
-  // happening, use a for-loop and reserve the init logic as below.
-
-  // Parentheses added to eliminate strict JS warning in Firefox.
-  for (var part; parts.length && (part = parts.shift());) {
-    if (!parts.length && goog.isDef(opt_object)) {
-      // last part and we have an object; use it
-      cur[part] = opt_object;
-    } else if (cur[part]) {
-      cur = cur[part];
-    } else {
-      cur = cur[part] = {};
-    }
-  }
-};
 
 
 /**
@@ -243,7 +304,7 @@ goog.globalize = function(obj, opt_global) {
  *                         this file requires.
  */
 goog.addDependency = function(relPath, provides, requires) {
-  if (!COMPILED) {
+  if (goog.DEPENDENCIES_ENABLED) {
     var provide, require;
     var path = relPath.replace(/\\/g, '/');
     var deps = goog.dependencies_;
@@ -294,7 +355,7 @@ goog.addDependency = function(relPath, provides, requires) {
  * provided (and depend on the fact that some outside tool correctly ordered
  * the script).
  */
-goog.ENABLE_DEBUG_LOADER = true;
+goog.define('goog.ENABLE_DEBUG_LOADER', true);
 
 
 /**
@@ -446,7 +507,14 @@ goog.addSingletonGetter = function(ctor) {
 goog.instantiatedSingletons_ = [];
 
 
-if (!COMPILED && goog.ENABLE_DEBUG_LOADER) {
+/**
+ * True if goog.dependencies_ is available.
+ * @const {boolean}
+ */
+goog.DEPENDENCIES_ENABLED = !COMPILED && goog.ENABLE_DEBUG_LOADER;
+
+
+if (goog.DEPENDENCIES_ENABLED) {
   /**
    * Object used to keep track of urls that have already been added. This
    * record allows the prevention of circular dependencies.
@@ -538,6 +606,23 @@ if (!COMPILED && goog.ENABLE_DEBUG_LOADER) {
   goog.writeScriptTag_ = function(src) {
     if (goog.inHtmlDocument_()) {
       var doc = goog.global.document;
+
+      // If the user tries to require a new symbol after document load,
+      // something has gone terribly wrong. Doing a document.write would
+      // wipe out the page.
+      if (doc.readyState == 'complete') {
+        // Certain test frameworks load base.js multiple times, which tries
+        // to write deps.js each time. If that happens, just fail silently.
+        // These frameworks wipe the page between each load of base.js, so this
+        // is OK.
+        var isDeps = /\bdeps.js$/.test(src);
+        if (isDeps) {
+          return false;
+        } else {
+          throw Error('Cannot write "' + src + '" after document load');
+        }
+      }
+
       doc.write(
           '<script type="text/javascript" src="' + src + '"></' + 'script>');
       return true;
@@ -914,8 +999,7 @@ goog.removeUid = function(obj) {
  * @type {string}
  * @private
  */
-goog.UID_PROPERTY_ = 'closure_uid_' +
-    Math.floor(Math.random() * 2147483648).toString(36);
+goog.UID_PROPERTY_ = 'closure_uid_' + ((Math.random() * 1e9) >>> 0);
 
 
 /**
@@ -974,19 +1058,6 @@ goog.cloneObject = function(obj) {
 
   return obj;
 };
-
-
-/**
- * Forward declaration for the clone method. This is necessary until the
- * compiler can better support duck-typing constructs as used in
- * goog.cloneObject.
- *
- * TODO(brenneman): Remove once the JSCompiler can infer that the check for
- * proto.clone is safe in goog.cloneObject.
- *
- * @type {Function}
- */
-Object.prototype.clone;
 
 
 /**
@@ -1055,13 +1126,14 @@ goog.bindJs_ = function(fn, selfObj, var_args) {
  * <pre>var barMethBound = bind(myFunction, myObj, 'arg1', 'arg2');
  * barMethBound('arg3', 'arg4');</pre>
  *
- * @param {Function} fn A function to partially apply.
- * @param {Object|undefined} selfObj Specifies the object which |this| should
+ * @param {?function(this:T, ...)} fn A function to partially apply.
+ * @param {T} selfObj Specifies the object which |this| should
  *     point to when the function is run.
  * @param {...*} var_args Additional arguments that are partially
  *     applied to the function.
  * @return {!Function} A partially-applied form of the function bind() was
  *     invoked as a method of.
+ * @template T
  * @suppress {deprecated} See above.
  */
 goog.bind = function(fn, selfObj, var_args) {
@@ -1132,7 +1204,7 @@ goog.mixin = function(target, source) {
  * @return {number} An integer value representing the number of milliseconds
  *     between midnight, January 1, 1970 and the current time.
  */
-goog.now = Date.now || (function() {
+goog.now = (goog.TRUSTED_SITE && Date.now) || (function() {
   // Unary plus operator converts its operand to a number which in the case of
   // a date is done by calling getTime().
   return +new Date();
@@ -1327,7 +1399,17 @@ if (!COMPILED && goog.global.CLOSURE_CSS_NAME_MAPPING) {
 
 
 /**
- * Abstract implementation of goog.getMsg for use with localized messages.
+ * Gets a localized message.
+ *
+ * This function is a compiler primitive. If you give the compiler a localized
+ * message bundle, it will replace the string at compile-time with a localized
+ * version, and expand goog.getMsg call to a concatenated string.
+ *
+ * Messages must be initialized in the form:
+ * <code>
+ * var MSG_NAME = goog.getMsg('Hello {$placeholder}', {'placeholder': 'world'});
+ * </code>
+ *
  * @param {string} str Translatable string, places holders in the form {$foo}.
  * @param {Object=} opt_values Map of place holder name to value.
  * @return {string} message with placeholders filled.
@@ -1343,6 +1425,26 @@ goog.getMsg = function(str, opt_values) {
 
 
 /**
+ * Gets a localized message. If the message does not have a translation, gives a
+ * fallback message.
+ *
+ * This is useful when introducing a new message that has not yet been
+ * translated into all languages.
+ *
+ * This function is a compiler primtive. Must be used in the form:
+ * <code>var x = goog.getMsgWithFallback(MSG_A, MSG_B);</code>
+ * where MSG_A and MSG_B were initialized with goog.getMsg.
+ *
+ * @param {string} a The preferred message.
+ * @param {string} b The fallback message.
+ * @return {string} The best translated message.
+ */
+goog.getMsgWithFallback = function(a, b) {
+  return a;
+};
+
+
+/**
  * Exposes an unobfuscated global namespace path for the given object.
  * Note that fields of the exported object *will* be obfuscated,
  * unless they are exported in turn via this function or
@@ -1351,7 +1453,7 @@ goog.getMsg = function(str, opt_values) {
  * <p>Also handy for making public items that are defined in anonymous
  * closures.
  *
- * ex. goog.exportSymbol('Foo', Foo);
+ * ex. goog.exportSymbol('public.path.Foo', Foo);
  *
  * ex. goog.exportSymbol('public.path.Foo.staticFunction',
  *                       Foo.staticFunction);
@@ -1420,6 +1522,7 @@ goog.inherits = function(childCtor, parentCtor) {
   tempCtor.prototype = parentCtor.prototype;
   childCtor.superClass_ = parentCtor.prototype;
   childCtor.prototype = new tempCtor();
+  /** @override */
   childCtor.prototype.constructor = childCtor;
 };
 
@@ -1451,6 +1554,15 @@ goog.inherits = function(childCtor, parentCtor) {
  */
 goog.base = function(me, opt_methodName, var_args) {
   var caller = arguments.callee.caller;
+
+  if (goog.DEBUG) {
+    if (!caller) {
+      throw Error('arguments.caller not defined.  goog.base() expects not ' +
+                  'to be running in strict mode. See ' +
+                  'http://www.ecma-international.org/ecma-262/5.1/#sec-C');
+    }
+  }
+
   if (caller.superClass_) {
     // This is a constructor. Call the superclass constructor.
     return caller.superClass_.constructor.apply(
@@ -1496,6 +1608,138 @@ goog.scope = function(fn) {
 };
 
 
+// Copyright 2012 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Soy data primitives.
+ *
+ * The goal is to encompass data types used by Soy, especially to mark content
+ * as known to be "safe".
+ *
+ * @author gboyer@google.com (Garrett Boyer)
+ */
+
+goog.provide('goog.soy.data');
+goog.provide('goog.soy.data.SanitizedContent');
+goog.provide('goog.soy.data.SanitizedContentKind');
+
+
+/**
+ * A type of textual content.
+ *
+ * This is an enum of type Object so that these values are unforgeable.
+ *
+ * @enum {!Object}
+ */
+goog.soy.data.SanitizedContentKind = {
+
+  /**
+   * A snippet of HTML that does not start or end inside a tag, comment, entity,
+   * or DOCTYPE; and that does not contain any executable code
+   * (JS, {@code <object>}s, etc.) from a different trust domain.
+   */
+  HTML: goog.DEBUG ? {sanitizedContentKindHtml: true} : {},
+
+  /**
+   * Executable Javascript code or expression, safe for insertion in a
+   * script-tag or event handler context, known to be free of any
+   * attacker-controlled scripts. This can either be side-effect-free
+   * Javascript (such as JSON) or Javascript that entirely under Google's
+   * control.
+   */
+  JS: goog.DEBUG ? {sanitizedContentJsStrChars: true} : {},
+
+  /**
+   * A sequence of code units that can appear between quotes (either kind) in a
+   * JS program without causing a parse error, and without causing any side
+   * effects.
+   * <p>
+   * The content should not contain unescaped quotes, newlines, or anything else
+   * that would cause parsing to fail or to cause a JS parser to finish the
+   * string its parsing inside the content.
+   * <p>
+   * The content must also not end inside an escape sequence ; no partial octal
+   * escape sequences or odd number of '{@code \}'s at the end.
+   */
+  JS_STR_CHARS: goog.DEBUG ? {sanitizedContentJsStrChars: true} : {},
+
+  /** A properly encoded portion of a URI. */
+  URI: goog.DEBUG ? {sanitizedContentUri: true} : {},
+
+  /**
+   * Repeated attribute names and values. For example,
+   * {@code dir="ltr" foo="bar" onclick="trustedFunction()" checked}.
+   */
+  ATTRIBUTES: goog.DEBUG ? {sanitizedContentHtmlAttribute: true} : {},
+
+  // TODO: Consider separating rules, declarations, and values into
+  // separate types, but for simplicity, we'll treat explicitly blessed
+  // SanitizedContent as allowed in all of these contexts.
+  /**
+   * A CSS3 declaration, property, value or group of semicolon separated
+   * declarations.
+   */
+  CSS: goog.DEBUG ? {sanitizedContentCss: true} : {},
+
+  /**
+   * Unsanitized plain-text content.
+   *
+   * This is effectively the "null" entry of this enum, and is sometimes used
+   * to explicitly mark content that should never be used unescaped. Since any
+   * string is safe to use as text, being of ContentKind.TEXT makes no
+   * guarantees about its safety in any other context such as HTML.
+   */
+  TEXT: goog.DEBUG ? {sanitizedContentKindText: true} : {}
+};
+
+
+
+/**
+ * A string-like object that carries a content-type.
+ *
+ * IMPORTANT! Do not create these directly, nor instantiate the subclasses.
+ * Instead, use a trusted, centrally reviewed library as endorsed by your team
+ * to generate these objects. Otherwise, you risk accidentally creating
+ * SanitizedContent that is attacker-controlled and gets evaluated unescaped in
+ * templates.
+ *
+ * @constructor
+ */
+goog.soy.data.SanitizedContent = function() {
+  throw Error('Do not instantiate directly');
+};
+
+
+/**
+ * The context in which this content is safe from XSS attacks.
+ * @type {goog.soy.data.SanitizedContentKind}
+ */
+goog.soy.data.SanitizedContent.prototype.contentKind;
+
+
+/**
+ * The already-safe content.
+ * @type {string}
+ */
+goog.soy.data.SanitizedContent.prototype.content;
+
+
+/** @override */
+goog.soy.data.SanitizedContent.prototype.toString = function() {
+  return this.content;
+};
 // Copyright 2009 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1532,7 +1776,11 @@ goog.provide('goog.debug.Error');
 goog.debug.Error = function(opt_msg) {
 
   // Ensure there is a stack trace.
-  this.stack = new Error().stack || '';
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, goog.debug.Error);
+  } else {
+    this.stack = new Error().stack || '';
+  }
 
   if (opt_msg) {
     this.message = String(opt_msg);
@@ -1628,6 +1876,18 @@ goog.string.caseInsensitiveEndsWith = function(str, suffix) {
 
 
 /**
+ * Case-insensitive equality checker.
+ * @param {string} str1 First string to check.
+ * @param {string} str2 Second string to check.
+ * @return {boolean} True if {@code str1} and {@code str2} are the same string,
+ *     ignoring case.
+ */
+goog.string.caseInsensitiveEquals = function(str1, str2) {
+  return str1.toLowerCase() == str2.toLowerCase();
+};
+
+
+/**
  * Does simple python-style string substitution.
  * subs("foo%s hot%s", "bar", "dog") becomes "foobar hotdog".
  * @param {string} str The string containing the pattern.
@@ -1636,18 +1896,18 @@ goog.string.caseInsensitiveEndsWith = function(str, suffix) {
  *     {@code %s} has been replaced an argument from {@code var_args}.
  */
 goog.string.subs = function(str, var_args) {
-  // This appears to be slow, but testing shows it compares more or less
-  // equivalent to the regex.exec method.
-  for (var i = 1; i < arguments.length; i++) {
-    // We cast to String in case an argument is a Function.  Replacing $&, for
-    // example, with $$$& stops the replace from subsituting the whole match
-    // into the resultant string.  $$$& in the first replace becomes $$& in the
-    //  second, which leaves $& in the resultant string.  Also:
-    // $$, $`, $', $n $nn
-    var replacement = String(arguments[i]).replace(/\$/g, '$$$$');
-    str = str.replace(/\%s/, replacement);
+  var splitParts = str.split('%s');
+  var returnString = '';
+
+  var subsArguments = Array.prototype.slice.call(arguments, 1);
+  while (subsArguments.length &&
+         // Replace up to the last split part. We are inserting in the
+         // positions between split parts.
+         splitParts.length > 1) {
+    returnString += splitParts.shift() + subsArguments.shift();
   }
-  return str;
+
+  return returnString + splitParts.join('%s'); // Join unused '%s'
 };
 
 
@@ -1681,9 +1941,10 @@ goog.string.isEmpty = function(str) {
 
 
 /**
- * Checks if a string is null, empty or contains only whitespaces.
+ * Checks if a string is null, undefined, empty or contains only whitespaces.
  * @param {*} str The string to check.
- * @return {boolean} True if{@code str} is null, empty, or whitespace only.
+ * @return {boolean} True if{@code str} is null, undefined, empty, or
+ *     whitespace only.
  */
 goog.string.isEmptySafe = function(str) {
   return goog.string.isEmpty(goog.string.makeSafe(str));
@@ -1948,14 +2209,6 @@ goog.string.numerateCompare = function(str1, str2) {
 
 
 /**
- * Regular expression used for determining if a string needs to be encoded.
- * @type {RegExp}
- * @private
- */
-goog.string.encodeUriRegExp_ = /^[a-zA-Z0-9\-_.!~*'()]*$/;
-
-
-/**
  * URL-encodes a string
  * @param {*} str The string to url-encode.
  * @return {string} An encoded copy of {@code str} that is safe for urls.
@@ -1963,15 +2216,7 @@ goog.string.encodeUriRegExp_ = /^[a-zA-Z0-9\-_.!~*'()]*$/;
  *     of URLs *will* be encoded.
  */
 goog.string.urlEncode = function(str) {
-  str = String(str);
-  // Checking if the search matches before calling encodeURIComponent avoids an
-  // extra allocation in IE6. This adds about 10us time in FF and a similiar
-  // over head in IE6 for lower working set apps, but for large working set
-  // apps like Gmail, it saves about 70us per call.
-  if (!goog.string.encodeUriRegExp_.test(str)) {
-    return encodeURIComponent(str);
-  }
-  return str;
+  return encodeURIComponent(String(str));
 };
 
 
@@ -2445,7 +2690,7 @@ goog.string.toMap = function(s) {
 
 
 /**
- * Checks whether a string contains a given character.
+ * Checks whether a string contains a given substring.
  * @param {string} s The string to test.
  * @param {string} ss The substring to test for.
  * @return {boolean} True if {@code s} contains {@code ss}.
@@ -2754,11 +2999,31 @@ goog.string.toNumber = function(str) {
 
 
 /**
- * A memoized cache for goog.string.toCamelCase.
- * @type {Object.<string>}
- * @private
+ * Returns whether the given string is lower camel case (e.g. "isFooBar").
+ *
+ * Note that this assumes the string is entirely letters.
+ * @see http://en.wikipedia.org/wiki/CamelCase#Variations_and_synonyms
+ *
+ * @param {string} str String to test.
+ * @return {boolean} Whether the string is lower camel case.
  */
-goog.string.toCamelCaseCache_ = {};
+goog.string.isLowerCamelCase = function(str) {
+  return /^[a-z]+([A-Z][a-z]*)*$/.test(str);
+};
+
+
+/**
+ * Returns whether the given string is upper camel case (e.g. "FooBarBaz").
+ *
+ * Note that this assumes the string is entirely letters.
+ * @see http://en.wikipedia.org/wiki/CamelCase#Variations_and_synonyms
+ *
+ * @param {string} str String to test.
+ * @return {boolean} Whether the string is upper camel case.
+ */
+goog.string.isUpperCamelCase = function(str) {
+  return /^([A-Z][a-z]*)+$/.test(str);
+};
 
 
 /**
@@ -2769,20 +3034,10 @@ goog.string.toCamelCaseCache_ = {};
  * @return {string} The string in camelCase form.
  */
 goog.string.toCamelCase = function(str) {
-  return goog.string.toCamelCaseCache_[str] ||
-      (goog.string.toCamelCaseCache_[str] =
-          String(str).replace(/\-([a-z])/g, function(all, match) {
-            return match.toUpperCase();
-          }));
+  return String(str).replace(/\-([a-z])/g, function(all, match) {
+    return match.toUpperCase();
+  });
 };
-
-
-/**
- * A memoized cache for goog.string.toSelectorCase.
- * @type {Object.<string>}
- * @private
- */
-goog.string.toSelectorCaseCache_ = {};
 
 
 /**
@@ -2793,10 +3048,127 @@ goog.string.toSelectorCaseCache_ = {};
  * @return {string} The string in selector-case form.
  */
 goog.string.toSelectorCase = function(str) {
-  return goog.string.toSelectorCaseCache_[str] ||
-      (goog.string.toSelectorCaseCache_[str] =
-          String(str).replace(/([A-Z])/g, '-$1').toLowerCase());
+  return String(str).replace(/([A-Z])/g, '-$1').toLowerCase();
 };
+
+
+/**
+ * Converts a string into TitleCase. First character of the string is always
+ * capitalized in addition to the first letter of every subsequent word.
+ * Words are delimited by one or more whitespaces by default. Custom delimiters
+ * can optionally be specified to replace the default, which doesn't preserve
+ * whitespace delimiters and instead must be explicitly included if needed.
+ *
+ * Default delimiter => " ":
+ *    goog.string.toTitleCase('oneTwoThree')    => 'OneTwoThree'
+ *    goog.string.toTitleCase('one two three')  => 'One Two Three'
+ *    goog.string.toTitleCase('  one   two   ') => '  One   Two   '
+ *    goog.string.toTitleCase('one_two_three')  => 'One_two_three'
+ *    goog.string.toTitleCase('one-two-three')  => 'One-two-three'
+ *
+ * Custom delimiter => "_-.":
+ *    goog.string.toTitleCase('oneTwoThree', '_-.')       => 'OneTwoThree'
+ *    goog.string.toTitleCase('one two three', '_-.')     => 'One two three'
+ *    goog.string.toTitleCase('  one   two   ', '_-.')    => '  one   two   '
+ *    goog.string.toTitleCase('one_two_three', '_-.')     => 'One_Two_Three'
+ *    goog.string.toTitleCase('one-two-three', '_-.')     => 'One-Two-Three'
+ *    goog.string.toTitleCase('one...two...three', '_-.') => 'One...Two...Three'
+ *    goog.string.toTitleCase('one. two. three', '_-.')   => 'One. two. three'
+ *    goog.string.toTitleCase('one-two.three', '_-.')     => 'One-Two.Three'
+ *
+ * @param {string} str String value in camelCase form.
+ * @param {string=} opt_delimiters Custom delimiter character set used to
+ *      distinguish words in the string value. Each character represents a
+ *      single delimiter. When provided, default whitespace delimiter is
+ *      overridden and must be explicitly included if needed.
+ * @return {string} String value in TitleCase form.
+ */
+goog.string.toTitleCase = function(str, opt_delimiters) {
+  var delimiters = goog.isString(opt_delimiters) ?
+      goog.string.regExpEscape(opt_delimiters) : '\\s';
+
+  // For IE8, we need to prevent using an empty character set. Otherwise,
+  // incorrect matching will occur.
+  delimiters = delimiters ? '|[' + delimiters + ']+' : '';
+
+  var regexp = new RegExp('(^' + delimiters + ')([a-z])', 'g');
+  return str.replace(regexp, function(all, p1, p2) {
+    return p1 + p2.toUpperCase();
+  });
+};
+
+
+/**
+ * Parse a string in decimal or hexidecimal ('0xFFFF') form.
+ *
+ * To parse a particular radix, please use parseInt(string, radix) directly. See
+ * https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/parseInt
+ *
+ * This is a wrapper for the built-in parseInt function that will only parse
+ * numbers as base 10 or base 16.  Some JS implementations assume strings
+ * starting with "0" are intended to be octal. ES3 allowed but discouraged
+ * this behavior. ES5 forbids it.  This function emulates the ES5 behavior.
+ *
+ * For more information, see Mozilla JS Reference: http://goo.gl/8RiFj
+ *
+ * @param {string|number|null|undefined} value The value to be parsed.
+ * @return {number} The number, parsed. If the string failed to parse, this
+ *     will be NaN.
+ */
+goog.string.parseInt = function(value) {
+  // Force finite numbers to strings.
+  if (isFinite(value)) {
+    value = String(value);
+  }
+
+  if (goog.isString(value)) {
+    // If the string starts with '0x' or '-0x', parse as hex.
+    return /^\s*-?0x/i.test(value) ?
+        parseInt(value, 16) : parseInt(value, 10);
+  }
+
+  return NaN;
+};
+
+
+/**
+ * Splits a string on a separator a limited number of times.
+ *
+ * This implementation is more similar to Python or Java, where the limit
+ * parameter specifies the maximum number of splits rather than truncating
+ * the number of results.
+ *
+ * See http://docs.python.org/2/library/stdtypes.html#str.split
+ * See JavaDoc: http://goo.gl/F2AsY
+ * See Mozilla reference: http://goo.gl/dZdZs
+ *
+ * @param {string} str String to split.
+ * @param {string} separator The separator.
+ * @param {number} limit The limit to the number of splits. The resulting array
+ *     will have a maximum length of limit+1.  Negative numbers are the same
+ *     as zero.
+ * @return {!Array.<string>} The string, split.
+ */
+
+goog.string.splitLimit = function(str, separator, limit) {
+  var parts = str.split(separator);
+  var returnVal = [];
+
+  // Only continue doing this while we haven't hit the limit and we have
+  // parts left.
+  while (limit > 0 && parts.length) {
+    returnVal.push(parts.shift());
+    limit--;
+  }
+
+  // If there are remaining parts, append them to the end.
+  if (parts.length) {
+    returnVal.push(parts.join(separator));
+  }
+
+  return returnVal;
+};
+
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -2842,7 +3214,7 @@ goog.require('goog.string');
 /**
  * @define {boolean} Whether to strip out asserts or to leave them in.
  */
-goog.asserts.ENABLE_ASSERTS = goog.DEBUG;
+goog.define('goog.asserts.ENABLE_ASSERTS', goog.DEBUG);
 
 
 
@@ -3060,18 +3432,24 @@ goog.asserts.assertBoolean = function(value, opt_message, var_args) {
 /**
  * Checks if the value is an instance of the user-defined type if
  * goog.asserts.ENABLE_ASSERTS is true.
+ *
+ * The compiler may tighten the type returned by this function.
+ *
  * @param {*} value The value to check.
- * @param {!Function} type A user-defined constructor.
+ * @param {function(new: T, ...)} type A user-defined constructor.
  * @param {string=} opt_message Error message in case of failure.
  * @param {...*} var_args The items to substitute into the failure message.
  * @throws {goog.asserts.AssertionError} When the value is not an instance of
  *     type.
+ * @return {!T}
+ * @template T
  */
 goog.asserts.assertInstanceof = function(value, type, opt_message, var_args) {
   if (goog.asserts.ENABLE_ASSERTS && !(value instanceof type)) {
     goog.asserts.doAssertFailure_('instanceof check failed.', null,
         opt_message, Array.prototype.slice.call(arguments, 3));
   }
+  return value;
 };
 
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
@@ -3111,8 +3489,11 @@ goog.require('goog.asserts');
  * If your javascript can be loaded by a third party site and you are wary about
  * relying on the prototype functions, specify
  * "--define goog.NATIVE_ARRAY_PROTOTYPES=false" to the JSCompiler.
+ *
+ * Setting goog.TRUSTED_SITE to false will automatically set
+ * NATIVE_ARRAY_PROTOTYPES to false.
  */
-goog.NATIVE_ARRAY_PROTOTYPES = true;
+goog.define('goog.NATIVE_ARRAY_PROTOTYPES', goog.TRUSTED_SITE);
 
 
 /**
@@ -3231,20 +3612,16 @@ goog.array.lastIndexOf = goog.NATIVE_ARRAY_PROTOTYPES &&
 
 
 /**
- * Calls a function for each element in an array.
- *
+ * Calls a function for each element in an array. Skips holes in the array.
  * See {@link http://tinyurl.com/developer-mozilla-org-array-foreach}
  *
- * @param {goog.array.ArrayLike} arr Array or array like object over
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array like object over
  *     which to iterate.
- * @param {?function(this: T, ...)} f The function to call for every element.
- *     This function takes 3 arguments (the element, the index and the array).
- *     The return value is ignored. The function is called only for indexes of
- *     the array which have assigned values; it is not called for indexes which
- *     have been deleted or which have never been assigned values.
- * @param {T=} opt_obj The object to be used as the value of 'this'
- *     within f.
- * @template T
+ * @param {?function(this: S, T, number, ?): ?} f The function to call for every
+ *     element. This function takes 3 arguments (the element, the index and the
+ *     array). The return value is ignored.
+ * @param {S=} opt_obj The object to be used as the value of 'this' within f.
+ * @template T,S
  */
 goog.array.forEach = goog.NATIVE_ARRAY_PROTOTYPES &&
                      goog.array.ARRAY_PROTOTYPE_.forEach ?
@@ -3268,12 +3645,15 @@ goog.array.forEach = goog.NATIVE_ARRAY_PROTOTYPES &&
  * Calls a function for each element in an array, starting from the last
  * element rather than the first.
  *
- * @param {goog.array.ArrayLike} arr The array over which to iterate.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this: S, T, number, ?): ?} f The function to call for every
+ *     element. This function
  *     takes 3 arguments (the element, the index and the array). The return
  *     value is ignored.
- * @param {Object=} opt_obj The object to be used as the value of 'this'
+ * @param {S=} opt_obj The object to be used as the value of 'this'
  *     within f.
+ * @template T,S
  */
 goog.array.forEachRight = function(arr, f, opt_obj) {
   var l = arr.length;  // must be fixed during loop... see docs
@@ -3292,15 +3672,18 @@ goog.array.forEachRight = function(arr, f, opt_obj) {
  *
  * See {@link http://tinyurl.com/developer-mozilla-org-array-filter}
  *
- * @param {goog.array.ArrayLike} arr The array over which to iterate.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?):boolean} f The function to call for
+ *     every element. This function
  *     takes 3 arguments (the element, the index and the array) and must
  *     return a Boolean. If the return value is true the element is added to the
  *     result array. If it is false the element is not included.
- * @param {Object=} opt_obj The object to be used as the value of 'this'
+ * @param {S=} opt_obj The object to be used as the value of 'this'
  *     within f.
  * @return {!Array} a new array in which only elements that passed the test are
  *     present.
+ * @template T,S
  */
 goog.array.filter = goog.NATIVE_ARRAY_PROTOTYPES &&
                     goog.array.ARRAY_PROTOTYPE_.filter ?
@@ -3332,13 +3715,16 @@ goog.array.filter = goog.NATIVE_ARRAY_PROTOTYPES &&
  *
  * See {@link http://tinyurl.com/developer-mozilla-org-array-map}
  *
- * @param {goog.array.ArrayLike} arr The array over which to iterate.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?):?} f The function to call for every
+ *     element. This function
  *     takes 3 arguments (the element, the index and the array) and should
  *     return something. The result will be inserted into a new array.
- * @param {Object=} opt_obj The object to be used as the value of 'this'
+ * @param {S=} opt_obj The object to be used as the value of 'this'
  *     within f.
  * @return {!Array} a new array with the results from f.
+ * @template T,S
  */
 goog.array.map = goog.NATIVE_ARRAY_PROTOTYPES &&
                  goog.array.ARRAY_PROTOTYPE_.map ?
@@ -3370,16 +3756,19 @@ goog.array.map = goog.NATIVE_ARRAY_PROTOTYPES &&
  * goog.array.reduce(a, function(r, v, i, arr) {return r + v;}, 0);
  * returns 10
  *
- * @param {goog.array.ArrayLike} arr The array over which to iterate.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, R, T, number, ?) : R} f The function to call for
+ *     every element. This function
  *     takes 4 arguments (the function's previous result or the initial value,
  *     the value of the current array element, the current array index, and the
  *     array itself)
  *     function(previousValue, currentValue, index, array).
- * @param {*} val The initial value to pass into the function on the first call.
- * @param {Object=} opt_obj  The object to be used as the value of 'this'
+ * @param {?} val The initial value to pass into the function on the first call.
+ * @param {S=} opt_obj  The object to be used as the value of 'this'
  *     within f.
- * @return {*} Result of evaluating f repeatedly across the values of the array.
+ * @return {R} Result of evaluating f repeatedly across the values of the array.
+ * @template T,S,R
  */
 goog.array.reduce = function(arr, f, val, opt_obj) {
   if (arr.reduce) {
@@ -3408,17 +3797,20 @@ goog.array.reduce = function(arr, f, val, opt_obj) {
  * goog.array.reduceRight(a, function(r, v, i, arr) {return r + v;}, '');
  * returns 'cba'
  *
- * @param {goog.array.ArrayLike} arr The array over which to iterate.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, R, T, number, ?) : R} f The function to call for
+ *     every element. This function
  *     takes 4 arguments (the function's previous result or the initial value,
  *     the value of the current array element, the current array index, and the
  *     array itself)
  *     function(previousValue, currentValue, index, array).
- * @param {*} val The initial value to pass into the function on the first call.
- * @param {Object=} opt_obj The object to be used as the value of 'this'
+ * @param {?} val The initial value to pass into the function on the first call.
+ * @param {S=} opt_obj The object to be used as the value of 'this'
  *     within f.
- * @return {*} Object returned as a result of evaluating f repeatedly across the
+ * @return {R} Object returned as a result of evaluating f repeatedly across the
  *     values of the array.
+ * @template T,S,R
  */
 goog.array.reduceRight = function(arr, f, val, opt_obj) {
   if (arr.reduceRight) {
@@ -3443,13 +3835,15 @@ goog.array.reduceRight = function(arr, f, val, opt_obj) {
  *
  * See {@link http://tinyurl.com/developer-mozilla-org-array-some}
  *
- * @param {goog.array.ArrayLike} arr The array to check.
- * @param {Function} f The function to call for every element. This function
- *     takes 3 arguments (the element, the index and the array) and must
- *     return a Boolean.
- * @param {Object=} opt_obj  The object to be used as the value of 'this'
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?) : boolean} f The function to call for
+ *     for every element. This function takes 3 arguments (the element, the
+ *     index and the array) and should return a boolean.
+ * @param {S=} opt_obj  The object to be used as the value of 'this'
  *     within f.
  * @return {boolean} true if any element passes the test.
+ * @template T,S
  */
 goog.array.some = goog.NATIVE_ARRAY_PROTOTYPES &&
                   goog.array.ARRAY_PROTOTYPE_.some ?
@@ -3477,13 +3871,15 @@ goog.array.some = goog.NATIVE_ARRAY_PROTOTYPES &&
  *
  * See {@link http://tinyurl.com/developer-mozilla-org-array-every}
  *
- * @param {goog.array.ArrayLike} arr The array to check.
- * @param {Function} f The function to call for every element. This function
- *     takes 3 arguments (the element, the index and the array) and must
- *     return a Boolean.
- * @param {Object=} opt_obj The object to be used as the value of 'this'
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?) : boolean} f The function to call for
+ *     for every element. This function takes 3 arguments (the element, the
+ *     index and the array) and should return a boolean.
+ * @param {S=} opt_obj The object to be used as the value of 'this'
  *     within f.
  * @return {boolean} false if any element fails the test.
+ * @template T,S
  */
 goog.array.every = goog.NATIVE_ARRAY_PROTOTYPES &&
                    goog.array.ARRAY_PROTOTYPE_.every ?
@@ -3505,15 +3901,40 @@ goog.array.every = goog.NATIVE_ARRAY_PROTOTYPES &&
 
 
 /**
+ * Counts the array elements that fulfill the predicate, i.e. for which the
+ * callback function returns true. Skips holes in the array.
+ *
+ * @param {!(Array.<T>|goog.array.ArrayLike)} arr Array or array like object
+ *     over which to iterate.
+ * @param {function(this: S, T, number, ?): boolean} f The function to call for
+ *     every element. Takes 3 arguments (the element, the index and the array).
+ * @param {S=} opt_obj The object to be used as the value of 'this' within f.
+ * @return {number} The number of the matching elements.
+ * @template T,S
+ */
+goog.array.count = function(arr, f, opt_obj) {
+  var count = 0;
+  goog.array.forEach(arr, function(element, index, arr) {
+    if (f.call(opt_obj, element, index, arr)) {
+      ++count;
+    }
+  }, opt_obj);
+  return count;
+};
+
+
+/**
  * Search an array for the first element that satisfies a given condition and
  * return that element.
- * @param {goog.array.ArrayLike} arr The array to search.
- * @param {Function} f The function to call for every element. This function
- *     takes 3 arguments (the element, the index and the array) and should
- *     return a boolean.
- * @param {Object=} opt_obj An optional "this" context for the function.
- * @return {*} The first array element that passes the test, or null if no
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?) : boolean} f The function to call
+ *     for every element. This function takes 3 arguments (the element, the
+ *     index and the array) and should return a boolean.
+ * @param {S=} opt_obj An optional "this" context for the function.
+ * @return {T} The first array element that passes the test, or null if no
  *     element is found.
+ * @template T,S
  */
 goog.array.find = function(arr, f, opt_obj) {
   var i = goog.array.findIndex(arr, f, opt_obj);
@@ -3524,13 +3945,16 @@ goog.array.find = function(arr, f, opt_obj) {
 /**
  * Search an array for the first element that satisfies a given condition and
  * return its index.
- * @param {goog.array.ArrayLike} arr The array to search.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?) : boolean} f The function to call for
+ *     every element. This function
  *     takes 3 arguments (the element, the index and the array) and should
  *     return a boolean.
- * @param {Object=} opt_obj An optional "this" context for the function.
+ * @param {S=} opt_obj An optional "this" context for the function.
  * @return {number} The index of the first array element that passes the test,
  *     or -1 if no element is found.
+ * @template T,S
  */
 goog.array.findIndex = function(arr, f, opt_obj) {
   var l = arr.length;  // must be fixed during loop... see docs
@@ -3547,13 +3971,16 @@ goog.array.findIndex = function(arr, f, opt_obj) {
 /**
  * Search an array (in reverse order) for the last element that satisfies a
  * given condition and return that element.
- * @param {goog.array.ArrayLike} arr The array to search.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?) : boolean} f The function to call
+ *     for every element. This function
  *     takes 3 arguments (the element, the index and the array) and should
  *     return a boolean.
- * @param {Object=} opt_obj An optional "this" context for the function.
- * @return {*} The last array element that passes the test, or null if no
+ * @param {S=} opt_obj An optional "this" context for the function.
+ * @return {T} The last array element that passes the test, or null if no
  *     element is found.
+ * @template T,S
  */
 goog.array.findRight = function(arr, f, opt_obj) {
   var i = goog.array.findIndexRight(arr, f, opt_obj);
@@ -3564,13 +3991,16 @@ goog.array.findRight = function(arr, f, opt_obj) {
 /**
  * Search an array (in reverse order) for the last element that satisfies a
  * given condition and return its index.
- * @param {goog.array.ArrayLike} arr The array to search.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?) : boolean} f The function to call
+ *     for every element. This function
  *     takes 3 arguments (the element, the index and the array) and should
  *     return a boolean.
  * @param {Object=} opt_obj An optional "this" context for the function.
  * @return {number} The index of the last array element that passes the test,
  *     or -1 if no element is found.
+ * @template T,S
  */
 goog.array.findIndexRight = function(arr, f, opt_obj) {
   var l = arr.length;  // must be fixed during loop... see docs
@@ -3624,8 +4054,9 @@ goog.array.clear = function(arr) {
 
 /**
  * Pushes an item into an array, if it's not already in the array.
- * @param {Array} arr Array into which to insert the item.
- * @param {*} obj Value to add.
+ * @param {Array.<T>} arr Array into which to insert the item.
+ * @param {T} obj Value to add.
+ * @template T
  */
 goog.array.insert = function(arr, obj) {
   if (!goog.array.contains(arr, obj)) {
@@ -3660,10 +4091,11 @@ goog.array.insertArrayAt = function(arr, elementsToAdd, opt_i) {
 
 /**
  * Inserts an object into an array before a specified object.
- * @param {Array} arr The array to modify.
- * @param {*} obj The object to insert.
- * @param {*=} opt_obj2 The object before which obj should be inserted. If obj2
+ * @param {Array.<T>} arr The array to modify.
+ * @param {T} obj The object to insert.
+ * @param {T=} opt_obj2 The object before which obj should be inserted. If obj2
  *     is omitted or not found, obj is inserted at the end of the array.
+ * @template T
  */
 goog.array.insertBefore = function(arr, obj, opt_obj2) {
   var i;
@@ -3710,12 +4142,15 @@ goog.array.removeAt = function(arr, i) {
 
 /**
  * Removes the first value that satisfies the given condition.
- * @param {goog.array.ArrayLike} arr Array from which to remove value.
- * @param {Function} f The function to call for every element. This function
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array
+ *     like object over which to iterate.
+ * @param {?function(this:S, T, number, ?) : boolean} f The function to call
+ *     for every element. This function
  *     takes 3 arguments (the element, the index and the array) and should
  *     return a boolean.
- * @param {Object=} opt_obj An optional "this" context for the function.
+ * @param {S=} opt_obj An optional "this" context for the function.
  * @return {boolean} True if an element was removed.
+ * @template T,S
  */
 goog.array.removeIf = function(arr, f, opt_obj) {
   var i = goog.array.findIndex(arr, f, opt_obj);
@@ -3761,25 +4196,6 @@ goog.array.concat = function(var_args) {
 
 
 /**
- * Does a shallow copy of an array.
- * @param {goog.array.ArrayLike} arr  Array or array-like object to clone.
- * @return {!Array} Clone of the input array.
- */
-goog.array.clone = function(arr) {
-  if (goog.isArray(arr)) {
-    return goog.array.concat(/** @type {!Array} */ (arr));
-  } else { // array like
-    // Concat does not work with non arrays.
-    var rv = [];
-    for (var i = 0, len = arr.length; i < len; i++) {
-      rv[i] = arr[i];
-    }
-    return rv;
-  }
-};
-
-
-/**
  * Converts an object to an array.
  * @param {goog.array.ArrayLike} object  The object to convert to an array.
  * @return {!Array} The object converted into an array. If object has a
@@ -3788,15 +4204,28 @@ goog.array.clone = function(arr) {
  *     have a length property, an empty array will be returned.
  */
 goog.array.toArray = function(object) {
-  if (goog.isArray(object)) {
-    // This fixes the JS compiler warning and forces the Object to an Array type
-    return goog.array.concat(/** @type {!Array} */ (object));
+  var length = object.length;
+
+  // If length is not a number the following it false. This case is kept for
+  // backwards compatibility since there are callers that pass objects that are
+  // not array like.
+  if (length > 0) {
+    var rv = new Array(length);
+    for (var i = 0; i < length; i++) {
+      rv[i] = object[i];
+    }
+    return rv;
   }
-  // Clone what we hope to be an array-like object to an array.
-  // We could check isArrayLike() first, but no check we perform would be as
-  // reliable as simply making the call.
-  return goog.array.clone(/** @type {Array} */ (object));
+  return [];
 };
+
+
+/**
+ * Does a shallow copy of an array.
+ * @param {goog.array.ArrayLike} arr  Array or array-like object to clone.
+ * @return {!Array} Clone of the input array.
+ */
+goog.array.clone = goog.array.toArray;
 
 
 /**
@@ -3826,9 +4255,8 @@ goog.array.extend = function(arr1, var_args) {
         (isArrayLike = goog.isArrayLike(arr2)) &&
             // The getter for callee throws an exception in strict mode
             // according to section 10.6 in ES5 so check for presence instead.
-            arr2.hasOwnProperty('callee')) {
+            Object.prototype.hasOwnProperty.call(arr2, 'callee')) {
       arr1.push.apply(arr1, arr2);
-
     } else if (isArrayLike) {
       // Otherwise loop over arr2 to prevent copying the object.
       var len1 = arr1.length;
@@ -3871,11 +4299,13 @@ goog.array.splice = function(arr, index, howMany, var_args) {
  * Array slice. This means that it might work on other objects similar to
  * arrays, such as the arguments object.
  *
- * @param {goog.array.ArrayLike} arr The array from which to copy a segment.
+ * @param {Array.<T>|goog.array.ArrayLike} arr The array from
+ * which to copy a segment.
  * @param {number} start The index of the first element to copy.
  * @param {number=} opt_end The index after the last element to copy.
- * @return {!Array} A new array containing the specified segment of the original
- *     array.
+ * @return {!Array.<T>} A new array containing the specified segment of the
+ *     original array.
+ * @template T
  */
 goog.array.slice = function(arr, start, opt_end) {
   goog.asserts.assert(arr.length != null);
@@ -4056,11 +4486,13 @@ goog.array.binarySearch_ = function(arr, compareFn, isEvaluator, opt_target,
  *
  * Runtime: Same as <code>Array.prototype.sort</code>
  *
- * @param {Array} arr The array to be sorted.
- * @param {Function=} opt_compareFn Optional comparison function by which the
+ * @param {Array.<T>} arr The array to be sorted.
+ * @param {?function(T,T):number=} opt_compareFn Optional comparison
+ *     function by which the
  *     array is to be ordered. Should take 2 arguments to compare, and return a
  *     negative number, zero, or a positive number depending on whether the
  *     first argument is less than, equal to, or greater than the second.
+ * @template T
  */
 goog.array.sort = function(arr, opt_compareFn) {
   // TODO(arv): Update type annotation since null is not accepted.
@@ -4081,12 +4513,13 @@ goog.array.sort = function(arr, opt_compareFn) {
  * Runtime: Same as <code>Array.prototype.sort</code>, plus an additional
  * O(n) overhead of copying the array twice.
  *
- * @param {Array} arr The array to be sorted.
- * @param {function(*, *): number=} opt_compareFn Optional comparison function
+ * @param {Array.<T>} arr The array to be sorted.
+ * @param {?function(T, T): number=} opt_compareFn Optional comparison function
  *     by which the array is to be ordered. Should take 2 arguments to compare,
  *     and return a negative number, zero, or a positive number depending on
  *     whether the first argument is less than, equal to, or greater than the
  *     second.
+ * @template T
  */
 goog.array.stableSort = function(arr, opt_compareFn) {
   for (var i = 0; i < arr.length; i++) {
@@ -4124,13 +4557,15 @@ goog.array.sortObjectsByKey = function(arr, key, opt_compareFn) {
 
 /**
  * Tells if the array is sorted.
- * @param {!Array} arr The array.
- * @param {Function=} opt_compareFn Function to compare the array elements.
+ * @param {!Array.<T>} arr The array.
+ * @param {?function(T,T):number=} opt_compareFn Function to compare the
+ *     array elements.
  *     Should take 2 arguments to compare, and return a negative number, zero,
  *     or a positive number depending on whether the first argument is less
  *     than, equal to, or greater than the second.
  * @param {boolean=} opt_strict If true no equal elements are allowed.
  * @return {boolean} Whether the array is sorted.
+ * @template T
  */
 goog.array.isSorted = function(arr, opt_compareFn, opt_strict) {
   var compare = opt_compareFn || goog.array.defaultCompare;
@@ -4189,7 +4624,7 @@ goog.array.compare = function(arr1, arr2, opt_equalsFn) {
  * 3-way array compare function.
  * @param {!goog.array.ArrayLike} arr1 The first array to compare.
  * @param {!goog.array.ArrayLike} arr2 The second array to compare.
- * @param {(function(*, *): number)=} opt_compareFn Optional comparison function
+ * @param {?function(?, ?): number=} opt_compareFn Optional comparison function
  *     by which the array is to be ordered. Should take 2 arguments to compare,
  *     and return a negative number, zero, or a positive number depending on
  *     whether the first argument is less than, equal to, or greater than the
@@ -4238,13 +4673,15 @@ goog.array.defaultCompareEquality = function(a, b) {
 /**
  * Inserts a value into a sorted array. The array is not modified if the
  * value is already present.
- * @param {Array} array The array to modify.
- * @param {*} value The object to insert.
- * @param {Function=} opt_compareFn Optional comparison function by which the
+ * @param {Array.<T>} array The array to modify.
+ * @param {T} value The object to insert.
+ * @param {?function(T,T):number=} opt_compareFn Optional comparison function by
+ *     which the
  *     array is ordered. Should take 2 arguments to compare, and return a
  *     negative number, zero, or a positive number depending on whether the
  *     first argument is less than, equal to, or greater than the second.
  * @return {boolean} True if an element was inserted.
+ * @template T
  */
 goog.array.binaryInsert = function(array, value, opt_compareFn) {
   var index = goog.array.binarySearch(array, value, opt_compareFn);
@@ -4274,21 +4711,24 @@ goog.array.binaryRemove = function(array, value, opt_compareFn) {
 
 /**
  * Splits an array into disjoint buckets according to a splitting function.
- * @param {Array} array The array.
- * @param {Function} sorter Function to call for every element.  This
- *     takes 3 arguments (the element, the index and the array) and must
- *     return a valid object key (a string, number, etc), or undefined, if
- *     that object should not be placed in a bucket.
+ * @param {Array.<T>} array The array.
+ * @param {function(this:S, T,number,Array.<T>):?} sorter Function to call for
+ *     every element.  This takes 3 arguments (the element, the index and the
+ *     array) and must return a valid object key (a string, number, etc), or
+ *     undefined, if that object should not be placed in a bucket.
+ * @param {S=} opt_obj The object to be used as the value of 'this' within
+ *     sorter.
  * @return {!Object} An object, with keys being all of the unique return values
  *     of sorter, and values being arrays containing the items for
  *     which the splitter returned that key.
+ * @template T,S
  */
-goog.array.bucket = function(array, sorter) {
+goog.array.bucket = function(array, sorter, opt_obj) {
   var buckets = {};
 
   for (var i = 0; i < array.length; i++) {
     var value = array[i];
-    var key = sorter(value, i, array);
+    var key = sorter.call(opt_obj, value, i, array);
     if (goog.isDef(key)) {
       // Push the value to the right bucket, creating it if necessary.
       var bucket = buckets[key] || (buckets[key] = []);
@@ -4301,11 +4741,84 @@ goog.array.bucket = function(array, sorter) {
 
 
 /**
+ * Creates a new object built from the provided array and the key-generation
+ * function.
+ * @param {Array.<T>|goog.array.ArrayLike} arr Array or array like object over
+ *     which to iterate whose elements will be the values in the new object.
+ * @param {?function(this:S, T, number, ?) : string} keyFunc The function to
+ *     call for every element. This function takes 3 arguments (the element, the
+ *     index and the array) and should return a string that will be used as the
+ *     key for the element in the new object. If the function returns the same
+ *     key for more than one element, the value for that key is
+ *     implementation-defined.
+ * @param {S=} opt_obj The object to be used as the value of 'this'
+ *     within keyFunc.
+ * @return {!Object.<T>} The new object.
+ * @template T,S
+ */
+goog.array.toObject = function(arr, keyFunc, opt_obj) {
+  var ret = {};
+  goog.array.forEach(arr, function(element, index) {
+    ret[keyFunc.call(opt_obj, element, index, arr)] = element;
+  });
+  return ret;
+};
+
+
+/**
+ * Creates a range of numbers in an arithmetic progression.
+ *
+ * Range takes 1, 2, or 3 arguments:
+ * <pre>
+ * range(5) is the same as range(0, 5, 1) and produces [0, 1, 2, 3, 4]
+ * range(2, 5) is the same as range(2, 5, 1) and produces [2, 3, 4]
+ * range(-2, -5, -1) produces [-2, -3, -4]
+ * range(-2, -5, 1) produces [], since stepping by 1 wouldn't ever reach -5.
+ * </pre>
+ *
+ * @param {number} startOrEnd The starting value of the range if an end argument
+ *     is provided. Otherwise, the start value is 0, and this is the end value.
+ * @param {number=} opt_end The optional end value of the range.
+ * @param {number=} opt_step The step size between range values. Defaults to 1
+ *     if opt_step is undefined or 0.
+ * @return {!Array.<number>} An array of numbers for the requested range. May be
+ *     an empty array if adding the step would not converge toward the end
+ *     value.
+ */
+goog.array.range = function(startOrEnd, opt_end, opt_step) {
+  var array = [];
+  var start = 0;
+  var end = startOrEnd;
+  var step = opt_step || 1;
+  if (opt_end !== undefined) {
+    start = startOrEnd;
+    end = opt_end;
+  }
+
+  if (step * (end - start) < 0) {
+    // Sign mismatch: start + step will never reach the end value.
+    return [];
+  }
+
+  if (step > 0) {
+    for (var i = start; i < end; i += step) {
+      array.push(i);
+    }
+  } else {
+    for (var i = start; i > end; i += step) {
+      array.push(i);
+    }
+  }
+  return array;
+};
+
+
+/**
  * Returns an array consisting of the given value repeated N times.
  *
  * @param {*} value The value to repeat.
  * @param {number} n The repeat count.
- * @return {!Array.<*>} An array with the repeated value.
+ * @return {!Array} An array with the repeated value.
  */
 goog.array.repeat = function(value, n) {
   var array = [];
@@ -4321,7 +4834,7 @@ goog.array.repeat = function(value, n) {
  * expanded in-place recursively.
  *
  * @param {...*} var_args The values to flatten.
- * @return {!Array.<*>} An array containing the flattened values.
+ * @return {!Array} An array containing the flattened values.
  */
 goog.array.flatten = function(var_args) {
   var result = [];
@@ -4346,9 +4859,10 @@ goog.array.flatten = function(var_args) {
  * For example, suppose list comprises [t, a, n, k, s]. After invoking
  * rotate(array, 1) (or rotate(array, -4)), array will comprise [s, t, a, n, k].
  *
- * @param {!Array.<*>} array The array to rotate.
+ * @param {!Array.<T>} array The array to rotate.
  * @param {number} n The amount to rotate.
- * @return {!Array.<*>} The array.
+ * @return {!Array.<T>} The array.
+ * @template T
  */
 goog.array.rotate = function(array, n) {
   goog.asserts.assert(array.length != null);
@@ -4406,7 +4920,8 @@ goog.array.zip = function(var_args) {
  * Runtime: O(n)
  *
  * @param {!Array} arr The array to be shuffled.
- * @param {Function=} opt_randFn Optional random function to use for shuffling.
+ * @param {function():number=} opt_randFn Optional random function to use for
+ *     shuffling.
  *     Takes no arguments, and returns a random number on the interval [0, 1).
  *     Defaults to Math.random() using JavaScript's built-in Math library.
  */
@@ -4437,7 +4952,14 @@ goog.array.shuffle = function(arr, opt_randFn) {
 // limitations under the License.
 
 /**
- * @fileoverview Utilities for adding, removing and setting classes.
+ * @fileoverview Utilities for adding, removing and setting classes.  Prefer
+ * {@link goog.dom.classlist} over these utilities since goog.dom.classlist
+ * conforms closer to the semantics of Element.classList, is faster (uses
+ * native methods rather than parsing strings on every call) and compiles
+ * to smaller code as a result.
+ *
+ * Note: these utilities are meant to operate on HTMLElements and
+ * will not work on elements with differing interfaces (such as SVGElements).
  *
  */
 
@@ -4483,7 +5005,7 @@ goog.dom.classes.add = function(element, var_args) {
   var args = goog.array.slice(arguments, 1);
   var expectedCount = classes.length + args.length;
   goog.dom.classes.add_(classes, args);
-  element.className = classes.join(' ');
+  goog.dom.classes.set(element, classes.join(' '));
   return classes.length == expectedCount;
 };
 
@@ -4499,7 +5021,7 @@ goog.dom.classes.remove = function(element, var_args) {
   var classes = goog.dom.classes.get(element);
   var args = goog.array.slice(arguments, 1);
   var newClasses = goog.dom.classes.getDifference_(classes, args);
-  element.className = newClasses.join(' ');
+  goog.dom.classes.set(element, newClasses.join(' '));
   return newClasses.length == classes.length - args.length;
 };
 
@@ -4559,7 +5081,7 @@ goog.dom.classes.swap = function(element, fromClass, toClass) {
 
   if (removed) {
     classes.push(toClass);
-    element.className = classes.join(' ');
+    goog.dom.classes.set(element, classes.join(' '));
   }
 
   return removed;
@@ -4597,7 +5119,7 @@ goog.dom.classes.addRemove = function(element, classesToRemove, classesToAdd) {
     goog.dom.classes.add_(classes, classesToAdd);
   }
 
-  element.className = classes.join(' ');
+  goog.dom.classes.set(element, classes.join(' '));
 };
 
 
@@ -4666,11 +5188,12 @@ goog.provide('goog.object');
 /**
  * Calls a function for each element in an object/map/hash.
  *
- * @param {Object} obj The object over which to iterate.
- * @param {Function} f The function to call for every element. This function
- *     takes 3 arguments (the element, the index and the object)
- *     and the return value is irrelevant.
- * @param {Object=} opt_obj This is used as the 'this' object within f.
+ * @param {Object.<K,V>} obj The object over which to iterate.
+ * @param {function(this:T,V,?,Object.<K,V>):?} f The function to call
+ *     for every element. This function takes 3 arguments (the element, the
+ *     index and the object) and the return value is ignored.
+ * @param {T=} opt_obj This is used as the 'this' object within f.
+ * @template T,K,V
  */
 goog.object.forEach = function(obj, f, opt_obj) {
   for (var key in obj) {
@@ -4683,15 +5206,17 @@ goog.object.forEach = function(obj, f, opt_obj) {
  * Calls a function for each element in an object/map/hash. If that call returns
  * true, adds the element to a new object.
  *
- * @param {Object} obj The object over which to iterate.
- * @param {Function} f The function to call for every element. This
+ * @param {Object.<K,V>} obj The object over which to iterate.
+ * @param {function(this:T,V,?,Object.<K,V>):boolean} f The function to call
+ *     for every element. This
  *     function takes 3 arguments (the element, the index and the object)
  *     and should return a boolean. If the return value is true the
  *     element is added to the result object. If it is false the
  *     element is not included.
- * @param {Object=} opt_obj This is used as the 'this' object within f.
- * @return {!Object} a new object in which only elements that passed the test
- *     are present.
+ * @param {T=} opt_obj This is used as the 'this' object within f.
+ * @return {!Object.<K,V>} a new object in which only elements that passed the
+ *     test are present.
+ * @template T,K,V
  */
 goog.object.filter = function(obj, f, opt_obj) {
   var res = {};
@@ -4708,13 +5233,15 @@ goog.object.filter = function(obj, f, opt_obj) {
  * For every element in an object/map/hash calls a function and inserts the
  * result into a new object.
  *
- * @param {Object} obj The object over which to iterate.
- * @param {Function} f The function to call for every element. This function
+ * @param {Object.<K,V>} obj The object over which to iterate.
+ * @param {function(this:T,V,?,Object.<K,V>):R} f The function to call
+ *     for every element. This function
  *     takes 3 arguments (the element, the index and the object)
  *     and should return something. The result will be inserted
  *     into a new object.
- * @param {Object=} opt_obj This is used as the 'this' object within f.
- * @return {!Object} a new object with the results from f.
+ * @param {T=} opt_obj This is used as the 'this' object within f.
+ * @return {!Object.<K,R>} a new object with the results from f.
+ * @template T,K,V,R
  */
 goog.object.map = function(obj, f, opt_obj) {
   var res = {};
@@ -4730,12 +5257,14 @@ goog.object.map = function(obj, f, opt_obj) {
  * call returns true, returns true (without checking the rest). If
  * all calls return false, returns false.
  *
- * @param {Object} obj The object to check.
- * @param {Function} f The function to call for every element. This function
+ * @param {Object.<K,V>} obj The object to check.
+ * @param {function(this:T,V,?,Object.<K,V>):boolean} f The function to
+ *     call for every element. This function
  *     takes 3 arguments (the element, the index and the object) and should
  *     return a boolean.
- * @param {Object=} opt_obj This is used as the 'this' object within f.
+ * @param {T=} opt_obj This is used as the 'this' object within f.
  * @return {boolean} true if any element passes the test.
+ * @template T,K,V
  */
 goog.object.some = function(obj, f, opt_obj) {
   for (var key in obj) {
@@ -4752,12 +5281,14 @@ goog.object.some = function(obj, f, opt_obj) {
  * all calls return true, returns true. If any call returns false, returns
  * false at this point and does not continue to check the remaining elements.
  *
- * @param {Object} obj The object to check.
- * @param {Function} f The function to call for every element. This function
+ * @param {Object.<K,V>} obj The object to check.
+ * @param {?function(this:T,V,?,Object.<K,V>):boolean} f The function to
+ *     call for every element. This function
  *     takes 3 arguments (the element, the index and the object) and should
  *     return a boolean.
- * @param {Object=} opt_obj This is used as the 'this' object within f.
+ * @param {T=} opt_obj This is used as the 'this' object within f.
  * @return {boolean} false if any element fails the test.
+ * @template T,K,V
  */
 goog.object.every = function(obj, f, opt_obj) {
   for (var key in obj) {
@@ -4808,8 +5339,9 @@ goog.object.getAnyKey = function(obj) {
  * For map literals the returned value will be the first one in most of the
  * browsers (a know exception is Konqueror).
  *
- * @param {Object} obj The object to pick a value from.
- * @return {*} The value or undefined if the object is empty.
+ * @param {Object.<K,V>} obj The object to pick a value from.
+ * @return {V|undefined} The value or undefined if the object is empty.
+ * @template K,V
  */
 goog.object.getAnyValue = function(obj) {
   for (var key in obj) {
@@ -4822,9 +5354,10 @@ goog.object.getAnyValue = function(obj) {
  * Whether the object/hash/map contains the given object as a value.
  * An alias for goog.object.containsValue(obj, val).
  *
- * @param {Object} obj The object in which to look for val.
- * @param {*} val The object for which to check.
+ * @param {Object.<K,V>} obj The object in which to look for val.
+ * @param {V} val The object for which to check.
  * @return {boolean} true if val is present.
+ * @template K,V
  */
 goog.object.contains = function(obj, val) {
   return goog.object.containsValue(obj, val);
@@ -4834,8 +5367,9 @@ goog.object.contains = function(obj, val) {
 /**
  * Returns the values of the object/map/hash.
  *
- * @param {Object} obj The object from which to get the values.
- * @return {!Array} The values in the object/map/hash.
+ * @param {Object.<K,V>} obj The object from which to get the values.
+ * @return {!Array.<V>} The values in the object/map/hash.
+ * @template K,V
  */
 goog.object.getValues = function(obj) {
   var res = [];
@@ -4870,7 +5404,7 @@ goog.object.getKeys = function(obj) {
  *
  * @param {!Object} obj An object to get the value from.  Can be array-like.
  * @param {...(string|number|!Array.<number|string>)} var_args A number of keys
- *     (as strings, or nubmers, for array-like objects).  Can also be
+ *     (as strings, or numbers, for array-like objects).  Can also be
  *     specified as a single array of keys.
  * @return {*} The resulting value.  If, at any point, the value for a key
  *     is undefined, returns undefined.
@@ -4906,9 +5440,10 @@ goog.object.containsKey = function(obj, key) {
 /**
  * Whether the object/map/hash contains the given value. This is O(n).
  *
- * @param {Object} obj The object in which to look for val.
- * @param {*} val The value for which to check.
+ * @param {Object.<K,V>} obj The object in which to look for val.
+ * @param {V} val The value for which to check.
  * @return {boolean} true If the map contains the value.
+ * @template K,V
  */
 goog.object.containsValue = function(obj, val) {
   for (var key in obj) {
@@ -4923,13 +5458,14 @@ goog.object.containsValue = function(obj, val) {
 /**
  * Searches an object for an element that satisfies the given condition and
  * returns its key.
- * @param {Object} obj The object to search in.
- * @param {function(*, string, Object): boolean} f The function to call for
- *     every element. Takes 3 arguments (the value, the key and the object) and
- *     should return a boolean.
- * @param {Object=} opt_this An optional "this" context for the function.
+ * @param {Object.<K,V>} obj The object to search in.
+ * @param {function(this:T,V,string,Object.<K,V>):boolean} f The
+ *      function to call for every element. Takes 3 arguments (the value,
+ *     the key and the object) and should return a boolean.
+ * @param {T=} opt_this An optional "this" context for the function.
  * @return {string|undefined} The key of an element for which the function
  *     returns true or undefined if no such element is found.
+ * @template T,K,V
  */
 goog.object.findKey = function(obj, f, opt_this) {
   for (var key in obj) {
@@ -4944,13 +5480,14 @@ goog.object.findKey = function(obj, f, opt_this) {
 /**
  * Searches an object for an element that satisfies the given condition and
  * returns its value.
- * @param {Object} obj The object to search in.
- * @param {function(*, string, Object): boolean} f The function to call for
- *     every element. Takes 3 arguments (the value, the key and the object) and
- *     should return a boolean.
- * @param {Object=} opt_this An optional "this" context for the function.
- * @return {*} The value of an element for which the function returns true or
+ * @param {Object.<K,V>} obj The object to search in.
+ * @param {function(this:T,V,string,Object.<K,V>):boolean} f The function
+ *     to call for every element. Takes 3 arguments (the value, the key
+ *     and the object) and should return a boolean.
+ * @param {T=} opt_this An optional "this" context for the function.
+ * @return {V} The value of an element for which the function returns true or
  *     undefined if no such element is found.
+ * @template T,K,V
  */
 goog.object.findValue = function(obj, f, opt_this) {
   var key = goog.object.findKey(obj, f, opt_this);
@@ -5004,9 +5541,10 @@ goog.object.remove = function(obj, key) {
  * Adds a key-value pair to the object. Throws an exception if the key is
  * already in use. Use set if you want to change an existing pair.
  *
- * @param {Object} obj The object to which to add the key-value pair.
+ * @param {Object.<K,V>} obj The object to which to add the key-value pair.
  * @param {string} key The key to add.
- * @param {*} val The value to add.
+ * @param {V} val The value to add.
+ * @template K,V
  */
 goog.object.add = function(obj, key, val) {
   if (key in obj) {
@@ -5019,11 +5557,12 @@ goog.object.add = function(obj, key, val) {
 /**
  * Returns the value for the given key.
  *
- * @param {Object} obj The object from which to get the value.
+ * @param {Object.<K,V>} obj The object from which to get the value.
  * @param {string} key The key for which to get the value.
- * @param {*=} opt_val The value to return if no item is found for the given
+ * @param {R=} opt_val The value to return if no item is found for the given
  *     key (default is undefined).
- * @return {*} The value for the given key.
+ * @return {V|R|undefined} The value for the given key.
+ * @template K,V,R
  */
 goog.object.get = function(obj, key, opt_val) {
   if (key in obj) {
@@ -5036,9 +5575,10 @@ goog.object.get = function(obj, key, opt_val) {
 /**
  * Adds a key-value pair to the object/map/hash.
  *
- * @param {Object} obj The object to which to add the key-value pair.
+ * @param {Object.<K,V>} obj The object to which to add the key-value pair.
  * @param {string} key The key to add.
- * @param {*} value The value to add.
+ * @param {V} value The value to add.
+ * @template K,V
  */
 goog.object.set = function(obj, key, value) {
   obj[key] = value;
@@ -5048,10 +5588,11 @@ goog.object.set = function(obj, key, value) {
 /**
  * Adds a key-value pair to the object/map/hash if it doesn't exist yet.
  *
- * @param {Object} obj The object to which to add the key-value pair.
+ * @param {Object.<K,V>} obj The object to which to add the key-value pair.
  * @param {string} key The key to add.
- * @param {*} value The value to add if the key wasn't present.
- * @return {*} The value of the entry at the end of the function.
+ * @param {V} value The value to add if the key wasn't present.
+ * @return {V} The value of the entry at the end of the function.
+ * @template K,V
  */
 goog.object.setIfUndefined = function(obj, key, value) {
   return key in obj ? obj[key] : (obj[key] = value);
@@ -5061,8 +5602,9 @@ goog.object.setIfUndefined = function(obj, key, value) {
 /**
  * Does a flat clone of the object.
  *
- * @param {Object} obj Object to clone.
- * @return {!Object} Clone of the input object.
+ * @param {Object.<K,V>} obj Object to clone.
+ * @return {!Object.<K,V>} Clone of the input object.
+ * @template K,V
  */
 goog.object.clone = function(obj) {
   // We cannot use the prototype trick because a lot of methods depend on where
@@ -5226,6 +5768,37 @@ goog.object.createSet = function(var_args) {
   }
   return rv;
 };
+
+
+/**
+ * Creates an immutable view of the underlying object, if the browser
+ * supports immutable objects.
+ *
+ * In default mode, writes to this view will fail silently. In strict mode,
+ * they will throw an error.
+ *
+ * @param {!Object.<K,V>} obj An object.
+ * @return {!Object.<K,V>} An immutable view of that object, or the
+ *     original object if this browser does not support immutables.
+ * @template K,V
+ */
+goog.object.createImmutableView = function(obj) {
+  var result = obj;
+  if (Object.isFrozen && !Object.isFrozen(obj)) {
+    result = Object.create(obj);
+    Object.freeze(result);
+  }
+  return result;
+};
+
+
+/**
+ * @param {!Object} obj An object.
+ * @return {boolean} Whether this is an immutable view of the object.
+ */
+goog.object.isImmutableView = function(obj) {
+  return !!Object.isFrozen && Object.isFrozen(obj);
+};
 // Copyright 2007 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -5242,15 +5815,20 @@ goog.object.createSet = function(var_args) {
 
 /**
  * @fileoverview Defines the goog.dom.TagName enum.  This enumerates
- * all html tag names specified by the W3C HTML 4.01 Specification.
- * Reference http://www.w3.org/TR/html401/index/elements.html.
+ * all HTML tag names specified in either the the W3C HTML 4.01 index of
+ * elements or the HTML5 draft specification.
+ *
+ * References:
+ * http://www.w3.org/TR/html401/index/elements.html
+ * http://dev.w3.org/html5/spec/section-index.html
+ *
  */
 goog.provide('goog.dom.TagName');
 
 
 /**
- * Enum of all html tag names specified by the W3C HTML 4.01 Specification.
- * Reference http://www.w3.org/TR/html401/index/elements.html
+ * Enum of all html tag names specified by the W3C HTML4.01 and HTML5
+ * specifications.
  * @enum {string}
  */
 goog.dom.TagName = {
@@ -5260,10 +5838,13 @@ goog.dom.TagName = {
   ADDRESS: 'ADDRESS',
   APPLET: 'APPLET',
   AREA: 'AREA',
+  ARTICLE: 'ARTICLE',
+  ASIDE: 'ASIDE',
   AUDIO: 'AUDIO',
   B: 'B',
   BASE: 'BASE',
   BASEFONT: 'BASEFONT',
+  BDI: 'BDI',
   BDO: 'BDO',
   BIG: 'BIG',
   BLOCKQUOTE: 'BLOCKQUOTE',
@@ -5277,16 +5858,25 @@ goog.dom.TagName = {
   CODE: 'CODE',
   COL: 'COL',
   COLGROUP: 'COLGROUP',
+  COMMAND: 'COMMAND',
+  DATA: 'DATA',
+  DATALIST: 'DATALIST',
   DD: 'DD',
   DEL: 'DEL',
+  DETAILS: 'DETAILS',
   DFN: 'DFN',
+  DIALOG: 'DIALOG',
   DIR: 'DIR',
   DIV: 'DIV',
   DL: 'DL',
   DT: 'DT',
   EM: 'EM',
+  EMBED: 'EMBED',
   FIELDSET: 'FIELDSET',
+  FIGCAPTION: 'FIGCAPTION',
+  FIGURE: 'FIGURE',
   FONT: 'FONT',
+  FOOTER: 'FOOTER',
   FORM: 'FORM',
   FRAME: 'FRAME',
   FRAMESET: 'FRAMESET',
@@ -5297,6 +5887,8 @@ goog.dom.TagName = {
   H5: 'H5',
   H6: 'H6',
   HEAD: 'HEAD',
+  HEADER: 'HEADER',
+  HGROUP: 'HGROUP',
   HR: 'HR',
   HTML: 'HTML',
   I: 'I',
@@ -5306,34 +5898,48 @@ goog.dom.TagName = {
   INS: 'INS',
   ISINDEX: 'ISINDEX',
   KBD: 'KBD',
+  KEYGEN: 'KEYGEN',
   LABEL: 'LABEL',
   LEGEND: 'LEGEND',
   LI: 'LI',
   LINK: 'LINK',
   MAP: 'MAP',
+  MARK: 'MARK',
+  MATH: 'MATH',
   MENU: 'MENU',
   META: 'META',
+  METER: 'METER',
+  NAV: 'NAV',
   NOFRAMES: 'NOFRAMES',
   NOSCRIPT: 'NOSCRIPT',
   OBJECT: 'OBJECT',
   OL: 'OL',
   OPTGROUP: 'OPTGROUP',
   OPTION: 'OPTION',
+  OUTPUT: 'OUTPUT',
   P: 'P',
   PARAM: 'PARAM',
   PRE: 'PRE',
+  PROGRESS: 'PROGRESS',
   Q: 'Q',
+  RP: 'RP',
+  RT: 'RT',
+  RUBY: 'RUBY',
   S: 'S',
   SAMP: 'SAMP',
   SCRIPT: 'SCRIPT',
+  SECTION: 'SECTION',
   SELECT: 'SELECT',
   SMALL: 'SMALL',
+  SOURCE: 'SOURCE',
   SPAN: 'SPAN',
   STRIKE: 'STRIKE',
   STRONG: 'STRONG',
   STYLE: 'STYLE',
   SUB: 'SUB',
+  SUMMARY: 'SUMMARY',
   SUP: 'SUP',
+  SVG: 'SVG',
   TABLE: 'TABLE',
   TBODY: 'TBODY',
   TD: 'TD',
@@ -5341,13 +5947,16 @@ goog.dom.TagName = {
   TFOOT: 'TFOOT',
   TH: 'TH',
   THEAD: 'THEAD',
+  TIME: 'TIME',
   TITLE: 'TITLE',
   TR: 'TR',
+  TRACK: 'TRACK',
   TT: 'TT',
   U: 'U',
   UL: 'UL',
   VAR: 'VAR',
-  VIDEO: 'VIDEO'
+  VIDEO: 'VIDEO',
+  WBR: 'WBR'
 };
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
@@ -5379,39 +5988,40 @@ goog.require('goog.string');
 /**
  * @define {boolean} Whether we know at compile-time that the browser is IE.
  */
-goog.userAgent.ASSUME_IE = false;
+goog.define('goog.userAgent.ASSUME_IE', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is GECKO.
  */
-goog.userAgent.ASSUME_GECKO = false;
+goog.define('goog.userAgent.ASSUME_GECKO', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is WEBKIT.
  */
-goog.userAgent.ASSUME_WEBKIT = false;
+goog.define('goog.userAgent.ASSUME_WEBKIT', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is a
  *     mobile device running WebKit e.g. iPhone or Android.
  */
-goog.userAgent.ASSUME_MOBILE_WEBKIT = false;
+goog.define('goog.userAgent.ASSUME_MOBILE_WEBKIT', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the browser is OPERA.
  */
-goog.userAgent.ASSUME_OPERA = false;
+goog.define('goog.userAgent.ASSUME_OPERA', false);
 
 
 /**
- * @define {boolean} Whether the {@code goog.userAgent.isVersion} function will
- *     return true for any version.
+ * @define {boolean} Whether the
+ *     {@code goog.userAgent.isVersionOrHigher}
+ *     function will return true for any version.
  */
-goog.userAgent.ASSUME_ANY_VERSION = false;
+goog.define('goog.userAgent.ASSUME_ANY_VERSION', false);
 
 
 /**
@@ -5445,7 +6055,7 @@ goog.userAgent.getUserAgentString = function() {
 goog.userAgent.getNavigator = function() {
   // Need a local navigator reference instead of using the global one,
   // to avoid the rare case where they reference different objects.
-  // (goog.gears.FakeWorkerPool, for example).
+  // (in a WorkerPool, for example).
   return goog.global['navigator'];
 };
 
@@ -5599,28 +6209,46 @@ goog.userAgent.PLATFORM = goog.userAgent.determinePlatform_();
  * @define {boolean} Whether the user agent is running on a Macintosh operating
  *     system.
  */
-goog.userAgent.ASSUME_MAC = false;
+goog.define('goog.userAgent.ASSUME_MAC', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on a Windows operating
  *     system.
  */
-goog.userAgent.ASSUME_WINDOWS = false;
+goog.define('goog.userAgent.ASSUME_WINDOWS', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on a Linux operating
  *     system.
  */
-goog.userAgent.ASSUME_LINUX = false;
+goog.define('goog.userAgent.ASSUME_LINUX', false);
 
 
 /**
  * @define {boolean} Whether the user agent is running on a X11 windowing
  *     system.
  */
-goog.userAgent.ASSUME_X11 = false;
+goog.define('goog.userAgent.ASSUME_X11', false);
+
+
+/**
+ * @define {boolean} Whether the user agent is running on Android.
+ */
+goog.define('goog.userAgent.ASSUME_ANDROID', false);
+
+
+/**
+ * @define {boolean} Whether the user agent is running on an iPhone.
+ */
+goog.define('goog.userAgent.ASSUME_IPHONE', false);
+
+
+/**
+ * @define {boolean} Whether the user agent is running on an iPad.
+ */
+goog.define('goog.userAgent.ASSUME_IPAD', false);
 
 
 /**
@@ -5631,7 +6259,10 @@ goog.userAgent.PLATFORM_KNOWN_ =
     goog.userAgent.ASSUME_MAC ||
     goog.userAgent.ASSUME_WINDOWS ||
     goog.userAgent.ASSUME_LINUX ||
-    goog.userAgent.ASSUME_X11;
+    goog.userAgent.ASSUME_X11 ||
+    goog.userAgent.ASSUME_ANDROID ||
+    goog.userAgent.ASSUME_IPHONE ||
+    goog.userAgent.ASSUME_IPAD;
 
 
 /**
@@ -5672,6 +6303,30 @@ goog.userAgent.initPlatform_ = function() {
   goog.userAgent.detectedX11_ = !!goog.userAgent.getNavigator() &&
       goog.string.contains(goog.userAgent.getNavigator()['appVersion'] || '',
           'X11');
+
+  // Need user agent string for Android/IOS detection
+  var ua = goog.userAgent.getUserAgentString();
+
+  /**
+   * Whether the user agent is running on Android.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.detectedAndroid_ = !!ua && ua.indexOf('Android') >= 0;
+
+  /**
+   * Whether the user agent is running on an iPhone.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.detectedIPhone_ = !!ua && ua.indexOf('iPhone') >= 0;
+
+  /**
+   * Whether the user agent is running on an iPad.
+   * @type {boolean}
+   * @private
+   */
+  goog.userAgent.detectedIPad_ = !!ua && ua.indexOf('iPad') >= 0;
 };
 
 
@@ -5710,6 +6365,30 @@ goog.userAgent.LINUX = goog.userAgent.PLATFORM_KNOWN_ ?
  */
 goog.userAgent.X11 = goog.userAgent.PLATFORM_KNOWN_ ?
     goog.userAgent.ASSUME_X11 : goog.userAgent.detectedX11_;
+
+
+/**
+ * Whether the user agent is running on Android.
+ * @type {boolean}
+ */
+goog.userAgent.ANDROID = goog.userAgent.PLATFORM_KNOWN_ ?
+    goog.userAgent.ASSUME_ANDROID : goog.userAgent.detectedAndroid_;
+
+
+/**
+ * Whether the user agent is running on an iPhone.
+ * @type {boolean}
+ */
+goog.userAgent.IPHONE = goog.userAgent.PLATFORM_KNOWN_ ?
+    goog.userAgent.ASSUME_IPHONE : goog.userAgent.detectedIPhone_;
+
+
+/**
+ * Whether the user agent is running on an iPad.
+ * @type {boolean}
+ */
+goog.userAgent.IPAD = goog.userAgent.PLATFORM_KNOWN_ ?
+    goog.userAgent.ASSUME_IPAD : goog.userAgent.detectedIPad_;
 
 
 /**
@@ -5793,13 +6472,13 @@ goog.userAgent.compare = function(v1, v2) {
 
 
 /**
- * Cache for {@link goog.userAgent.isVersion}. Calls to compareVersions are
- * surprisingly expensive and as a browsers version number is unlikely to change
- * during a session we cache the results.
- * @type {Object}
+ * Cache for {@link goog.userAgent.isVersionOrHigher}.
+ * Calls to compareVersions are surprisingly expensive and, as a browser's
+ * version number is unlikely to change during a session, we cache the results.
+ * @const
  * @private
  */
-goog.userAgent.isVersionCache_ = {};
+goog.userAgent.isVersionOrHigherCache_ = {};
 
 
 /**
@@ -5816,22 +6495,22 @@ goog.userAgent.isVersionCache_ = {};
  * @return {boolean} Whether the user agent version is higher or the same as
  *     the given version.
  */
-goog.userAgent.isVersion = function(version) {
+goog.userAgent.isVersionOrHigher = function(version) {
   return goog.userAgent.ASSUME_ANY_VERSION ||
-      goog.userAgent.isVersionCache_[version] ||
-      (goog.userAgent.isVersionCache_[version] =
+      goog.userAgent.isVersionOrHigherCache_[version] ||
+      (goog.userAgent.isVersionOrHigherCache_[version] =
           goog.string.compareVersions(goog.userAgent.VERSION, version) >= 0);
 };
 
 
 /**
- * Cache for {@link goog.userAgent.isDocumentMode}.
- * Browsers document mode version number is unlikely to change during a session
- * we cache the results.
- * @type {Object}
- * @private
+ * Deprecated alias to {@code goog.userAgent.isVersionOrHigher}.
+ * @param {string|number} version The version to check.
+ * @return {boolean} Whether the user agent version is higher or the same as
+ *     the given version.
+ * @deprecated Use goog.userAgent.isVersionOrHigher().
  */
-goog.userAgent.isDocumentModeCache_ = {};
+goog.userAgent.isVersion = goog.userAgent.isVersionOrHigher;
 
 
 /**
@@ -5843,11 +6522,37 @@ goog.userAgent.isDocumentModeCache_ = {};
  * @return {boolean} Whether the IE effective document mode is higher or the
  *     same as the given version.
  */
-goog.userAgent.isDocumentMode = function(documentMode) {
-  return goog.userAgent.isDocumentModeCache_[documentMode] ||
-      (goog.userAgent.isDocumentModeCache_[documentMode] = goog.userAgent.IE &&
-      !!document.documentMode && document.documentMode >= documentMode);
+goog.userAgent.isDocumentModeOrHigher = function(documentMode) {
+  return goog.userAgent.IE && goog.userAgent.DOCUMENT_MODE >= documentMode;
 };
+
+
+/**
+ * Deprecated alias to {@code goog.userAgent.isDocumentModeOrHigher}.
+ * @param {number} version The version to check.
+ * @return {boolean} Whether the IE effective document mode is higher or the
+ *      same as the given version.
+ */
+goog.userAgent.isDocumentMode = goog.userAgent.isDocumentModeOrHigher;
+
+
+/**
+ * For IE version < 7, documentMode is undefined, so attempt to use the
+ * CSS1Compat property to see if we are in standards mode. If we are in
+ * standards mode, treat the browser version as the document mode. Otherwise,
+ * IE is emulating version 5.
+ * @type {number|undefined}
+ * @const
+ */
+goog.userAgent.DOCUMENT_MODE = (function() {
+  var doc = goog.global['document'];
+  if (!doc || !goog.userAgent.IE) {
+    return undefined;
+  }
+  var mode = goog.userAgent.getDocumentMode_();
+  return mode || (doc['compatMode'] == 'CSS1Compat' ?
+      parseInt(goog.userAgent.VERSION, 10) : 5);
+})();
 // Copyright 2007 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -5923,6 +6628,7 @@ if (goog.DEBUG) {
   /**
    * Returns a nice string representing size.
    * @return {string} In the form (50 x 73).
+   * @override
    */
   goog.math.Size.prototype.toString = function() {
     return '(' + this.width + ' x ' + this.height + ')';
@@ -6023,13 +6729,17 @@ goog.math.Size.prototype.round = function() {
 
 
 /**
- * Scales the size uniformly by a factor.
- * @param {number} s The scale factor.
+ * Scales this size by the given scale factors. The width and height are scaled
+ * by {@code sx} and {@code opt_sy} respectively.  If {@code opt_sy} is not
+ * given, then {@code sx} is used for both the width and height.
+ * @param {number} sx The scale factor to use for the width.
+ * @param {number=} opt_sy The scale factor to use for the height.
  * @return {!goog.math.Size} This Size object after scaling.
  */
-goog.math.Size.prototype.scale = function(s) {
-  this.width *= s;
-  this.height *= s;
+goog.math.Size.prototype.scale = function(sx, opt_sy) {
+  var sy = goog.isNumber(opt_sy) ? opt_sy : sx;
+  this.width *= sx;
+  this.height *= sy;
   return this;
 };
 
@@ -6084,7 +6794,7 @@ goog.dom.BrowserFeature = {
    * created. False in Internet Explorer prior to version 9.
    */
   CAN_ADD_NAME_OR_TYPE_ATTRIBUTES: !goog.userAgent.IE ||
-      goog.userAgent.isDocumentMode(9),
+      goog.userAgent.isDocumentModeOrHigher(9),
 
   /**
    * Whether we can use element.children to access an element's Element
@@ -6092,14 +6802,15 @@ goog.dom.BrowserFeature = {
    * nodes in the collection.)
    */
   CAN_USE_CHILDREN_ATTRIBUTE: !goog.userAgent.GECKO && !goog.userAgent.IE ||
-      goog.userAgent.IE && goog.userAgent.isDocumentMode(9) ||
-      goog.userAgent.GECKO && goog.userAgent.isVersion('1.9.1'),
+      goog.userAgent.IE && goog.userAgent.isDocumentModeOrHigher(9) ||
+      goog.userAgent.GECKO && goog.userAgent.isVersionOrHigher('1.9.1'),
 
   /**
    * Opera, Safari 3, and Internet Explorer 9 all support innerText but they
    * include text nodes in script and style tags. Not document-mode-dependent.
    */
-  CAN_USE_INNER_TEXT: goog.userAgent.IE && !goog.userAgent.isVersion('9'),
+  CAN_USE_INNER_TEXT: (
+      goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('9')),
 
   /**
    * MSIE, Opera, and Safari>=4 support element.parentElement to access an
@@ -6130,11 +6841,400 @@ goog.dom.BrowserFeature = {
 // limitations under the License.
 
 /**
+ * @fileoverview Additional mathematical functions.
+ */
+
+goog.provide('goog.math');
+
+goog.require('goog.array');
+goog.require('goog.asserts');
+
+
+/**
+ * Returns a random integer greater than or equal to 0 and less than {@code a}.
+ * @param {number} a  The upper bound for the random integer (exclusive).
+ * @return {number} A random integer N such that 0 <= N < a.
+ */
+goog.math.randomInt = function(a) {
+  return Math.floor(Math.random() * a);
+};
+
+
+/**
+ * Returns a random number greater than or equal to {@code a} and less than
+ * {@code b}.
+ * @param {number} a  The lower bound for the random number (inclusive).
+ * @param {number} b  The upper bound for the random number (exclusive).
+ * @return {number} A random number N such that a <= N < b.
+ */
+goog.math.uniformRandom = function(a, b) {
+  return a + Math.random() * (b - a);
+};
+
+
+/**
+ * Takes a number and clamps it to within the provided bounds.
+ * @param {number} value The input number.
+ * @param {number} min The minimum value to return.
+ * @param {number} max The maximum value to return.
+ * @return {number} The input number if it is within bounds, or the nearest
+ *     number within the bounds.
+ */
+goog.math.clamp = function(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+};
+
+
+/**
+ * The % operator in JavaScript returns the remainder of a / b, but differs from
+ * some other languages in that the result will have the same sign as the
+ * dividend. For example, -1 % 8 == -1, whereas in some other languages
+ * (such as Python) the result would be 7. This function emulates the more
+ * correct modulo behavior, which is useful for certain applications such as
+ * calculating an offset index in a circular list.
+ *
+ * @param {number} a The dividend.
+ * @param {number} b The divisor.
+ * @return {number} a % b where the result is between 0 and b (either 0 <= x < b
+ *     or b < x <= 0, depending on the sign of b).
+ */
+goog.math.modulo = function(a, b) {
+  var r = a % b;
+  // If r and b differ in sign, add b to wrap the result to the correct sign.
+  return (r * b < 0) ? r + b : r;
+};
+
+
+/**
+ * Performs linear interpolation between values a and b. Returns the value
+ * between a and b proportional to x (when x is between 0 and 1. When x is
+ * outside this range, the return value is a linear extrapolation).
+ * @param {number} a A number.
+ * @param {number} b A number.
+ * @param {number} x The proportion between a and b.
+ * @return {number} The interpolated value between a and b.
+ */
+goog.math.lerp = function(a, b, x) {
+  return a + x * (b - a);
+};
+
+
+/**
+ * Tests whether the two values are equal to each other, within a certain
+ * tolerance to adjust for floating pount errors.
+ * @param {number} a A number.
+ * @param {number} b A number.
+ * @param {number=} opt_tolerance Optional tolerance range. Defaults
+ *     to 0.000001. If specified, should be greater than 0.
+ * @return {boolean} Whether {@code a} and {@code b} are nearly equal.
+ */
+goog.math.nearlyEquals = function(a, b, opt_tolerance) {
+  return Math.abs(a - b) <= (opt_tolerance || 0.000001);
+};
+
+
+/**
+ * Standardizes an angle to be in range [0-360). Negative angles become
+ * positive, and values greater than 360 are returned modulo 360.
+ * @param {number} angle Angle in degrees.
+ * @return {number} Standardized angle.
+ */
+goog.math.standardAngle = function(angle) {
+  return goog.math.modulo(angle, 360);
+};
+
+
+/**
+ * Converts degrees to radians.
+ * @param {number} angleDegrees Angle in degrees.
+ * @return {number} Angle in radians.
+ */
+goog.math.toRadians = function(angleDegrees) {
+  return angleDegrees * Math.PI / 180;
+};
+
+
+/**
+ * Converts radians to degrees.
+ * @param {number} angleRadians Angle in radians.
+ * @return {number} Angle in degrees.
+ */
+goog.math.toDegrees = function(angleRadians) {
+  return angleRadians * 180 / Math.PI;
+};
+
+
+/**
+ * For a given angle and radius, finds the X portion of the offset.
+ * @param {number} degrees Angle in degrees (zero points in +X direction).
+ * @param {number} radius Radius.
+ * @return {number} The x-distance for the angle and radius.
+ */
+goog.math.angleDx = function(degrees, radius) {
+  return radius * Math.cos(goog.math.toRadians(degrees));
+};
+
+
+/**
+ * For a given angle and radius, finds the Y portion of the offset.
+ * @param {number} degrees Angle in degrees (zero points in +X direction).
+ * @param {number} radius Radius.
+ * @return {number} The y-distance for the angle and radius.
+ */
+goog.math.angleDy = function(degrees, radius) {
+  return radius * Math.sin(goog.math.toRadians(degrees));
+};
+
+
+/**
+ * Computes the angle between two points (x1,y1) and (x2,y2).
+ * Angle zero points in the +X direction, 90 degrees points in the +Y
+ * direction (down) and from there we grow clockwise towards 360 degrees.
+ * @param {number} x1 x of first point.
+ * @param {number} y1 y of first point.
+ * @param {number} x2 x of second point.
+ * @param {number} y2 y of second point.
+ * @return {number} Standardized angle in degrees of the vector from
+ *     x1,y1 to x2,y2.
+ */
+goog.math.angle = function(x1, y1, x2, y2) {
+  return goog.math.standardAngle(goog.math.toDegrees(Math.atan2(y2 - y1,
+                                                                x2 - x1)));
+};
+
+
+/**
+ * Computes the difference between startAngle and endAngle (angles in degrees).
+ * @param {number} startAngle  Start angle in degrees.
+ * @param {number} endAngle  End angle in degrees.
+ * @return {number} The number of degrees that when added to
+ *     startAngle will result in endAngle. Positive numbers mean that the
+ *     direction is clockwise. Negative numbers indicate a counter-clockwise
+ *     direction.
+ *     The shortest route (clockwise vs counter-clockwise) between the angles
+ *     is used.
+ *     When the difference is 180 degrees, the function returns 180 (not -180)
+ *     angleDifference(30, 40) is 10, and angleDifference(40, 30) is -10.
+ *     angleDifference(350, 10) is 20, and angleDifference(10, 350) is -20.
+ */
+goog.math.angleDifference = function(startAngle, endAngle) {
+  var d = goog.math.standardAngle(endAngle) -
+          goog.math.standardAngle(startAngle);
+  if (d > 180) {
+    d = d - 360;
+  } else if (d <= -180) {
+    d = 360 + d;
+  }
+  return d;
+};
+
+
+/**
+ * Returns the sign of a number as per the "sign" or "signum" function.
+ * @param {number} x The number to take the sign of.
+ * @return {number} -1 when negative, 1 when positive, 0 when 0.
+ */
+goog.math.sign = function(x) {
+  return x == 0 ? 0 : (x < 0 ? -1 : 1);
+};
+
+
+/**
+ * JavaScript implementation of Longest Common Subsequence problem.
+ * http://en.wikipedia.org/wiki/Longest_common_subsequence
+ *
+ * Returns the longest possible array that is subarray of both of given arrays.
+ *
+ * @param {Array.<Object>} array1 First array of objects.
+ * @param {Array.<Object>} array2 Second array of objects.
+ * @param {Function=} opt_compareFn Function that acts as a custom comparator
+ *     for the array ojects. Function should return true if objects are equal,
+ *     otherwise false.
+ * @param {Function=} opt_collectorFn Function used to decide what to return
+ *     as a result subsequence. It accepts 2 arguments: index of common element
+ *     in the first array and index in the second. The default function returns
+ *     element from the first array.
+ * @return {Array.<Object>} A list of objects that are common to both arrays
+ *     such that there is no common subsequence with size greater than the
+ *     length of the list.
+ */
+goog.math.longestCommonSubsequence = function(
+    array1, array2, opt_compareFn, opt_collectorFn) {
+
+  var compare = opt_compareFn || function(a, b) {
+    return a == b;
+  };
+
+  var collect = opt_collectorFn || function(i1, i2) {
+    return array1[i1];
+  };
+
+  var length1 = array1.length;
+  var length2 = array2.length;
+
+  var arr = [];
+  for (var i = 0; i < length1 + 1; i++) {
+    arr[i] = [];
+    arr[i][0] = 0;
+  }
+
+  for (var j = 0; j < length2 + 1; j++) {
+    arr[0][j] = 0;
+  }
+
+  for (i = 1; i <= length1; i++) {
+    for (j = 1; j <= length2; j++) {
+      if (compare(array1[i - 1], array2[j - 1])) {
+        arr[i][j] = arr[i - 1][j - 1] + 1;
+      } else {
+        arr[i][j] = Math.max(arr[i - 1][j], arr[i][j - 1]);
+      }
+    }
+  }
+
+  // Backtracking
+  var result = [];
+  var i = length1, j = length2;
+  while (i > 0 && j > 0) {
+    if (compare(array1[i - 1], array2[j - 1])) {
+      result.unshift(collect(i - 1, j - 1));
+      i--;
+      j--;
+    } else {
+      if (arr[i - 1][j] > arr[i][j - 1]) {
+        i--;
+      } else {
+        j--;
+      }
+    }
+  }
+
+  return result;
+};
+
+
+/**
+ * Returns the sum of the arguments.
+ * @param {...number} var_args Numbers to add.
+ * @return {number} The sum of the arguments (0 if no arguments were provided,
+ *     {@code NaN} if any of the arguments is not a valid number).
+ */
+goog.math.sum = function(var_args) {
+  return /** @type {number} */ (goog.array.reduce(arguments,
+      function(sum, value) {
+        return sum + value;
+      }, 0));
+};
+
+
+/**
+ * Returns the arithmetic mean of the arguments.
+ * @param {...number} var_args Numbers to average.
+ * @return {number} The average of the arguments ({@code NaN} if no arguments
+ *     were provided or any of the arguments is not a valid number).
+ */
+goog.math.average = function(var_args) {
+  return goog.math.sum.apply(null, arguments) / arguments.length;
+};
+
+
+/**
+ * Returns the sample standard deviation of the arguments.  For a definition of
+ * sample standard deviation, see e.g.
+ * http://en.wikipedia.org/wiki/Standard_deviation
+ * @param {...number} var_args Number samples to analyze.
+ * @return {number} The sample standard deviation of the arguments (0 if fewer
+ *     than two samples were provided, or {@code NaN} if any of the samples is
+ *     not a valid number).
+ */
+goog.math.standardDeviation = function(var_args) {
+  var sampleSize = arguments.length;
+  if (sampleSize < 2) {
+    return 0;
+  }
+
+  var mean = goog.math.average.apply(null, arguments);
+  var variance = goog.math.sum.apply(null, goog.array.map(arguments,
+      function(val) {
+        return Math.pow(val - mean, 2);
+      })) / (sampleSize - 1);
+
+  return Math.sqrt(variance);
+};
+
+
+/**
+ * Returns whether the supplied number represents an integer, i.e. that is has
+ * no fractional component.  No range-checking is performed on the number.
+ * @param {number} num The number to test.
+ * @return {boolean} Whether {@code num} is an integer.
+ */
+goog.math.isInt = function(num) {
+  return isFinite(num) && num % 1 == 0;
+};
+
+
+/**
+ * Returns whether the supplied number is finite and not NaN.
+ * @param {number} num The number to test.
+ * @return {boolean} Whether {@code num} is a finite number.
+ */
+goog.math.isFiniteNumber = function(num) {
+  return isFinite(num) && !isNaN(num);
+};
+
+
+/**
+ * A tweaked variant of {@code Math.floor} which tolerates if the passed number
+ * is infinitesimally smaller than the closest integer. It often happens with
+ * the results of floating point calculations because of the finite precision
+ * of the intermediate results. For example {@code Math.floor(Math.log(1000) /
+ * Math.LN10) == 2}, not 3 as one would expect.
+ * @param {number} num A number.
+ * @param {number=} opt_epsilon An infinitesimally small positive number, the
+ *     rounding error to tolerate.
+ * @return {number} The largest integer less than or equal to {@code num}.
+ */
+goog.math.safeFloor = function(num, opt_epsilon) {
+  goog.asserts.assert(!goog.isDef(opt_epsilon) || opt_epsilon > 0);
+  return Math.floor(num + (opt_epsilon || 2e-15));
+};
+
+
+/**
+ * A tweaked variant of {@code Math.ceil}. See {@code goog.math.safeFloor} for
+ * details.
+ * @param {number} num A number.
+ * @param {number=} opt_epsilon An infinitesimally small positive number, the
+ *     rounding error to tolerate.
+ * @return {number} The smallest integer greater than or equal to {@code num}.
+ */
+goog.math.safeCeil = function(num, opt_epsilon) {
+  goog.asserts.assert(!goog.isDef(opt_epsilon) || opt_epsilon > 0);
+  return Math.ceil(num - (opt_epsilon || 2e-15));
+};
+// Copyright 2006 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
  * @fileoverview A utility class for representing two-dimensional positions.
  */
 
 
 goog.provide('goog.math.Coordinate');
+
+goog.require('goog.math');
 
 
 
@@ -6172,6 +7272,7 @@ if (goog.DEBUG) {
   /**
    * Returns a nice string representing the coordinate.
    * @return {string} In the form (50, 73).
+   * @override
    */
   goog.math.Coordinate.prototype.toString = function() {
     return '(' + this.x + ', ' + this.y + ')';
@@ -6206,6 +7307,27 @@ goog.math.Coordinate.distance = function(a, b) {
   var dx = a.x - b.x;
   var dy = a.y - b.y;
   return Math.sqrt(dx * dx + dy * dy);
+};
+
+
+/**
+ * Returns the magnitude of a coordinate.
+ * @param {!goog.math.Coordinate} a A Coordinate.
+ * @return {number} The distance between the origin and {@code a}.
+ */
+goog.math.Coordinate.magnitude = function(a) {
+  return Math.sqrt(a.x * a.x + a.y * a.y);
+};
+
+
+/**
+ * Returns the angle from the origin to a coordinate.
+ * @param {!goog.math.Coordinate} a A Coordinate.
+ * @return {number} The angle, in degrees, clockwise from the positive X
+ *     axis to {@code a}.
+ */
+goog.math.Coordinate.azimuth = function(a) {
+  return goog.math.angle(0, 0, a.x, a.y);
 };
 
 
@@ -6251,6 +7373,79 @@ goog.math.Coordinate.difference = function(a, b) {
 goog.math.Coordinate.sum = function(a, b) {
   return new goog.math.Coordinate(a.x + b.x, a.y + b.y);
 };
+
+
+/**
+ * Rounds the x and y fields to the next larger integer values.
+ * @return {!goog.math.Coordinate} This coordinate with ceil'd fields.
+ */
+goog.math.Coordinate.prototype.ceil = function() {
+  this.x = Math.ceil(this.x);
+  this.y = Math.ceil(this.y);
+  return this;
+};
+
+
+/**
+ * Rounds the x and y fields to the next smaller integer values.
+ * @return {!goog.math.Coordinate} This coordinate with floored fields.
+ */
+goog.math.Coordinate.prototype.floor = function() {
+  this.x = Math.floor(this.x);
+  this.y = Math.floor(this.y);
+  return this;
+};
+
+
+/**
+ * Rounds the x and y fields to the nearest integer values.
+ * @return {!goog.math.Coordinate} This coordinate with rounded fields.
+ */
+goog.math.Coordinate.prototype.round = function() {
+  this.x = Math.round(this.x);
+  this.y = Math.round(this.y);
+  return this;
+};
+
+
+/**
+ * Translates this box by the given offsets. If a {@code goog.math.Coordinate}
+ * is given, then the x and y values are translated by the coordinate's x and y.
+ * Otherwise, x and y are translated by {@code tx} and {@code opt_ty}
+ * respectively.
+ * @param {number|goog.math.Coordinate} tx The value to translate x by or the
+ *     the coordinate to translate this coordinate by.
+ * @param {number=} opt_ty The value to translate y by.
+ * @return {!goog.math.Coordinate} This coordinate after translating.
+ */
+goog.math.Coordinate.prototype.translate = function(tx, opt_ty) {
+  if (tx instanceof goog.math.Coordinate) {
+    this.x += tx.x;
+    this.y += tx.y;
+  } else {
+    this.x += tx;
+    if (goog.isNumber(opt_ty)) {
+      this.y += opt_ty;
+    }
+  }
+  return this;
+};
+
+
+/**
+ * Scales this coordinate by the given scale factors. The x and y values are
+ * scaled by {@code sx} and {@code opt_sy} respectively.  If {@code opt_sy}
+ * is not given, then {@code sx} is used for both x and y.
+ * @param {number} sx The scale factor to use for the x dimension.
+ * @param {number=} opt_sy The scale factor to use for the y dimension.
+ * @return {!goog.math.Coordinate} This coordinate after scaling.
+ */
+goog.math.Coordinate.prototype.scale = function(sx, opt_sy) {
+  var sy = goog.isNumber(opt_sy) ? opt_sy : sx;
+  this.x *= sx;
+  this.y *= sy;
+  return this;
+};
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -6282,6 +7477,7 @@ goog.math.Coordinate.sum = function(a, b) {
 
 
 goog.provide('goog.dom');
+goog.provide('goog.dom.Appendable');
 goog.provide('goog.dom.DomHelper');
 goog.provide('goog.dom.NodeType');
 
@@ -6300,14 +7496,14 @@ goog.require('goog.userAgent');
  * @define {boolean} Whether we know at compile time that the browser is in
  * quirks mode.
  */
-goog.dom.ASSUME_QUIRKS_MODE = false;
+goog.define('goog.dom.ASSUME_QUIRKS_MODE', false);
 
 
 /**
  * @define {boolean} Whether we know at compile time that the browser is in
  * standards compliance mode.
  */
-goog.dom.ASSUME_STANDARDS_MODE = false;
+goog.define('goog.dom.ASSUME_STANDARDS_MODE', false);
 
 
 /**
@@ -6456,18 +7652,13 @@ goog.dom.getElementByClass = function(className, opt_el) {
 
 /**
  * Prefer the standardized (http://www.w3.org/TR/selectors-api/), native and
- * fast W3C Selectors API. However, the version of WebKit that shipped with
- * Safari 3.1 and Chrome has a bug where it will not correctly match mixed-
- * case class name selectors in quirks mode.
+ * fast W3C Selectors API.
  * @param {!(Element|Document)} parent The parent document object.
  * @return {boolean} whether or not we can use parent.querySelector* APIs.
  * @private
  */
 goog.dom.canUseQuerySelector_ = function(parent) {
-  return parent.querySelectorAll &&
-         parent.querySelector &&
-         (!goog.userAgent.WEBKIT || goog.dom.isCss1CompatMode_(document) ||
-          goog.userAgent.isVersion('528'));
+  return !!(parent.querySelectorAll && parent.querySelector);
 };
 
 
@@ -6564,7 +7755,8 @@ goog.dom.setProperties = function(element, properties) {
       element.htmlFor = val;
     } else if (key in goog.dom.DIRECT_ATTRIBUTE_MAP_) {
       element.setAttribute(goog.dom.DIRECT_ATTRIBUTE_MAP_[key], val);
-    } else if (goog.string.startsWith(key, 'aria-')) {
+    } else if (goog.string.startsWith(key, 'aria-') ||
+        goog.string.startsWith(key, 'data-')) {
       element.setAttribute(key, val);
     } else {
       element[key] = val;
@@ -6585,14 +7777,15 @@ goog.dom.DIRECT_ATTRIBUTE_MAP_ = {
   'cellpadding': 'cellPadding',
   'cellspacing': 'cellSpacing',
   'colspan': 'colSpan',
-  'rowspan': 'rowSpan',
-  'valign': 'vAlign',
-  'height': 'height',
-  'width': 'width',
-  'usemap': 'useMap',
   'frameborder': 'frameBorder',
+  'height': 'height',
   'maxlength': 'maxLength',
-  'type': 'type'
+  'role': 'role',
+  'rowspan': 'rowSpan',
+  'type': 'type',
+  'usemap': 'useMap',
+  'valign': 'vAlign',
+  'width': 'width'
 };
 
 
@@ -6675,29 +7868,7 @@ goog.dom.getViewportSize = function(opt_window) {
  */
 goog.dom.getViewportSize_ = function(win) {
   var doc = win.document;
-
-  if (goog.userAgent.WEBKIT && !goog.userAgent.isVersion('500') &&
-      !goog.userAgent.MOBILE) {
-    // TODO(doughtie): Sometimes we get something that isn't a valid window
-    // object. In this case we just revert to the current window. We need to
-    // figure out when this happens and find a real fix for it.
-    // See the comments on goog.dom.getWindow.
-    if (typeof win.innerHeight == 'undefined') {
-      win = window;
-    }
-    var innerHeight = win.innerHeight;
-    var scrollHeight = win.document.documentElement.scrollHeight;
-
-    if (win == win.top) {
-      if (scrollHeight < innerHeight) {
-        innerHeight -= 15; // Scrollbars are 15px wide on Mac
-      }
-    }
-    return new goog.math.Size(win.innerWidth, innerHeight);
-  }
-
   var el = goog.dom.isCss1CompatMode_(doc) ? doc.documentElement : doc.body;
-
   return new goog.math.Size(el.clientWidth, el.clientHeight);
 };
 
@@ -6818,6 +7989,13 @@ goog.dom.getDocumentScroll = function() {
 goog.dom.getDocumentScroll_ = function(doc) {
   var el = goog.dom.getDocumentScrollElement_(doc);
   var win = goog.dom.getWindow_(doc);
+  if (goog.userAgent.IE && goog.userAgent.isVersionOrHigher('10') &&
+      win.pageYOffset != el.scrollTop) {
+    // The keyboard on IE10 touch devices shifts the page using the pageYOffset
+    // without modifying scrollTop. For this case, we want the body scroll
+    // offsets.
+    return new goog.math.Coordinate(el.scrollLeft, el.scrollTop);
+  }
   return new goog.math.Coordinate(win.pageXOffset || el.scrollLeft,
       win.pageYOffset || el.scrollTop);
 };
@@ -6922,8 +8100,13 @@ goog.dom.createDom_ = function(doc, args) {
       // Clone attributes map to remove 'type' without mutating the input.
       var clone = {};
       goog.object.extend(clone, attributes);
+
+      // JSCompiler can't see how goog.object.extend added this property,
+      // because it was essentially added by reflection.
+      // So it needs to be quoted.
+      delete clone['type'];
+
       attributes = clone;
-      delete attributes.type;
     }
     tagNameArr.push('>');
     tagName = tagNameArr.join('');
@@ -6973,7 +8156,7 @@ goog.dom.append_ = function(doc, parent, args, startIndex) {
       // If the argument is a node list, not a real array, use a clone,
       // because forEach can't be used to mutate a NodeList.
       goog.array.forEach(goog.dom.isNodeList(arg) ?
-          goog.array.clone(arg) : arg,
+          goog.array.toArray(arg) : arg,
           childHandler);
     } else {
       childHandler(arg);
@@ -7009,11 +8192,11 @@ goog.dom.createElement = function(name) {
 
 /**
  * Creates a new text node.
- * @param {string} content Content.
+ * @param {number|string} content Content.
  * @return {!Text} The new text node.
  */
 goog.dom.createTextNode = function(content) {
-  return document.createTextNode(content);
+  return document.createTextNode(String(content));
 };
 
 
@@ -7058,7 +8241,11 @@ goog.dom.createTable_ = function(doc, rows, columns, fillWithNbsp) {
 
 
 /**
- * Converts an HTML string into a document fragment.
+ * Converts an HTML string into a document fragment. The string must be
+ * sanitized in order to avoid cross-site scripting. For example
+ * {@code goog.dom.htmlToDocumentFragment('&lt;img src=x onerror=alert(0)&gt;')}
+ * triggers an alert in all browsers, even if the returned document fragment
+ * is thrown away immediately.
  *
  * @param {string} htmlString The HTML string to convert.
  * @return {!Node} The resulting document fragment.
@@ -7151,6 +8338,9 @@ goog.dom.isCss1CompatMode_ = function(doc) {
  *   console.log(a.innerHTML);  // Chrome: "", IE9: "foobar", FF3.5: "foobar"
  * </pre>
  *
+ * For more information, see:
+ * http://dev.w3.org/html5/markup/syntax.html#syntax-elements
+ *
  * TODO(user): Rename shouldAllowChildren() ?
  *
  * @param {Node} node The node to check.
@@ -7166,12 +8356,15 @@ goog.dom.canHaveChildren = function(node) {
     case goog.dom.TagName.BASE:
     case goog.dom.TagName.BR:
     case goog.dom.TagName.COL:
+    case goog.dom.TagName.COMMAND:
+    case goog.dom.TagName.EMBED:
     case goog.dom.TagName.FRAME:
     case goog.dom.TagName.HR:
     case goog.dom.TagName.IMG:
     case goog.dom.TagName.INPUT:
     case goog.dom.TagName.IFRAME:
     case goog.dom.TagName.ISINDEX:
+    case goog.dom.TagName.KEYGEN:
     case goog.dom.TagName.LINK:
     case goog.dom.TagName.NOFRAMES:
     case goog.dom.TagName.NOSCRIPT:
@@ -7179,7 +8372,10 @@ goog.dom.canHaveChildren = function(node) {
     case goog.dom.TagName.OBJECT:
     case goog.dom.TagName.PARAM:
     case goog.dom.TagName.SCRIPT:
+    case goog.dom.TagName.SOURCE:
     case goog.dom.TagName.STYLE:
+    case goog.dom.TagName.TRACK:
+    case goog.dom.TagName.WBR:
       return false;
   }
   return true;
@@ -7492,10 +8688,18 @@ goog.dom.isWindow = function(obj) {
  */
 goog.dom.getParentElement = function(element) {
   if (goog.dom.BrowserFeature.CAN_USE_PARENT_ELEMENT_PROPERTY) {
-    return element.parentElement;
+    var isIe9 = goog.userAgent.IE &&
+        goog.userAgent.isVersionOrHigher('9') &&
+        !goog.userAgent.isVersionOrHigher('10');
+    // SVG elements in IE9 can't use the parentElement property.
+    // goog.global['SVGElement'] is not defined in IE9 quirks mode.
+    if (!(isIe9 && goog.global['SVGElement'] &&
+        element instanceof goog.global['SVGElement'])) {
+      return element.parentElement;
+    }
   }
   var parent = element.parentNode;
-  return goog.dom.isElement(parent) ? (/** @type {!Element} */ parent) : null;
+  return goog.dom.isElement(parent) ? /** @type {!Element} */ (parent) : null;
 };
 
 
@@ -7550,6 +8754,16 @@ goog.dom.compareNodeOrder = function(node1, node2) {
   if (node1.compareDocumentPosition) {
     // 4 is the bitmask for FOLLOWS.
     return node1.compareDocumentPosition(node2) & 2 ? 1 : -1;
+  }
+
+  // Special case for document nodes on IE 7 and 8.
+  if (goog.userAgent.IE && !goog.userAgent.isDocumentModeOrHigher(9)) {
+    if (node1.nodeType == goog.dom.NodeType.DOCUMENT) {
+      return -1;
+    }
+    if (node2.nodeType == goog.dom.NodeType.DOCUMENT) {
+      return 1;
+    }
   }
 
   // Process in IE using sourceIndex - we check to see if the first node has
@@ -7716,7 +8930,7 @@ goog.dom.getFrameContentDocument = function(frame) {
 
 /**
  * Cross-browser function for getting the window of a frame or iframe.
- * @param {HTMLIFrameElement|HTMLFrameElement} frame Frame element.
+ * @param {Element} frame Frame element.
  * @return {Window} The window associated with the given frame.
  */
 goog.dom.getFrameContentWindow = function(frame) {
@@ -7728,8 +8942,8 @@ goog.dom.getFrameContentWindow = function(frame) {
 /**
  * Cross-browser function for setting the text content of an element.
  * @param {Element} element The element to change the text content of.
- * @param {string} text The string that should replace the current element
- *     content.
+ * @param {string|number} text The string that should replace the current
+ *     element content.
  */
 goog.dom.setTextContent = function(element, text) {
   if ('textContent' in element) {
@@ -7745,7 +8959,7 @@ goog.dom.setTextContent = function(element, text) {
   } else {
     goog.dom.removeChildren(element);
     var doc = goog.dom.getOwnerDocument(element);
-    element.appendChild(doc.createTextNode(text));
+    element.appendChild(doc.createTextNode(String(text)));
   }
 };
 
@@ -8048,7 +9262,7 @@ goog.dom.getNodeTextOffset = function(node, opt_offsetParent) {
  * @return {Node} The node at the given offset.
  */
 goog.dom.getNodeAtOffset = function(parent, offset, opt_result) {
-  var stack = [parent], pos = 0, cur;
+  var stack = [parent], pos = 0, cur = null;
   while (stack.length > 0 && pos < offset) {
     cur = stack.pop();
     if (cur.nodeName in goog.dom.TAGS_TO_IGNORE_) {
@@ -8422,11 +9636,11 @@ goog.dom.DomHelper.prototype.createElement = function(name) {
 
 /**
  * Creates a new text node.
- * @param {string} content Content.
+ * @param {number|string} content Content.
  * @return {!Text} The new text node.
  */
 goog.dom.DomHelper.prototype.createTextNode = function(content) {
-  return this.document_.createTextNode(content);
+  return this.document_.createTextNode(String(content));
 };
 
 
@@ -8506,6 +9720,16 @@ goog.dom.DomHelper.prototype.getDocumentScroll = function() {
 
 
 /**
+ * Determines the active element in the given document.
+ * @param {Document=} opt_doc The document to look in.
+ * @return {Element} The active element.
+ */
+goog.dom.DomHelper.prototype.getActiveElement = function(opt_doc) {
+  return goog.dom.getActiveElement(opt_doc || this.document_);
+};
+
+
+/**
  * Appends a child to a node.
  * @param {Node} parent Parent.
  * @param {Node} child Child.
@@ -8522,6 +9746,16 @@ goog.dom.DomHelper.prototype.appendChild = goog.dom.appendChild;
  *     If this is an array like object then fields 0 to length - 1 are appended.
  */
 goog.dom.DomHelper.prototype.append = goog.dom.append;
+
+
+/**
+ * Determines if the given node can contain children, intended to be used for
+ * HTML generation.
+ *
+ * @param {Node} node The node to check.
+ * @return {boolean} Whether the node can contain children.
+ */
+goog.dom.DomHelper.prototype.canHaveChildren = goog.dom.canHaveChildren;
 
 
 /**
@@ -8550,6 +9784,18 @@ goog.dom.DomHelper.prototype.insertSiblingAfter = goog.dom.insertSiblingAfter;
 
 
 /**
+ * Insert a child at a given index. If index is larger than the number of child
+ * nodes that the parent currently has, the node is inserted as the last child
+ * node.
+ * @param {Element} parent The element into which to insert the child.
+ * @param {Node} child The element to insert.
+ * @param {number} index The index at which to insert the new child node. Must
+ *     not be negative.
+ */
+goog.dom.DomHelper.prototype.insertChildAt = goog.dom.insertChildAt;
+
+
+/**
  * Removes a node from its parent.
  * @param {Node} node The node to remove.
  * @return {Node} The node removed if removed; else, null.
@@ -8574,6 +9820,15 @@ goog.dom.DomHelper.prototype.replaceNode = goog.dom.replaceNode;
  *     document.
  */
 goog.dom.DomHelper.prototype.flattenElement = goog.dom.flattenElement;
+
+
+/**
+ * Returns an array containing just the element children of the given element.
+ * @param {Element} element The element whose element children we want.
+ * @return {!(Array|NodeList)} An array or array-like list of just the element
+ *     children of the given element.
+ */
+goog.dom.DomHelper.prototype.getChildren = goog.dom.getChildren;
 
 
 /**
@@ -8618,8 +9873,7 @@ goog.dom.DomHelper.prototype.getPreviousElementSibling =
  * @return {Node} The next node in the DOM tree, or null if this was the last
  *     node.
  */
-goog.dom.DomHelper.prototype.getNextNode =
-    goog.dom.getNextNode;
+goog.dom.DomHelper.prototype.getNextNode = goog.dom.getNextNode;
 
 
 /**
@@ -8628,8 +9882,7 @@ goog.dom.DomHelper.prototype.getNextNode =
  * @return {Node} The previous node in the DOM tree, or null if this was the
  *     first node.
  */
-goog.dom.DomHelper.prototype.getPreviousNode =
-    goog.dom.getPreviousNode;
+goog.dom.DomHelper.prototype.getPreviousNode = goog.dom.getPreviousNode;
 
 
 /**
@@ -8641,12 +9894,62 @@ goog.dom.DomHelper.prototype.isNodeLike = goog.dom.isNodeLike;
 
 
 /**
+ * Whether the object looks like an Element.
+ * @param {*} obj The object being tested for Element likeness.
+ * @return {boolean} Whether the object looks like an Element.
+ */
+goog.dom.DomHelper.prototype.isElement = goog.dom.isElement;
+
+
+/**
+ * Returns true if the specified value is a Window object. This includes the
+ * global window for HTML pages, and iframe windows.
+ * @param {*} obj Variable to test.
+ * @return {boolean} Whether the variable is a window.
+ */
+goog.dom.DomHelper.prototype.isWindow = goog.dom.isWindow;
+
+
+/**
+ * Returns an element's parent, if it's an Element.
+ * @param {Element} element The DOM element.
+ * @return {Element} The parent, or null if not an Element.
+ */
+goog.dom.DomHelper.prototype.getParentElement = goog.dom.getParentElement;
+
+
+/**
  * Whether a node contains another node.
  * @param {Node} parent The node that should contain the other node.
  * @param {Node} descendant The node to test presence of.
  * @return {boolean} Whether the parent node contains the descendent node.
  */
 goog.dom.DomHelper.prototype.contains = goog.dom.contains;
+
+
+/**
+ * Compares the document order of two nodes, returning 0 if they are the same
+ * node, a negative number if node1 is before node2, and a positive number if
+ * node2 is before node1.  Note that we compare the order the tags appear in the
+ * document so in the tree <b><i>text</i></b> the B node is considered to be
+ * before the I node.
+ *
+ * @param {Node} node1 The first node to compare.
+ * @param {Node} node2 The second node to compare.
+ * @return {number} 0 if the nodes are the same node, a negative number if node1
+ *     is before node2, and a positive number if node2 is before node1.
+ */
+goog.dom.DomHelper.prototype.compareNodeOrder = goog.dom.compareNodeOrder;
+
+
+/**
+ * Find the deepest common ancestor of the given nodes.
+ * @param {...Node} var_args The nodes to find a common ancestor of.
+ * @return {Node} The common ancestor of the nodes, or null if there is none.
+ *     null will only be returned if two or more of the nodes are from different
+ *     documents.
+ */
+goog.dom.DomHelper.prototype.findCommonAncestor = goog.dom.findCommonAncestor;
 
 
 /**
@@ -8668,7 +9971,7 @@ goog.dom.DomHelper.prototype.getFrameContentDocument =
 
 /**
  * Cross browser function for getting the window of a frame or iframe.
- * @param {HTMLIFrameElement|HTMLFrameElement} frame Frame element.
+ * @param {Element} frame Frame element.
  * @return {Window} The window associated with the given frame.
  */
 goog.dom.DomHelper.prototype.getFrameContentWindow =
@@ -8682,6 +9985,15 @@ goog.dom.DomHelper.prototype.getFrameContentWindow =
  *     content with.
  */
 goog.dom.DomHelper.prototype.setTextContent = goog.dom.setTextContent;
+
+
+/**
+ * Gets the outerHTML of a node, which islike innerHTML, except that it
+ * actually contains the HTML of the node itself.
+ * @param {Element} element The element to get the HTML of.
+ * @return {string} The outerHTML of the given element.
+ */
+goog.dom.DomHelper.prototype.getOuterHtml = goog.dom.getOuterHtml;
 
 
 /**
@@ -8702,6 +10014,30 @@ goog.dom.DomHelper.prototype.findNode = goog.dom.findNode;
  * @return {Array.<Node>} The found nodes or an empty array if none are found.
  */
 goog.dom.DomHelper.prototype.findNodes = goog.dom.findNodes;
+
+
+/**
+ * Returns true if the element has a tab index that allows it to receive
+ * keyboard focus (tabIndex >= 0), false otherwise.  Note that form elements
+ * natively support keyboard focus, even if they have no tab index.
+ * @param {Element} element Element to check.
+ * @return {boolean} Whether the element has a tab index that allows keyboard
+ *     focus.
+ */
+goog.dom.DomHelper.prototype.isFocusableTabIndex = goog.dom.isFocusableTabIndex;
+
+
+/**
+ * Enables or disables keyboard focus support on the element via its tab index.
+ * Only elements for which {@link goog.dom.isFocusableTabIndex} returns true
+ * (or elements that natively support keyboard focus, like form elements) can
+ * receive keyboard focus.  See http://go/tabindex for more info.
+ * @param {Element} element Element whose tab index is to be changed.
+ * @param {boolean} enable Whether to set or remove a tab index on the element
+ *     that supports keyboard focus.
+ */
+goog.dom.DomHelper.prototype.setFocusableTabIndex =
+    goog.dom.setFocusableTabIndex;
 
 
 /**
@@ -8740,6 +10076,30 @@ goog.dom.DomHelper.prototype.getNodeTextLength = goog.dom.getNodeTextLength;
  * @return {number} The text offset.
  */
 goog.dom.DomHelper.prototype.getNodeTextOffset = goog.dom.getNodeTextOffset;
+
+
+/**
+ * Returns the node at a given offset in a parent node.  If an object is
+ * provided for the optional third parameter, the node and the remainder of the
+ * offset will stored as properties of this object.
+ * @param {Node} parent The parent node.
+ * @param {number} offset The offset into the parent node.
+ * @param {Object=} opt_result Object to be used to store the return value. The
+ *     return value will be stored in the form {node: Node, remainder: number}
+ *     if this object is provided.
+ * @return {Node} The node at the given offset.
+ */
+goog.dom.DomHelper.prototype.getNodeAtOffset = goog.dom.getNodeAtOffset;
+
+
+/**
+ * Returns true if the object is a {@code NodeList}.  To qualify as a NodeList,
+ * the object must have a numeric length property and an item function (which
+ * has type 'string' on IE for some reason).
+ * @param {Object} val Object to test.
+ * @return {boolean} Whether the object is a NodeList.
+ */
+goog.dom.DomHelper.prototype.isNodeList = goog.dom.isNodeList;
 
 
 /**
@@ -8806,10 +10166,24 @@ goog.dom.DomHelper.prototype.getAncestor = goog.dom.getAncestor;
 
 goog.provide('goog.soy');
 
+goog.require('goog.asserts');
 goog.require('goog.dom');
 goog.require('goog.dom.NodeType');
 goog.require('goog.dom.TagName');
+goog.require('goog.soy.data');
+goog.require('goog.string');
 
+
+/**
+ * @define {boolean} Whether to require all Soy templates to be "strict html".
+ * Soy templates that use strict autoescaping forbid noAutoescape along with
+ * many dangerous directives, and return a runtime type SanitizedContent that
+ * marks them as safe.
+ *
+ * If this flag is enabled, Soy templates will fail to render if a template
+ * returns plain text -- indicating it is a non-strict template.
+ */
+goog.define('goog.soy.REQUIRE_STRICT_AUTOESCAPE', false);
 
 
 /**
@@ -8825,9 +10199,9 @@ goog.require('goog.dom.TagName');
  */
 goog.soy.renderElement = function(element, template, opt_templateData,
                                   opt_injectedData) {
-  element.innerHTML = template(
+  element.innerHTML = goog.soy.ensureTemplateOutputHtml_(template(
       opt_templateData || goog.soy.defaultTemplateData_, undefined,
-      opt_injectedData);
+      opt_injectedData));
 };
 
 
@@ -8848,9 +10222,11 @@ goog.soy.renderElement = function(element, template, opt_templateData,
 goog.soy.renderAsFragment = function(template, opt_templateData,
                                      opt_injectedData, opt_domHelper) {
   var dom = opt_domHelper || goog.dom.getDomHelper();
-  return dom.htmlToDocumentFragment(
+  var html = goog.soy.ensureTemplateOutputHtml_(
       template(opt_templateData || goog.soy.defaultTemplateData_,
                undefined, opt_injectedData));
+  goog.soy.assertFirstTagValid_(html);
+  return dom.htmlToDocumentFragment(html);
 };
 
 
@@ -8871,9 +10247,11 @@ goog.soy.renderAsElement = function(template, opt_templateData,
                                     opt_injectedData, opt_domHelper) {
   var dom = opt_domHelper || goog.dom.getDomHelper();
   var wrapper = dom.createElement(goog.dom.TagName.DIV);
-  wrapper.innerHTML = template(
+  var html = goog.soy.ensureTemplateOutputHtml_(template(
       opt_templateData || goog.soy.defaultTemplateData_,
-      undefined, opt_injectedData);
+      undefined, opt_injectedData));
+  goog.soy.assertFirstTagValid_(html);
+  wrapper.innerHTML = html;
 
   // If the template renders as a single element, return it.
   if (wrapper.childNodes.length == 1) {
@@ -8889,13 +10267,91 @@ goog.soy.renderAsElement = function(template, opt_templateData,
 
 
 /**
+ * Ensures the result is "safe" to insert as HTML.
+ *
+ * Note if the template has non-strict autoescape, the guarantees here are very
+ * weak. It is recommended applications switch to requiring strict
+ * autoescaping over time by tweaking goog.soy.REQUIRE_STRICT_AUTOESCAPE.
+ *
+ * In the case the argument is a SanitizedContent object, it either must
+ * already be of kind HTML, or if it is kind="text", the output will be HTML
+ * escaped.
+ *
+ * @param {*} templateResult The template result.
+ * @return {string} The assumed-safe HTML output string.
+ * @private
+ */
+goog.soy.ensureTemplateOutputHtml_ = function(templateResult) {
+  // Allow strings as long as strict autoescaping is not mandated. Note we
+  // allow everything that isn't an object, because some non-escaping templates
+  // end up returning non-strings if their only print statement is a
+  // non-escaped argument, plus some unit tests spoof templates.
+  // TODO(gboyer): Track down and fix these cases.
+  if (!goog.soy.REQUIRE_STRICT_AUTOESCAPE && !goog.isObject(templateResult)) {
+    return String(templateResult);
+  }
+
+  // Allow SanitizedContent of kind HTML.
+  if (templateResult instanceof goog.soy.data.SanitizedContent) {
+    templateResult = /** @type {!goog.soy.data.SanitizedContent} */ (
+        templateResult);
+    var ContentKind = goog.soy.data.SanitizedContentKind;
+    if (templateResult.contentKind === ContentKind.HTML) {
+      return goog.asserts.assertString(templateResult.content);
+    }
+    if (templateResult.contentKind === ContentKind.TEXT) {
+      // Allow text to be rendered, as long as we escape it. Other content
+      // kinds will fail, since we don't know what to do with them.
+      // TODO(gboyer): Perhaps also include URI in this case.
+      return goog.string.htmlEscape(templateResult.content);
+    }
+  }
+
+  goog.asserts.fail('Soy template output is unsafe for use as HTML: ' +
+      templateResult);
+
+  // In production, return a safe string, rather than failing hard.
+  return 'zSoyz';
+};
+
+
+/**
+ * Checks that the rendered HTML does not start with an invalid tag that would
+ * likely cause unexpected output from renderAsElement or renderAsFragment.
+ * See {@link http://www.w3.org/TR/html5/semantics.html#semantics} for reference
+ * as to which HTML elements can be parents of each other.
+ * @param {string} html The output of a template.
+ * @private
+ */
+goog.soy.assertFirstTagValid_ = function(html) {
+  if (goog.asserts.ENABLE_ASSERTS) {
+    var matches = html.match(goog.soy.INVALID_TAG_TO_RENDER_);
+    goog.asserts.assert(!matches, 'This template starts with a %s, which ' +
+        'cannot be a child of a <div>, as required by soy internals. ' +
+        'Consider using goog.soy.renderElement instead.\nTemplate output: %s',
+        matches && matches[0], html);
+  }
+};
+
+
+/**
+ * A pattern to find templates that cannot be rendered by renderAsElement or
+ * renderAsFragment, as these elements cannot exist as the child of a <div>.
+ * @type {!RegExp}
+ * @private
+ */
+goog.soy.INVALID_TAG_TO_RENDER_ =
+    /^<(body|caption|col|colgroup|head|html|tr|td|tbody|thead|tfoot)>/i;
+
+
+/**
  * Immutable object that is passed into templates that are rendered
  * without any data.
  * @type {Object}
  * @private
  */
 goog.soy.defaultTemplateData_ = {};
-// Copyright 2008 The Closure Library Authors. All Rights Reserved.
+// Copyright 2011 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -8910,29 +10366,615 @@ goog.soy.defaultTemplateData_ = {};
 // limitations under the License.
 
 /**
- * @fileoverview File which defines dummy object to work around undefined
- * properties compiler warning for weak dependencies on
- * {@link goog.debug.ErrorHandler#protectEntryPoint}.
- *
+ * @fileoverview Definition of the disposable interface.  A disposable object
+ * has a dispose method to to clean up references and resources.
+ * @author nnaze@google.com (Nathan Naze)
  */
 
-goog.provide('goog.debug.errorHandlerWeakDep');
+
+goog.provide('goog.disposable.IDisposable');
+
 
 
 /**
- * Dummy object to work around undefined properties compiler warning.
+ * Interface for a disposable object.  If a instance requires cleanup
+ * (references COM objects, DOM notes, or other disposable objects), it should
+ * implement this interface (it may subclass goog.Disposable).
+ * @interface
+ */
+goog.disposable.IDisposable = function() {};
+
+
+/**
+ * Disposes of the object and its resources.
+ * @return {void} Nothing.
+ */
+goog.disposable.IDisposable.prototype.dispose;
+
+
+/**
+ * @return {boolean} Whether the object has been disposed of.
+ */
+goog.disposable.IDisposable.prototype.isDisposed;
+// Copyright 2005 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Implements the disposable interface. The dispose method is used
+ * to clean up references and resources.
+ * @author arv@google.com (Erik Arvidsson)
+ */
+
+
+goog.provide('goog.Disposable');
+goog.provide('goog.dispose');
+
+goog.require('goog.disposable.IDisposable');
+
+
+
+/**
+ * Class that provides the basic implementation for disposable objects. If your
+ * class holds one or more references to COM objects, DOM nodes, or other
+ * disposable objects, it should extend this class or implement the disposable
+ * interface (defined in goog.disposable.IDisposable).
+ * @constructor
+ * @implements {goog.disposable.IDisposable}
+ */
+goog.Disposable = function() {
+  if (goog.Disposable.MONITORING_MODE != goog.Disposable.MonitoringMode.OFF) {
+    this.creationStack = new Error().stack;
+    goog.Disposable.instances_[goog.getUid(this)] = this;
+  }
+};
+
+
+/**
+ * @enum {number} Different monitoring modes for Disposable.
+ */
+goog.Disposable.MonitoringMode = {
+  /**
+   * No monitoring.
+   */
+  OFF: 0,
+  /**
+   * Creating and disposing the goog.Disposable instances is monitored. All
+   * disposable objects need to call the {@code goog.Disposable} base
+   * constructor. The PERMANENT mode must bet switched on before creating any
+   * goog.Disposable instances.
+   */
+  PERMANENT: 1,
+  /**
+   * INTERACTIVE mode can be switched on and off on the fly without producing
+   * errors. It also doesn't warn if the disposable objects don't call the
+   * {@code goog.Disposable} base constructor.
+   */
+  INTERACTIVE: 2
+};
+
+
+/**
+ * @define {number} The monitoring mode of the goog.Disposable
+ *     instances. Default is OFF. Switching on the monitoring is only
+ *     recommended for debugging because it has a significant impact on
+ *     performance and memory usage. If switched off, the monitoring code
+ *     compiles down to 0 bytes.
+ */
+goog.define('goog.Disposable.MONITORING_MODE', 0);
+
+
+/**
+ * Maps the unique ID of every undisposed {@code goog.Disposable} object to
+ * the object itself.
+ * @type {!Object.<number, !goog.Disposable>}
+ * @private
+ */
+goog.Disposable.instances_ = {};
+
+
+/**
+ * @return {!Array.<!goog.Disposable>} All {@code goog.Disposable} objects that
+ *     haven't been disposed of.
+ */
+goog.Disposable.getUndisposedObjects = function() {
+  var ret = [];
+  for (var id in goog.Disposable.instances_) {
+    if (goog.Disposable.instances_.hasOwnProperty(id)) {
+      ret.push(goog.Disposable.instances_[Number(id)]);
+    }
+  }
+  return ret;
+};
+
+
+/**
+ * Clears the registry of undisposed objects but doesn't dispose of them.
+ */
+goog.Disposable.clearUndisposedObjects = function() {
+  goog.Disposable.instances_ = {};
+};
+
+
+/**
+ * Whether the object has been disposed of.
+ * @type {boolean}
+ * @private
+ */
+goog.Disposable.prototype.disposed_ = false;
+
+
+/**
+ * Callbacks to invoke when this object is disposed.
+ * @type {Array.<!Function>}
+ * @private
+ */
+goog.Disposable.prototype.onDisposeCallbacks_;
+
+
+/**
+ * If monitoring the goog.Disposable instances is enabled, stores the creation
+ * stack trace of the Disposable instance.
+ * @type {string}
+ */
+goog.Disposable.prototype.creationStack;
+
+
+/**
+ * @return {boolean} Whether the object has been disposed of.
+ * @override
+ */
+goog.Disposable.prototype.isDisposed = function() {
+  return this.disposed_;
+};
+
+
+/**
+ * @return {boolean} Whether the object has been disposed of.
+ * @deprecated Use {@link #isDisposed} instead.
+ */
+goog.Disposable.prototype.getDisposed = goog.Disposable.prototype.isDisposed;
+
+
+/**
+ * Disposes of the object. If the object hasn't already been disposed of, calls
+ * {@link #disposeInternal}. Classes that extend {@code goog.Disposable} should
+ * override {@link #disposeInternal} in order to delete references to COM
+ * objects, DOM nodes, and other disposable objects. Reentrant.
+ *
+ * @return {void} Nothing.
+ * @override
+ */
+goog.Disposable.prototype.dispose = function() {
+  if (!this.disposed_) {
+    // Set disposed_ to true first, in case during the chain of disposal this
+    // gets disposed recursively.
+    this.disposed_ = true;
+    this.disposeInternal();
+    if (goog.Disposable.MONITORING_MODE != goog.Disposable.MonitoringMode.OFF) {
+      var uid = goog.getUid(this);
+      if (goog.Disposable.MONITORING_MODE ==
+          goog.Disposable.MonitoringMode.PERMANENT &&
+          !goog.Disposable.instances_.hasOwnProperty(uid)) {
+        throw Error(this + ' did not call the goog.Disposable base ' +
+            'constructor or was disposed of after a clearUndisposedObjects ' +
+            'call');
+      }
+      delete goog.Disposable.instances_[uid];
+    }
+  }
+};
+
+
+/**
+ * Associates a disposable object with this object so that they will be disposed
+ * together.
+ * @param {goog.disposable.IDisposable} disposable that will be disposed when
+ *     this object is disposed.
+ */
+goog.Disposable.prototype.registerDisposable = function(disposable) {
+  this.addOnDisposeCallback(goog.partial(goog.dispose, disposable));
+};
+
+
+/**
+ * Invokes a callback function when this object is disposed. Callbacks are
+ * invoked in the order in which they were added.
+ * @param {function(this:T):?} callback The callback function.
+ * @param {T=} opt_scope An optional scope to call the callback in.
+ * @template T
+ */
+goog.Disposable.prototype.addOnDisposeCallback = function(callback, opt_scope) {
+  if (!this.onDisposeCallbacks_) {
+    this.onDisposeCallbacks_ = [];
+  }
+  this.onDisposeCallbacks_.push(goog.bind(callback, opt_scope));
+};
+
+
+/**
+ * Deletes or nulls out any references to COM objects, DOM nodes, or other
+ * disposable objects. Classes that extend {@code goog.Disposable} should
+ * override this method.
+ * Not reentrant. To avoid calling it twice, it must only be called from the
+ * subclass' {@code disposeInternal} method. Everywhere else the public
+ * {@code dispose} method must be used.
+ * For example:
+ * <pre>
+ *   mypackage.MyClass = function() {
+ *     goog.base(this);
+ *     // Constructor logic specific to MyClass.
+ *     ...
+ *   };
+ *   goog.inherits(mypackage.MyClass, goog.Disposable);
+ *
+ *   mypackage.MyClass.prototype.disposeInternal = function() {
+ *     // Dispose logic specific to MyClass.
+ *     ...
+ *     // Call superclass's disposeInternal at the end of the subclass's, like
+ *     // in C++, to avoid hard-to-catch issues.
+ *     goog.base(this, 'disposeInternal');
+ *   };
+ * </pre>
+ * @protected
+ */
+goog.Disposable.prototype.disposeInternal = function() {
+  if (this.onDisposeCallbacks_) {
+    while (this.onDisposeCallbacks_.length) {
+      this.onDisposeCallbacks_.shift()();
+    }
+  }
+};
+
+
+/**
+ * Returns True if we can verify the object is disposed.
+ * Calls {@code isDisposed} on the argument if it supports it.  If obj
+ * is not an object with an isDisposed() method, return false.
+ * @param {*} obj The object to investigate.
+ * @return {boolean} True if we can verify the object is disposed.
+ */
+goog.Disposable.isDisposed = function(obj) {
+  if (obj && typeof obj.isDisposed == 'function') {
+    return obj.isDisposed();
+  }
+  return false;
+};
+
+
+/**
+ * Calls {@code dispose} on the argument if it supports it. If obj is not an
+ *     object with a dispose() method, this is a no-op.
+ * @param {*} obj The object to dispose of.
+ */
+goog.dispose = function(obj) {
+  if (obj && typeof obj.dispose == 'function') {
+    obj.dispose();
+  }
+};
+
+
+/**
+ * Calls {@code dispose} on each member of the list that supports it. (If the
+ * member is an ArrayLike, then {@code goog.disposeAll()} will be called
+ * recursively on each of its members.) If the member is not an object with a
+ * {@code dispose()} method, then it is ignored.
+ * @param {...*} var_args The list.
+ */
+goog.disposeAll = function(var_args) {
+  for (var i = 0, len = arguments.length; i < len; ++i) {
+    var disposable = arguments[i];
+    if (goog.isArrayLike(disposable)) {
+      goog.disposeAll.apply(null, disposable);
+    } else {
+      goog.dispose(disposable);
+    }
+  }
+};
+// Copyright 2012 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview An interface for a listenable JavaScript object.
+ */
+
+goog.provide('goog.events.Listenable');
+goog.provide('goog.events.ListenableKey');
+
+
+
+/**
+ * A listenable interface. Also see goog.events.EventTarget.
+ * @interface
+ */
+goog.events.Listenable = function() {};
+
+
+/**
+ * An expando property to indicate that an object implements
+ * goog.events.Listenable.
+ *
+ * See addImplementation/isImplementedBy.
+ *
+ * @type {string}
+ * @const
+ */
+goog.events.Listenable.IMPLEMENTED_BY_PROP =
+    'closure_listenable_' + ((Math.random() * 1e6) | 0);
+
+
+/**
+ * Marks a given class (constructor) as an implementation of
+ * Listenable, do that we can query that fact at runtime. The class
+ * must have already implemented the interface.
+ * @param {!Function} cls The class constructor. The corresponding
+ *     class must have already implemented the interface.
+ */
+goog.events.Listenable.addImplementation = function(cls) {
+  cls.prototype[goog.events.Listenable.IMPLEMENTED_BY_PROP] = true;
+};
+
+
+/**
+ * @param {Object} obj The object to check.
+ * @return {boolean} Whether a given instance implements
+ *     Listenable. The class/superclass of the instance must call
+ *     addImplementation.
+ */
+goog.events.Listenable.isImplementedBy = function(obj) {
+  return !!(obj && obj[goog.events.Listenable.IMPLEMENTED_BY_PROP]);
+};
+
+
+/**
+ * Adds an event listener. A listener can only be added once to an
+ * object and if it is added again the key for the listener is
+ * returned. Note that if the existing listener is a one-off listener
+ * (registered via listenOnce), it will no longer be a one-off
+ * listener after a call to listen().
+ *
+ * @param {string} type Event type or array of event types.
+ * @param {!Function} listener Callback method, or an object
+ *     with a handleEvent function.
+ * @param {boolean=} opt_useCapture Whether to fire in capture phase
+ *     (defaults to false).
+ * @param {Object=} opt_listenerScope Object in whose scope to call the
+ *     listener.
+ * @return {goog.events.ListenableKey} Unique key for the listener.
+ */
+goog.events.Listenable.prototype.listen;
+
+
+/**
+ * Adds an event listener that is removed automatically after the
+ * listener fired once.
+ *
+ * If an existing listener already exists, listenOnce will do
+ * nothing. In particular, if the listener was previously registered
+ * via listen(), listenOnce() will not turn the listener into a
+ * one-off listener. Similarly, if there is already an existing
+ * one-off listener, listenOnce does not modify the listeners (it is
+ * still a once listener).
+ *
+ * @param {string} type Event type or array of event types.
+ * @param {!Function} listener Callback method, or an object
+ *     with a handleEvent function.
+ * @param {boolean=} opt_useCapture Whether to fire in capture phase
+ *     (defaults to false).
+ * @param {Object=} opt_listenerScope Object in whose scope to call the
+ *     listener.
+ * @return {goog.events.ListenableKey} Unique key for the listener.
+ */
+goog.events.Listenable.prototype.listenOnce;
+
+
+/**
+ * Removes an event listener which was added with listen() or listenOnce().
+ *
+ * Implementation needs to call goog.events.cleanUp.
+ *
+ * @param {string} type Event type or array of event types.
+ * @param {!Function} listener Callback method, or an object
+ *     with a handleEvent function. TODO(user): Consider whether
+ *     we can remove Object.
+ * @param {boolean=} opt_useCapture Whether to fire in capture phase
+ *     (defaults to false).
+ * @param {Object=} opt_listenerScope Object in whose scope to call
+ *     the listener.
+ * @return {boolean} Whether any listener was removed.
+ */
+goog.events.Listenable.prototype.unlisten;
+
+
+/**
+ * Removes an event listener which was added with listen() by the key
+ * returned by listen().
+ *
+ * Implementation needs to call goog.events.cleanUp.
+ *
+ * @param {goog.events.ListenableKey} key The key returned by
+ *     listen() or listenOnce().
+ * @return {boolean} Whether any listener was removed.
+ */
+goog.events.Listenable.prototype.unlistenByKey;
+
+
+/**
+ * Dispatches an event (or event like object) and calls all listeners
+ * listening for events of this type. The type of the event is decided by the
+ * type property on the event object.
+ *
+ * If any of the listeners returns false OR calls preventDefault then this
+ * function will return false.  If one of the capture listeners calls
+ * stopPropagation, then the bubble listeners won't fire.
+ *
+ * @param {goog.events.EventLike} e Event object.
+ * @return {boolean} If anyone called preventDefault on the event object (or
+ *     if any of the listeners returns false) this will also return false.
+ */
+goog.events.Listenable.prototype.dispatchEvent;
+
+
+/**
+ * Removes all listeners from this listenable. If type is specified,
+ * it will only remove listeners of the particular type. otherwise all
+ * registered listeners will be removed.
+ *
+ * Implementation needs to call goog.events.cleanUp for each removed
+ * listener.
+ *
+ * @param {string=} opt_type Type of event to remove, default is to
+ *     remove all types.
+ * @return {number} Number of listeners removed.
+ */
+goog.events.Listenable.prototype.removeAllListeners;
+
+
+/**
+ * Fires all registered listeners in this listenable for the given
+ * type and capture mode, passing them the given eventObject. This
+ * does not perform actual capture/bubble. Only implementors of the
+ * interface should be using this.
+ *
+ * @param {string} type The type of the listeners to fire.
+ * @param {boolean} capture The capture mode of the listeners to fire.
+ * @param {goog.events.Event} eventObject The event object to fire.
+ * @return {boolean} Whether all listeners succeeded without
+ *     attempting to prevent default behavior. If any listener returns
+ *     false or called goog.events.Event#preventDefault, this returns
+ *     false.
+ */
+goog.events.Listenable.prototype.fireListeners;
+
+
+/**
+ * Gets all listeners in this listenable for the given type and
+ * capture mode.
+ *
+ * @param {string} type The type of the listeners to fire.
+ * @param {boolean} capture The capture mode of the listeners to fire.
+ * @return {!Array.<goog.events.ListenableKey>} An array of registered
+ *     listeners.
+ */
+goog.events.Listenable.prototype.getListeners;
+
+
+/**
+ * Gets the goog.events.ListenableKey for the event or null if no such
+ * listener is in use.
+ *
+ * @param {string} type The name of the event without the 'on' prefix.
+ * @param {!Function} listener The listener function to get.
+ * @param {boolean} capture Whether the listener is a capturing listener.
+ * @param {Object=} opt_listenerScope Object in whose scope to call the
+ *     listener.
+ * @return {goog.events.ListenableKey} the found listener or null if not found.
+ */
+goog.events.Listenable.prototype.getListener;
+
+
+/**
+ * Whether there is any active listeners matching the specified
+ * signature. If either the type or capture parameters are
+ * unspecified, the function will match on the remaining criteria.
+ *
+ * @param {string=} opt_type Event type.
+ * @param {boolean=} opt_capture Whether to check for capture or bubble
+ *     listeners.
+ * @return {boolean} Whether there is any active listeners matching
+ *     the requested type and/or capture phase.
+ */
+goog.events.Listenable.prototype.hasListener;
+
+
+
+/**
+ * An interface that describes a single registered listener.
+ * @interface
+ */
+goog.events.ListenableKey = function() {};
+
+
+/**
+ * Counter used to create a unique key
+ * @type {number}
+ * @private
+ */
+goog.events.ListenableKey.counter_ = 0;
+
+
+/**
+ * Reserves a key to be used for ListenableKey#key field.
+ * @return {number} A number to be used to fill ListenableKey#key
+ *     field.
+ */
+goog.events.ListenableKey.reserveKey = function() {
+  return ++goog.events.ListenableKey.counter_;
+};
+
+
+/**
+ * The source event target.
+ * @type {!(Object|goog.events.Listenable|goog.events.EventTarget)}
+ */
+goog.events.ListenableKey.prototype.src;
+
+
+/**
+ * The event type the listener is listening to.
+ * @type {string}
+ */
+goog.events.ListenableKey.prototype.type;
+
+
+/**
+ * The listener function.
+ * TODO(user): Narrow the type if possible.
+ * @type {Function|Object}
+ */
+goog.events.ListenableKey.prototype.listener;
+
+
+/**
+ * Whether the listener works on capture phase.
+ * @type {boolean}
+ */
+goog.events.ListenableKey.prototype.capture;
+
+
+/**
+ * The 'this' object for the listener function's scope.
  * @type {Object}
  */
-goog.debug.errorHandlerWeakDep = {
-  /**
-   * @param {Function} fn An entry point function to be protected.
-   * @param {boolean=} opt_tracers Whether to install tracers around the
-   *     fn.
-   * @return {Function} A protected wrapper function that calls the
-   *     entry point function.
-   */
-  protectEntryPoint: function(fn, opt_tracers) { return fn; }
-};
+goog.events.ListenableKey.prototype.handler;
+
+
+/**
+ * A globally unique number to identify the key.
+ * @type {number}
+ */
+goog.events.ListenableKey.prototype.key;
 // Copyright 2005 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -8952,146 +10994,115 @@ goog.debug.errorHandlerWeakDep = {
  * @see ../demos/events.html
  */
 
-
-/**
- * Namespace for events
- */
 goog.provide('goog.events.Listener');
+
+goog.require('goog.events.ListenableKey');
 
 
 
 /**
  * Simple class that stores information about a listener
- * @constructor
- */
-goog.events.Listener = function() {
-};
-
-
-/**
- * Counter used to create a unique key
- * @type {number}
- * @private
- */
-goog.events.Listener.counter_ = 0;
-
-
-/**
- * Whether the listener is a function or an object that implements handleEvent.
- * @type {boolean}
- * @private
- */
-goog.events.Listener.prototype.isFunctionListener_;
-
-
-/**
- * Call back function or an object with a handleEvent function.
- * @type {Function|Object|null}
- */
-goog.events.Listener.prototype.listener;
-
-
-/**
- * Proxy for callback that passes through {@link goog.events#HandleEvent_}
- * @type {Function}
- */
-goog.events.Listener.prototype.proxy;
-
-
-/**
- * Object or node that callback is listening to
- * @type {Object|goog.events.EventTarget}
- */
-goog.events.Listener.prototype.src;
-
-
-/**
- * Type of event
- * @type {string}
- */
-goog.events.Listener.prototype.type;
-
-
-/**
- * Whether the listener is being called in the capture or bubble phase
- * @type {boolean}
- */
-goog.events.Listener.prototype.capture;
-
-
-/**
- * Optional object whose context to execute the listener in
- * @type {Object|undefined}
- */
-goog.events.Listener.prototype.handler;
-
-
-/**
- * The key of the listener.
- * @type {number}
- */
-goog.events.Listener.prototype.key = 0;
-
-
-/**
- * Whether the listener has been removed.
- * @type {boolean}
- */
-goog.events.Listener.prototype.removed = false;
-
-
-/**
- * Whether to remove the listener after it has been called.
- * @type {boolean}
- */
-goog.events.Listener.prototype.callOnce = false;
-
-
-/**
- * Initializes the listener.
- * @param {Function|Object} listener Callback function, or an object with a
- *     handleEvent function.
+ * @param {!Function} listener Callback function.
  * @param {Function} proxy Wrapper for the listener that patches the event.
- * @param {Object} src Source object for the event.
+ * @param {EventTarget|goog.events.Listenable} src Source object for
+ *     the event.
  * @param {string} type Event type.
  * @param {boolean} capture Whether in capture or bubble phase.
  * @param {Object=} opt_handler Object in whose context to execute the callback.
+ * @implements {goog.events.ListenableKey}
+ * @constructor
  */
-goog.events.Listener.prototype.init = function(listener, proxy, src, type,
-                                               capture, opt_handler) {
-  // we do the test of the listener here so that we do  not need to
-  // continiously do this inside handleEvent
-  if (goog.isFunction(listener)) {
-    this.isFunctionListener_ = true;
-  } else if (listener && listener.handleEvent &&
-      goog.isFunction(listener.handleEvent)) {
-    this.isFunctionListener_ = false;
-  } else {
-    throw Error('Invalid listener argument');
+goog.events.Listener = function(
+    listener, proxy, src, type, capture, opt_handler) {
+  if (goog.events.Listener.ENABLE_MONITORING) {
+    this.creationStack = new Error().stack;
   }
 
+  /**
+   * Callback function.
+   * @type {Function}
+   */
   this.listener = listener;
+
+  /**
+   * Proxy for callback that passes through {@link goog.events#HandleEvent_}.
+   * @type {Function}
+   */
   this.proxy = proxy;
+
+  /**
+   * Object or node that callback is listening to
+   * @type {EventTarget|goog.events.Listenable}
+   */
   this.src = src;
+
+  /**
+   * The event type.
+   * @const {string}
+   */
   this.type = type;
+
+  /**
+   * Whether the listener is being called in the capture or bubble phase
+   * @const {boolean}
+   */
   this.capture = !!capture;
+
+  /**
+   * Optional object whose context to execute the listener in
+   * @type {Object|undefined}
+   */
   this.handler = opt_handler;
+
+  /**
+   * The key of the listener.
+   * @const {number}
+   * @override
+   */
+  this.key = goog.events.ListenableKey.reserveKey();
+
+  /**
+   * Whether to remove the listener after it has been called.
+   * @type {boolean}
+   */
   this.callOnce = false;
-  this.key = ++goog.events.Listener.counter_;
+
+  /**
+   * Whether the listener has been removed.
+   * @type {boolean}
+   */
   this.removed = false;
 };
 
 
 /**
- * Calls the internal listener
- * @param {Object} eventObject Event object to be passed to listener.
- * @return {boolean} The result of the internal listener call.
+ * @define {boolean} Whether to enable the monitoring of the
+ *     goog.events.Listener instances. Switching on the monitoring is only
+ *     recommended for debugging because it has a significant impact on
+ *     performance and memory usage. If switched off, the monitoring code
+ *     compiles down to 0 bytes.
  */
-goog.events.Listener.prototype.handleEvent = function(eventObject) {
-  if (this.isFunctionListener_) {
-    return this.listener.call(this.handler || this.src, eventObject);
-  }
-  return this.listener.handleEvent.call(this.listener, eventObject);
+goog.define('goog.events.Listener.ENABLE_MONITORING', false);
+
+
+/**
+ * If monitoring the goog.events.Listener instances is enabled, stores the
+ * creation stack trace of the Disposable instance.
+ * @type {string}
+ */
+goog.events.Listener.prototype.creationStack;
+
+
+/**
+ * Marks this listener as removed. This also remove references held by
+ * this listener object (such as listener and event source).
+ */
+goog.events.Listener.prototype.markAsRemoved = function() {
+  this.removed = true;
+  this.listener = null;
+  this.proxy = null;
+  this.src = null;
+  this.handler = null;
 };
 // Copyright 2010 The Closure Library Authors. All Rights Reserved.
 //
@@ -9127,42 +11138,56 @@ goog.events.BrowserFeature = {
    * Whether the button attribute of the event is W3C compliant.  False in
    * Internet Explorer prior to version 9; document-version dependent.
    */
-  HAS_W3C_BUTTON: !goog.userAgent.IE || goog.userAgent.isDocumentMode(9),
+  HAS_W3C_BUTTON: !goog.userAgent.IE ||
+      goog.userAgent.isDocumentModeOrHigher(9),
 
   /**
    * Whether the browser supports full W3C event model.
    */
-  HAS_W3C_EVENT_SUPPORT: !goog.userAgent.IE || goog.userAgent.isDocumentMode(9),
+  HAS_W3C_EVENT_SUPPORT: !goog.userAgent.IE ||
+      goog.userAgent.isDocumentModeOrHigher(9),
 
   /**
-   * To prevent default in IE7 for certain keydown events we need set the
+   * To prevent default in IE7-8 for certain keydown events we need set the
    * keyCode to -1.
    */
   SET_KEY_CODE_TO_PREVENT_DEFAULT: goog.userAgent.IE &&
-      !goog.userAgent.isVersion('8'),
+      !goog.userAgent.isVersionOrHigher('9'),
 
   /**
    * Whether the {@code navigator.onLine} property is supported.
    */
   HAS_NAVIGATOR_ONLINE_PROPERTY: !goog.userAgent.WEBKIT ||
-      goog.userAgent.isVersion('528'),
+      goog.userAgent.isVersionOrHigher('528'),
 
   /**
    * Whether HTML5 network online/offline events are supported.
    */
   HAS_HTML5_NETWORK_EVENT_SUPPORT:
-      goog.userAgent.GECKO && goog.userAgent.isVersion('1.9b') ||
-      goog.userAgent.IE && goog.userAgent.isVersion('8') ||
-      goog.userAgent.OPERA && goog.userAgent.isVersion('9.5') ||
-      goog.userAgent.WEBKIT && goog.userAgent.isVersion('528'),
+      goog.userAgent.GECKO && goog.userAgent.isVersionOrHigher('1.9b') ||
+      goog.userAgent.IE && goog.userAgent.isVersionOrHigher('8') ||
+      goog.userAgent.OPERA && goog.userAgent.isVersionOrHigher('9.5') ||
+      goog.userAgent.WEBKIT && goog.userAgent.isVersionOrHigher('528'),
 
   /**
    * Whether HTML5 network events fire on document.body, or otherwise the
    * window.
    */
   HTML5_NETWORK_EVENTS_FIRE_ON_BODY:
-      goog.userAgent.GECKO && !goog.userAgent.isVersion('8') ||
-      goog.userAgent.IE && !goog.userAgent.isVersion('9')
+      goog.userAgent.GECKO && !goog.userAgent.isVersionOrHigher('8') ||
+      goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('9'),
+
+  /**
+   * Whether touch is enabled in the browser.
+   */
+  TOUCH_ENABLED:
+      ('ontouchstart' in goog.global ||
+          !!(goog.global['document'] &&
+             document.documentElement &&
+             'ontouchstart' in document.documentElement) ||
+          // IE10 uses non-standard touch events, so it has a different check.
+          !!(goog.global['navigator'] &&
+              goog.global['navigator']['msMaxTouchPoints']))
 };
 // Copyright 2010 The Closure Library Authors. All Rights Reserved.
 //
@@ -9322,74 +11347,6 @@ goog.debug.entryPointRegistry.unmonitorAllIfPossible = function(monitor) {
   }
   monitors.length--;
 };
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Definition of the goog.events.EventWrapper interface.
- *
- * @author eae@google.com (Emil A Eklund)
- */
-
-goog.provide('goog.events.EventWrapper');
-
-
-
-/**
- * Interface for event wrappers.
- * @interface
- */
-goog.events.EventWrapper = function() {
-};
-
-
-/**
- * Adds an event listener using the wrapper on a DOM Node or an object that has
- * implemented {@link goog.events.EventTarget}. A listener can only be added
- * once to an object.
- *
- * @param {EventTarget|goog.events.EventTarget} src The node to listen to
- *     events on.
- * @param {Function|Object} listener Callback method, or an object with a
- *     handleEvent function.
- * @param {boolean=} opt_capt Whether to fire in capture phase (defaults to
- *     false).
- * @param {Object=} opt_scope Element in whose scope to call the listener.
- * @param {goog.events.EventHandler=} opt_eventHandler Event handler to add
- *     listener to.
- */
-goog.events.EventWrapper.prototype.listen = function(src, listener, opt_capt,
-    opt_scope, opt_eventHandler) {
-};
-
-
-/**
- * Removes an event listener added using goog.events.EventWrapper.listen.
- *
- * @param {EventTarget|goog.events.EventTarget} src The node to remove listener
- *    from.
- * @param {Function|Object} listener Callback method, or an object with a
- *     handleEvent function.
- * @param {boolean=} opt_capt Whether to fire in capture phase (defaults to
- *     false).
- * @param {Object=} opt_scope Element in whose scope to call the listener.
- * @param {goog.events.EventHandler=} opt_eventHandler Event handler to remove
- *     listener from.
- */
-goog.events.EventWrapper.prototype.unlisten = function(src, listener, opt_capt,
-    opt_scope, opt_eventHandler) {
-};
 // Copyright 2010 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -9461,10 +11418,12 @@ goog.events.EventType = {
 
   // Drag and drop
   DRAGSTART: 'dragstart',
+  DRAG: 'drag',
   DRAGENTER: 'dragenter',
   DRAGOVER: 'dragover',
   DRAGLEAVE: 'dragleave',
   DROP: 'drop',
+  DRAGEND: 'dragend',
 
   // WebKit touch events.
   TOUCHSTART: 'touchstart',
@@ -9473,7 +11432,9 @@ goog.events.EventType = {
   TOUCHCANCEL: 'touchcancel',
 
   // Misc
+  BEFOREUNLOAD: 'beforeunload',
   CONTEXTMENU: 'contextmenu',
+  DOMCONTENTLOADED: 'DOMContentLoaded',
   ERROR: 'error',
   HELP: 'help',
   LOAD: 'load',
@@ -9501,6 +11462,11 @@ goog.events.EventType = {
   BEFORECUT: 'beforecut',
   BEFOREPASTE: 'beforepaste',
 
+  // HTML5 online/offline events.
+  // http://www.w3.org/TR/offline-webapps/#related
+  ONLINE: 'online',
+  OFFLINE: 'offline',
+
   // HTML 5 worker events
   MESSAGE: 'message',
   CONNECT: 'connect',
@@ -9508,270 +11474,30 @@ goog.events.EventType = {
   // CSS transition events. Based on the browser support described at:
   // https://developer.mozilla.org/en/css/css_transitions#Browser_compatibility
   TRANSITIONEND: goog.userAgent.WEBKIT ? 'webkitTransitionEnd' :
-      (goog.userAgent.OPERA ? 'oTransitionEnd' : 'transitionend')
-};
-// Copyright 2011 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+      (goog.userAgent.OPERA ? 'oTransitionEnd' : 'transitionend'),
 
-/**
- * @fileoverview Definition of the disposable interface.  A disposable object
- * has a dispose method to to clean up references and resources.
- * @author nnaze@google.com (Nathan Naze)
- */
+  // IE specific events.
+  // See http://msdn.microsoft.com/en-us/library/ie/hh673557(v=vs.85).aspx
+  MSGESTURECHANGE: 'MSGestureChange',
+  MSGESTUREEND: 'MSGestureEnd',
+  MSGESTUREHOLD: 'MSGestureHold',
+  MSGESTURESTART: 'MSGestureStart',
+  MSGESTURETAP: 'MSGestureTap',
+  MSGOTPOINTERCAPTURE: 'MSGotPointerCapture',
+  MSINERTIASTART: 'MSInertiaStart',
+  MSLOSTPOINTERCAPTURE: 'MSLostPointerCapture',
+  MSPOINTERCANCEL: 'MSPointerCancel',
+  MSPOINTERDOWN: 'MSPointerDown',
+  MSPOINTERMOVE: 'MSPointerMove',
+  MSPOINTEROVER: 'MSPointerOver',
+  MSPOINTEROUT: 'MSPointerOut',
+  MSPOINTERUP: 'MSPointerUp',
 
-
-goog.provide('goog.disposable.IDisposable');
-
-
-
-/**
- * Interface for a disposable object.  If a instance requires cleanup
- * (references COM objects, DOM notes, or other disposable objects), it should
- * implement this interface (it may subclass goog.Disposable).
- * @interface
- */
-goog.disposable.IDisposable = function() {};
-
-
-/**
- * Disposes of the object and its resources.
- * @return {void} Nothing.
- */
-goog.disposable.IDisposable.prototype.dispose;
-
-
-/**
- * @return {boolean} Whether the object has been disposed of.
- */
-goog.disposable.IDisposable.prototype.isDisposed;
-// Copyright 2005 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Implements the disposable interface. The dispose method is used
- * to clean up references and resources.
- * @author arv@google.com (Erik Arvidsson)
- */
-
-
-goog.provide('goog.Disposable');
-goog.provide('goog.dispose');
-
-goog.require('goog.disposable.IDisposable');
-
-
-
-/**
- * Class that provides the basic implementation for disposable objects. If your
- * class holds one or more references to COM objects, DOM nodes, or other
- * disposable objects, it should extend this class or implement the disposable
- * interface (defined in goog.disposable.IDisposable).
- * @constructor
- * @implements {goog.disposable.IDisposable}
- */
-goog.Disposable = function() {
-  if (goog.Disposable.ENABLE_MONITORING) {
-    goog.Disposable.instances_[goog.getUid(this)] = this;
-  }
-};
-
-
-/**
- * @define {boolean} Whether to enable the monitoring of the goog.Disposable
- *     instances. Switching on the monitoring is only recommended for debugging
- *     because it has a significant impact on performance and memory usage.
- *     If switched off, the monitoring code compiles down to 0 bytes.
- *     The monitoring expects that all disposable objects call the
- *     {@code goog.Disposable} base constructor.
- */
-goog.Disposable.ENABLE_MONITORING = false;
-
-
-/**
- * Maps the unique ID of every undisposed {@code goog.Disposable} object to
- * the object itself.
- * @type {!Object.<number, !goog.Disposable>}
- * @private
- */
-goog.Disposable.instances_ = {};
-
-
-/**
- * @return {!Array.<!goog.Disposable>} All {@code goog.Disposable} objects that
- *     haven't been disposed of.
- */
-goog.Disposable.getUndisposedObjects = function() {
-  var ret = [];
-  for (var id in goog.Disposable.instances_) {
-    if (goog.Disposable.instances_.hasOwnProperty(id)) {
-      ret.push(goog.Disposable.instances_[Number(id)]);
-    }
-  }
-  return ret;
-};
-
-
-/**
- * Clears the registry of undisposed objects but doesn't dispose of them.
- */
-goog.Disposable.clearUndisposedObjects = function() {
-  goog.Disposable.instances_ = {};
-};
-
-
-/**
- * Whether the object has been disposed of.
- * @type {boolean}
- * @private
- */
-goog.Disposable.prototype.disposed_ = false;
-
-
-/**
- * Disposables that should be disposed when this object is disposed.
- * @type {Array.<goog.disposable.IDisposable>}
- * @private
- */
-goog.Disposable.prototype.dependentDisposables_;
-
-
-/**
- * @return {boolean} Whether the object has been disposed of.
- */
-goog.Disposable.prototype.isDisposed = function() {
-  return this.disposed_;
-};
-
-
-/**
- * @return {boolean} Whether the object has been disposed of.
- * @deprecated Use {@link #isDisposed} instead.
- */
-goog.Disposable.prototype.getDisposed = goog.Disposable.prototype.isDisposed;
-
-
-/**
- * Disposes of the object. If the object hasn't already been disposed of, calls
- * {@link #disposeInternal}. Classes that extend {@code goog.Disposable} should
- * override {@link #disposeInternal} in order to delete references to COM
- * objects, DOM nodes, and other disposable objects. Reentrant.
- *
- * @return {void} Nothing.
- */
-goog.Disposable.prototype.dispose = function() {
-  if (!this.disposed_) {
-    // Set disposed_ to true first, in case during the chain of disposal this
-    // gets disposed recursively.
-    this.disposed_ = true;
-    this.disposeInternal();
-    if (goog.Disposable.ENABLE_MONITORING) {
-      var uid = goog.getUid(this);
-      if (!goog.Disposable.instances_.hasOwnProperty(uid)) {
-        throw Error(this + ' did not call the goog.Disposable base ' +
-            'constructor or was disposed of after a clearUndisposedObjects ' +
-            'call');
-      }
-      delete goog.Disposable.instances_[uid];
-    }
-  }
-};
-
-
-/**
- * Associates a disposable object with this object so that they will be disposed
- * together.
- * @param {goog.disposable.IDisposable} disposable that will be disposed when
- *     this object is disposed.
- */
-goog.Disposable.prototype.registerDisposable = function(disposable) {
-  if (!this.dependentDisposables_) {
-    this.dependentDisposables_ = [];
-  }
-  this.dependentDisposables_.push(disposable);
-};
-
-
-/**
- * Deletes or nulls out any references to COM objects, DOM nodes, or other
- * disposable objects. Classes that extend {@code goog.Disposable} should
- * override this method.
- * Not reentrant. To avoid calling it twice, it must only be called from the
- * subclass' {@code disposeInternal} method. Everywhere else the public
- * {@code dispose} method must be used.
- * For example:
- * <pre>
- *   mypackage.MyClass = function() {
- *     goog.base(this);
- *     // Constructor logic specific to MyClass.
- *     ...
- *   };
- *   goog.inherits(mypackage.MyClass, goog.Disposable);
- *
- *   mypackage.MyClass.prototype.disposeInternal = function() {
- *     goog.base(this, 'disposeInternal');
- *     // Dispose logic specific to MyClass.
- *     ...
- *   };
- * </pre>
- * @protected
- */
-goog.Disposable.prototype.disposeInternal = function() {
-  if (this.dependentDisposables_) {
-    goog.disposeAll.apply(null, this.dependentDisposables_);
-  }
-};
-
-
-/**
- * Calls {@code dispose} on the argument if it supports it. If obj is not an
- *     object with a dispose() method, this is a no-op.
- * @param {*} obj The object to dispose of.
- */
-goog.dispose = function(obj) {
-  if (obj && typeof obj.dispose == 'function') {
-    obj.dispose();
-  }
-};
-
-
-/**
- * Calls {@code dispose} on each member of the list that supports it. (If the
- * member is an ArrayLike, then {@code goog.disposeAll()} will be called
- * recursively on each of its members.) If the member is not an object with a
- * {@code dispose()} method, then it is ignored.
- * @param {...*} var_args The list.
- */
-goog.disposeAll = function(var_args) {
-  for (var i = 0, len = arguments.length; i < len; ++i) {
-    var disposable = arguments[i];
-    if (goog.isArrayLike(disposable)) {
-      goog.disposeAll.apply(null, disposable);
-    } else {
-      goog.dispose(disposable);
-    }
-  }
+  // Native IMEs/input tools events.
+  TEXTINPUT: 'textinput',
+  COMPOSITIONSTART: 'compositionstart',
+  COMPOSITIONUPDATE: 'compositionupdate',
+  COMPOSITIONEND: 'compositionend'
 };
 // Copyright 2005 The Closure Library Authors. All Rights Reserved.
 //
@@ -9794,8 +11520,22 @@ goog.disposeAll = function(var_args) {
 
 
 goog.provide('goog.events.Event');
+goog.provide('goog.events.EventLike');
 
+// goog.events.Event no longer depends on goog.Disposable. Keep requiring
+// goog.Disposable here to not break projects which assume this dependency.
 goog.require('goog.Disposable');
+
+
+/**
+ * A typedef for event like objects that are dispatchable via the
+ * goog.events.dispatchEvent function. strings are treated as the type for a
+ * goog.events.Event. Objects are treated as an extension of a new
+ * goog.events.Event with the type property of the object being used as the type
+ * of the Event.
+ * @typedef {string|Object|goog.events.Event}
+ */
+goog.events.EventLike;
 
 
 
@@ -9808,11 +11548,8 @@ goog.require('goog.Disposable');
  *     this event. It has to implement the {@code EventTarget} interface
  *     declared at {@link http://developer.mozilla.org/en/DOM/EventTarget}.
  * @constructor
- * @extends {goog.Disposable}
  */
 goog.events.Event = function(type, opt_target) {
-  goog.Disposable.call(this);
-
   /**
    * Event type.
    * @type {string}
@@ -9831,14 +11568,23 @@ goog.events.Event = function(type, opt_target) {
    */
   this.currentTarget = this.target;
 };
-goog.inherits(goog.events.Event, goog.Disposable);
 
 
-/** @override */
+/**
+ * For backwards compatibility (goog.events.Event used to inherit
+ * goog.Disposable).
+ * @deprecated Events don't need to be disposed.
+ */
 goog.events.Event.prototype.disposeInternal = function() {
-  delete this.type;
-  delete this.target;
-  delete this.currentTarget;
+};
+
+
+/**
+ * For backwards compatibility (goog.events.Event used to inherit
+ * goog.Disposable).
+ * @deprecated Events don't need to be disposed.
+ */
+goog.events.Event.prototype.dispose = function() {
 };
 
 
@@ -9849,6 +11595,16 @@ goog.events.Event.prototype.disposeInternal = function() {
  *     this package is strongly discouraged.
  */
 goog.events.Event.prototype.propagationStopped_ = false;
+
+
+/**
+ * Whether the default action has been prevented.
+ * This is a property to match the W3C specification at {@link
+ * http://www.w3.org/TR/DOM-Level-3-Events/#events-event-type-defaultPrevented}.
+ * Must be treated as read-only outside the class.
+ * @type {boolean}
+ */
+goog.events.Event.prototype.defaultPrevented = false;
 
 
 /**
@@ -9872,6 +11628,7 @@ goog.events.Event.prototype.stopPropagation = function() {
  * Prevents the default action, for example a link redirecting to a url.
  */
 goog.events.Event.prototype.preventDefault = function() {
+  this.defaultPrevented = true;
   this.returnValue_ = false;
 };
 
@@ -10009,6 +11766,7 @@ goog.reflect.canAccessProperty = function(obj, prop) {
  * - altKey         {boolean}   Was alt key depressed
  * - shiftKey       {boolean}   Was shift key depressed
  * - metaKey        {boolean}   Was meta key depressed
+ * - defaultPrevented {boolean} Whether the default action has been prevented
  * - state          {Object}    History state object
  *
  * NOTE: The keyCode member contains the raw browser keyCode. For normalized
@@ -10034,7 +11792,7 @@ goog.require('goog.userAgent');
  * The content of this object will not be initialized if no event object is
  * provided. If this is the case, init() needs to be invoked separately.
  * @param {Event=} opt_e Browser event object.
- * @param {Node=} opt_currentTarget Current target for event.
+ * @param {EventTarget=} opt_currentTarget Current target for event.
  * @constructor
  * @extends {goog.events.Event}
  */
@@ -10210,7 +11968,7 @@ goog.events.BrowserEvent.prototype.event_ = null;
  * Accepts a browser event object and creates a patched, cross browser event
  * object.
  * @param {Event} e Browser event object.
- * @param {Node=} opt_currentTarget Current target for event.
+ * @param {EventTarget=} opt_currentTarget Current target for event.
  */
 goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
   var type = this.type = e.type;
@@ -10219,7 +11977,8 @@ goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
   // TODO(nicksantos): Change this.target to type EventTarget.
   this.target = /** @type {Node} */ (e.target) || e.srcElement;
 
-  this.currentTarget = opt_currentTarget;
+  // TODO(nicksantos): Change this.currentTarget to type EventTarget.
+  this.currentTarget = /** @type {Node} */ (opt_currentTarget);
 
   var relatedTarget = /** @type {Node} */ (e.relatedTarget);
   if (relatedTarget) {
@@ -10265,7 +12024,9 @@ goog.events.BrowserEvent.prototype.init = function(e, opt_currentTarget) {
   this.platformModifierKey = goog.userAgent.MAC ? e.metaKey : e.ctrlKey;
   this.state = e.state;
   this.event_ = e;
-  delete this.returnValue_;
+  if (e.defaultPrevented) {
+    this.preventDefault();
+  }
   delete this.propagationStopped_;
 };
 
@@ -10379,11 +12140,6 @@ goog.events.BrowserEvent.prototype.getBrowserEvent = function() {
 
 /** @override */
 goog.events.BrowserEvent.prototype.disposeInternal = function() {
-  goog.events.BrowserEvent.superClass_.disposeInternal.call(this);
-  this.event_ = null;
-  this.target = null;
-  this.currentTarget = null;
-  this.relatedTarget = null;
 };
 // Copyright 2005 The Closure Library Authors. All Rights Reserved.
 //
@@ -10441,31 +12197,35 @@ goog.events.BrowserEvent.prototype.disposeInternal = function() {
 
 
 goog.provide('goog.events');
+goog.provide('goog.events.Key');
+goog.provide('goog.events.ListenableType');
 
 goog.require('goog.array');
+goog.require('goog.asserts');
+/** @suppress {extraRequire} */
 goog.require('goog.debug.entryPointRegistry');
-goog.require('goog.debug.errorHandlerWeakDep');
 goog.require('goog.events.BrowserEvent');
 goog.require('goog.events.BrowserFeature');
-goog.require('goog.events.Event');
-goog.require('goog.events.EventWrapper');
+goog.require('goog.events.Listenable');
 goog.require('goog.events.Listener');
 goog.require('goog.object');
-goog.require('goog.userAgent');
 
 
 /**
- * @define {boolean} Whether to always assume the garbage collector is good.
- * @deprecated This is no longer needed and will be removed once apps are
- * updated.
+ * @typedef {number|goog.events.ListenableKey}
  */
-goog.events.ASSUME_GOOD_GC = false;
+goog.events.Key;
+
+
+/**
+ * @typedef {EventTarget|goog.events.Listenable}
+ */
+goog.events.ListenableType;
 
 
 /**
  * Container for storing event listeners and their proxies
- * @private
- * @type {Object.<goog.events.Listener>}
+ * @private {!Object.<goog.events.ListenableKey>}
  */
 goog.events.listeners_ = {};
 
@@ -10514,12 +12274,15 @@ goog.events.keySeparator_ = '_';
 
 
 /**
- * Adds an event listener for a specific event on a DOM Node or an object that
- * has implemented {@link goog.events.EventTarget}. A listener can only be
- * added once to an object and if it is added again the key for the listener
- * is returned.
+ * Adds an event listener for a specific event on a DOM Node or an
+ * object that has implemented {@link goog.events.Listenable}. A
+ * listener can only be added once to an object and if it is added
+ * again the key for the listener is returned. Note that if the
+ * existing listener is a one-off listener (registered via
+ * listenOnce), it will no longer be a one-off listener after a call
+ * to listen().
  *
- * @param {EventTarget|goog.events.EventTarget} src The node to listen to
+ * @param {goog.events.ListenableType} src The node to listen to
  *     events on.
  * @param {string|Array.<string>} type Event type or array of event types.
  * @param {Function|Object} listener Callback method, or an object with a
@@ -10527,101 +12290,146 @@ goog.events.keySeparator_ = '_';
  * @param {boolean=} opt_capt Whether to fire in capture phase (defaults to
  *     false).
  * @param {Object=} opt_handler Element in whose scope to call the listener.
- * @return {?number} Unique key for the listener.
+ * @return {goog.events.Key} Unique key for the listener.
  */
 goog.events.listen = function(src, type, listener, opt_capt, opt_handler) {
-  if (!type) {
-    throw Error('Invalid event type');
-  } else if (goog.isArray(type)) {
+  if (goog.isArray(type)) {
     for (var i = 0; i < type.length; i++) {
       goog.events.listen(src, type[i], listener, opt_capt, opt_handler);
     }
     return null;
-  } else {
-    var capture = !!opt_capt;
-    var map = goog.events.listenerTree_;
-
-    if (!(type in map)) {
-      map[type] = {count_: 0, remaining_: 0};
-    }
-    map = map[type];
-
-    if (!(capture in map)) {
-      map[capture] = {count_: 0, remaining_: 0};
-      map.count_++;
-    }
-    map = map[capture];
-
-    var srcUid = goog.getUid(src);
-    var listenerArray, listenerObj;
-
-    // The remaining_ property is used to be able to short circuit the iteration
-    // of the event listeners.
-    //
-    // Increment the remaining event listeners to call even if this event might
-    // already have been fired. At this point we do not know if the event has
-    // been fired and it is too expensive to find out. By incrementing it we are
-    // guaranteed that we will not skip any event listeners.
-    map.remaining_++;
-
-    // Do not use srcUid in map here since that will cast the number to a
-    // string which will allocate one string object.
-    if (!map[srcUid]) {
-      listenerArray = map[srcUid] = [];
-      map.count_++;
-    } else {
-      listenerArray = map[srcUid];
-      // Ensure that the listeners do not already contain the current listener
-      for (var i = 0; i < listenerArray.length; i++) {
-        listenerObj = listenerArray[i];
-        if (listenerObj.listener == listener &&
-            listenerObj.handler == opt_handler) {
-
-          // If this listener has been removed we should not return its key. It
-          // is OK that we create new listenerObj below since the removed one
-          // will be cleaned up later.
-          if (listenerObj.removed) {
-            break;
-          }
-
-          // We already have this listener. Return its key.
-          return listenerArray[i].key;
-        }
-      }
-    }
-
-    var proxy = goog.events.getProxy();
-    proxy.src = src;
-    listenerObj = new goog.events.Listener();
-    listenerObj.init(listener, proxy, src, type, capture, opt_handler);
-    var key = listenerObj.key;
-    proxy.key = key;
-
-    listenerArray.push(listenerObj);
-    goog.events.listeners_[key] = listenerObj;
-
-    if (!goog.events.sources_[srcUid]) {
-      goog.events.sources_[srcUid] = [];
-    }
-    goog.events.sources_[srcUid].push(listenerObj);
-
-
-    // Attach the proxy through the browser's API
-    if (src.addEventListener) {
-      if (src == goog.global || !src.customEvent_) {
-        src.addEventListener(type, proxy, capture);
-      }
-    } else {
-      // The else above used to be else if (src.attachEvent) and then there was
-      // another else statement that threw an exception warning the developer
-      // they made a mistake. This resulted in an extra object allocation in IE6
-      // due to a wrapper object that had to be implemented around the element
-      // and so was removed.
-      src.attachEvent(goog.events.getOnString_(type), proxy);
-    }
-
-    return key;
   }
+
+  var listenableKey;
+  listener = goog.events.wrapListener_(listener);
+  if (goog.events.Listenable.isImplementedBy(src)) {
+    listenableKey = src.listen(
+        /** @type {string} */ (type), listener, opt_capt, opt_handler);
+  } else {
+    listenableKey = goog.events.listen_(
+        /** @type {EventTarget} */ (src),
+        type, listener, /* callOnce */ false, opt_capt, opt_handler);
+  }
+
+  return listenableKey;
+};
+
+
+/**
+ * Adds an event listener for a specific event on a DOM Node or an object that
+ * has implemented {@link goog.events.Listenable}. A listener can only be
+ * added once to an object and if it is added again the key for the listener
+ * is returned.
+ *
+ * Note that a one-off listener will not change an existing listener,
+ * if any. On the other hand a normal listener will change existing
+ * one-off listener to become a normal listener.
+ *
+ * @param {EventTarget} src The node to listen to events on.
+ * @param {?string} type Event type or array of event types.
+ * @param {!Function} listener Callback function.
+ * @param {boolean} callOnce Whether the listener is a one-off
+ *     listener or otherwise.
+ * @param {boolean=} opt_capt Whether to fire in capture phase (defaults to
+ *     false).
+ * @param {Object=} opt_handler Element in whose scope to call the listener.
+ * @return {goog.events.ListenableKey} Unique key for the listener.
+ * @private
+ */
+goog.events.listen_ = function(
+    src, type, listener, callOnce, opt_capt, opt_handler) {
+  if (!type) {
+    throw Error('Invalid event type');
+  }
+
+  var capture = !!opt_capt;
+  var map = goog.events.listenerTree_;
+
+  if (!(type in map)) {
+    map[type] = {count_: 0, remaining_: 0};
+  }
+  map = map[type];
+
+  if (!(capture in map)) {
+    map[capture] = {count_: 0, remaining_: 0};
+    map.count_++;
+  }
+  map = map[capture];
+
+  var srcUid = goog.getUid(src);
+  var listenerArray, listenerObj;
+
+  // The remaining_ property is used to be able to short circuit the iteration
+  // of the event listeners.
+  //
+  // Increment the remaining event listeners to call even if this event might
+  // already have been fired. At this point we do not know if the event has
+  // been fired and it is too expensive to find out. By incrementing it we are
+  // guaranteed that we will not skip any event listeners.
+  map.remaining_++;
+
+  // Do not use srcUid in map here since that will cast the number to a
+  // string which will allocate one string object.
+  if (!map[srcUid]) {
+    listenerArray = map[srcUid] = [];
+    map.count_++;
+  } else {
+    listenerArray = map[srcUid];
+    // Ensure that the listeners do not already contain the current listener
+    for (var i = 0; i < listenerArray.length; i++) {
+      listenerObj = listenerArray[i];
+      if (listenerObj.listener == listener &&
+          listenerObj.handler == opt_handler) {
+
+        // If this listener has been removed we should not return its key. It
+        // is OK that we create new listenerObj below since the removed one
+        // will be cleaned up later.
+        if (listenerObj.removed) {
+          break;
+        }
+
+        if (!callOnce) {
+          // Ensure that, if there is an existing callOnce listener, it is no
+          // longer a callOnce listener.
+          listenerArray[i].callOnce = false;
+        }
+
+        // We already have this listener. Return its key.
+        return listenerArray[i];
+      }
+    }
+  }
+
+  var proxy = goog.events.getProxy();
+  listenerObj = new goog.events.Listener(
+      listener, proxy, src, type, capture, opt_handler);
+  listenerObj.callOnce = callOnce;
+
+  proxy.src = src;
+  proxy.listener = listenerObj;
+
+  listenerArray.push(listenerObj);
+
+  if (!goog.events.sources_[srcUid]) {
+    goog.events.sources_[srcUid] = [];
+  }
+  goog.events.sources_[srcUid].push(listenerObj);
+
+  // Attach the proxy through the browser's API
+  if (src.addEventListener) {
+    src.addEventListener(type, proxy, capture);
+  } else {
+    // The else above used to be else if (src.attachEvent) and then there was
+    // another else statement that threw an exception warning the developer
+    // they made a mistake. This resulted in an extra object allocation in IE6
+    // due to a wrapper object that had to be implemented around the element
+    // and so was removed.
+    src.attachEvent(goog.events.getOnString_(type), proxy);
+  }
+
+  var key = listenerObj.key;
+  goog.events.listeners_[key] = listenerObj;
+  return listenerObj;
 };
 
 
@@ -10634,10 +12442,10 @@ goog.events.getProxy = function() {
   // Use a local var f to prevent one allocation.
   var f = goog.events.BrowserFeature.HAS_W3C_EVENT_SUPPORT ?
       function(eventObject) {
-        return proxyCallbackFunction.call(f.src, f.key, eventObject);
+        return proxyCallbackFunction.call(f.src, f.listener, eventObject);
       } :
       function(eventObject) {
-        var v = proxyCallbackFunction.call(f.src, f.key, eventObject);
+        var v = proxyCallbackFunction.call(f.src, f.listener, eventObject);
         // NOTE(user): In IE, we hack in a capture phase. However, if
         // there is inline event handler which tries to prevent default (for
         // example <a href="..." onclick="return false">...</a>) in a
@@ -10652,16 +12460,23 @@ goog.events.getProxy = function() {
 
 /**
  * Adds an event listener for a specific event on a DomNode or an object that
- * has implemented {@link goog.events.EventTarget}. After the event has fired
+ * has implemented {@link goog.events.Listenable}. After the event has fired
  * the event listener is removed from the target.
  *
- * @param {EventTarget|goog.events.EventTarget} src The node to listen to
+ * If an existing listener already exists, listenOnce will do
+ * nothing. In particular, if the listener was previously registered
+ * via listen(), listenOnce() will not turn the listener into a
+ * one-off listener. Similarly, if there is already an existing
+ * one-off listener, listenOnce does not modify the listeners (it is
+ * still a once listener).
+ *
+ * @param {goog.events.ListenableType} src The node to listen to
  *     events on.
  * @param {string|Array.<string>} type Event type or array of event types.
  * @param {Function|Object} listener Callback method.
  * @param {boolean=} opt_capt Fire in capture phase?.
  * @param {Object=} opt_handler Element in whose scope to call the listener.
- * @return {?number} Unique key for the listener.
+ * @return {goog.events.Key} Unique key for the listener.
  */
 goog.events.listenOnce = function(src, type, listener, opt_capt, opt_handler) {
   if (goog.isArray(type)) {
@@ -10671,20 +12486,27 @@ goog.events.listenOnce = function(src, type, listener, opt_capt, opt_handler) {
     return null;
   }
 
-  var key = goog.events.listen(src, type, listener, opt_capt, opt_handler);
-  var listenerObj = goog.events.listeners_[key];
-  listenerObj.callOnce = true;
-  return key;
+  var listenableKey;
+  listener = goog.events.wrapListener_(listener);
+  if (goog.events.Listenable.isImplementedBy(src)) {
+    listenableKey = src.listenOnce(
+        /** @type {string} */ (type), listener, opt_capt, opt_handler);
+  } else {
+    listenableKey = goog.events.listen_(
+        /** @type {EventTarget} */ (src),
+        type, listener, /* callOnce */ true, opt_capt, opt_handler);
+  }
+
+  return listenableKey;
 };
 
 
 /**
  * Adds an event listener with a specific event wrapper on a DOM Node or an
- * object that has implemented {@link goog.events.EventTarget}. A listener can
+ * object that has implemented {@link goog.events.Listenable}. A listener can
  * only be added once to an object.
  *
- * @param {EventTarget|goog.events.EventTarget} src The node to listen to
- *     events on.
+ * @param {goog.events.ListenableType} src The target to listen to events on.
  * @param {goog.events.EventWrapper} wrapper Event wrapper to use.
  * @param {Function|Object} listener Callback method, or an object with a
  *     handleEvent function.
@@ -10701,7 +12523,7 @@ goog.events.listenWithWrapper = function(src, wrapper, listener, opt_capt,
 /**
  * Removes an event listener which was added with listen().
  *
- * @param {EventTarget|goog.events.EventTarget} src The target to stop
+ * @param {goog.events.ListenableType} src The target to stop
  *     listening to events on.
  * @param {string|Array.<string>} type The name of the event without the 'on'
  *     prefix.
@@ -10720,6 +12542,12 @@ goog.events.unlisten = function(src, type, listener, opt_capt, opt_handler) {
     return null;
   }
 
+  listener = goog.events.wrapListener_(listener);
+  if (goog.events.Listenable.isImplementedBy(src)) {
+    return src.unlisten(
+        /** @type {string} */ (type), listener, opt_capt, opt_handler);
+  }
+
   var capture = !!opt_capt;
 
   var listenerArray = goog.events.getListeners_(src, type, capture);
@@ -10731,7 +12559,7 @@ goog.events.unlisten = function(src, type, listener, opt_capt, opt_handler) {
     if (listenerArray[i].listener == listener &&
         listenerArray[i].capture == capture &&
         listenerArray[i].handler == opt_handler) {
-      return goog.events.unlistenByKey(listenerArray[i].key);
+      return goog.events.unlistenByKey(listenerArray[i]);
     }
   }
 
@@ -10743,41 +12571,41 @@ goog.events.unlisten = function(src, type, listener, opt_capt, opt_handler) {
  * Removes an event listener which was added with listen() by the key
  * returned by listen().
  *
- * @param {?number} key The key returned by listen() for this event listener.
+ * @param {goog.events.Key} key The key returned by listen() for this
+ *     event listener.
  * @return {boolean} indicating whether the listener was there to remove.
  */
 goog.events.unlistenByKey = function(key) {
-  // Do not use key in listeners here since that will cast the number to a
-  // string which will allocate one string object.
-  if (!goog.events.listeners_[key]) {
+  // TODO(user): Remove this check when tests that rely on this
+  // are fixed.
+  if (goog.isNumber(key)) {
     return false;
   }
-  var listener = goog.events.listeners_[key];
 
+  var listener = /** @type {goog.events.ListenableKey} */ (key);
+  if (!listener) {
+    return false;
+  }
   if (listener.removed) {
     return false;
   }
 
   var src = listener.src;
+  if (goog.events.Listenable.isImplementedBy(src)) {
+    return src.unlistenByKey(listener);
+  }
+
   var type = listener.type;
   var proxy = listener.proxy;
   var capture = listener.capture;
 
   if (src.removeEventListener) {
-    // EventTarget calls unlisten so we need to ensure that the source is not
-    // an event target to prevent re-entry.
-    // TODO(arv): What is this goog.global for? Why would anyone listen to
-    // events on the [[Global]] object? Is it supposed to be window? Why would
-    // we not want to allow removing event listeners on the window?
-    if (src == goog.global || !src.customEvent_) {
-      src.removeEventListener(type, proxy, capture);
-    }
+    src.removeEventListener(type, proxy, capture);
   } else if (src.detachEvent) {
     src.detachEvent(goog.events.getOnString_(type), proxy);
   }
 
   var srcUid = goog.getUid(src);
-  var listenerArray = goog.events.listenerTree_[type][capture][srcUid];
 
   // In a perfect implementation we would decrement the remaining_ field here
   // but then we would need to know if the listener has already been fired or
@@ -10793,11 +12621,22 @@ goog.events.unlistenByKey = function(key) {
     }
   }
 
-  listener.removed = true;
-  listenerArray.needsCleanup_ = true;
-  goog.events.cleanUp_(type, capture, srcUid, listenerArray);
+  listener.markAsRemoved();
 
-  delete goog.events.listeners_[key];
+  // There are some esoteric situations where the hash code of an object
+  // can change, and we won't be able to find the listenerArray anymore.
+  // For example, if you're listening on a window, and the user navigates to
+  // a different window, the UID will disappear.
+  //
+  // It should be impossible to ever find the original listenerArray, so it
+  // doesn't really matter if we can't clean it up in this case.
+  var listenerArray = goog.events.listenerTree_[type][capture][srcUid];
+  if (listenerArray) {
+    listenerArray.needsCleanup_ = true;
+    goog.events.cleanUp_(type, capture, srcUid, listenerArray);
+  }
+
+  delete goog.events.listeners_[listener.key];
 
   return true;
 };
@@ -10806,8 +12645,8 @@ goog.events.unlistenByKey = function(key) {
 /**
  * Removes an event listener which was added with listenWithWrapper().
  *
- * @param {EventTarget|goog.events.EventTarget} src The target to stop
- *     listening to events on.
+ * @param {goog.events.ListenableType} src The target to stop listening to
+ *     events on.
  * @param {goog.events.EventWrapper} wrapper Event wrapper to use.
  * @param {Function|Object} listener The listener function to remove.
  * @param {boolean=} opt_capt In DOM-compliant browsers, this determines
@@ -10818,6 +12657,22 @@ goog.events.unlistenByKey = function(key) {
 goog.events.unlistenWithWrapper = function(src, wrapper, listener, opt_capt,
     opt_handler) {
   wrapper.unlisten(src, listener, opt_capt, opt_handler);
+};
+
+
+/**
+ * Cleans up goog.events internal data structure. This should be
+ * called by all implementations of goog.events.Listenable when
+ * removing listeners.
+ *
+ * TODO(user): Once we remove numeric key support from
+ * goog.events.listen and friend, we will be able to remove this
+ * requirement.
+ *
+ * @param {goog.events.ListenableKey} listenableKey The key to clean up.
+ */
+goog.events.cleanUp = function(listenableKey) {
+  delete goog.events.listeners_[listenableKey.key];
 };
 
 
@@ -10847,8 +12702,6 @@ goog.events.cleanUp_ = function(type, capture, srcUid, listenerArray) {
            oldIndex < listenerArray.length;
            oldIndex++) {
         if (listenerArray[oldIndex].removed) {
-          var proxy = listenerArray[oldIndex].proxy;
-          proxy.src = null;
           continue;
         }
         if (oldIndex != newIndex) {
@@ -10881,52 +12734,65 @@ goog.events.cleanUp_ = function(type, capture, srcUid, listenerArray) {
 
 
 /**
- * Removes all listeners from an object, if no object is specified it will
- * remove all listeners that have been registered.  You can also optionally
- * remove listeners of a particular type or capture phase.
+ * Removes all listeners from an object. You can also optionally
+ * remove listeners of a particular type.
  *
- * @param {Object=} opt_obj Object to remove listeners from.
+ * @param {Object=} opt_obj Object to remove listeners from. Not
+ *     specifying opt_obj is now DEPRECATED (it used to remove all
+ *     registered listeners).
  * @param {string=} opt_type Type of event to, default is all types.
- * @param {boolean=} opt_capt Whether to remove the listeners from the capture
- *     or bubble phase.  If unspecified, will remove both.
  * @return {number} Number of listeners removed.
  */
-goog.events.removeAll = function(opt_obj, opt_type, opt_capt) {
+goog.events.removeAll = function(opt_obj, opt_type) {
   var count = 0;
 
   var noObj = opt_obj == null;
   var noType = opt_type == null;
-  var noCapt = opt_capt == null;
-  opt_capt = !!opt_capt;
 
   if (!noObj) {
+    if (opt_obj && goog.events.Listenable.isImplementedBy(opt_obj)) {
+      return opt_obj.removeAllListeners(opt_type);
+    }
+
     var srcUid = goog.getUid(/** @type {Object} */ (opt_obj));
     if (goog.events.sources_[srcUid]) {
       var sourcesArray = goog.events.sources_[srcUid];
       for (var i = sourcesArray.length - 1; i >= 0; i--) {
         var listener = sourcesArray[i];
-        if ((noType || opt_type == listener.type) &&
-            (noCapt || opt_capt == listener.capture)) {
-          goog.events.unlistenByKey(listener.key);
+        if (noType || opt_type == listener.type) {
+          goog.events.unlistenByKey(listener);
           count++;
         }
       }
     }
   } else {
-    // Loop over the sources_ map instead of over the listeners_ since it is
-    // smaller which results in fewer allocations.
-    goog.object.forEach(goog.events.sources_, function(listeners) {
-      for (var i = listeners.length - 1; i >= 0; i--) {
-        var listener = listeners[i];
-        if ((noType || opt_type == listener.type) &&
-            (noCapt || opt_capt == listener.capture)) {
-          goog.events.unlistenByKey(listener.key);
-          count++;
-        }
-      }
+    goog.object.forEach(goog.events.listeners_, function(listener) {
+      goog.events.unlistenByKey(listener);
+      count++;
     });
   }
 
+  return count;
+};
+
+
+/**
+ * Removes all native listeners registered via goog.events. Native
+ * listeners are listeners on native browser objects (such as DOM
+ * elements). In particular, goog.events.Listenable and
+ * goog.events.EventTarget listeners will NOT be removed.
+ * @return {number} Number of listeners removed.
+ */
+goog.events.removeAllNativeListeners = function() {
+  var count = 0;
+  goog.object.forEach(goog.events.listeners_, function(listener) {
+    var src = listener.src;
+    // Only remove the listener if it is not on custom event target.
+    if (!goog.events.Listenable.isImplementedBy(src)) {
+      goog.events.unlistenByKey(listener);
+      count++;
+    }
+  });
   return count;
 };
 
@@ -10940,7 +12806,11 @@ goog.events.removeAll = function(opt_obj, opt_type, opt_capt) {
  * @return {Array.<goog.events.Listener>} Array of listener objects.
  */
 goog.events.getListeners = function(obj, type, capture) {
-  return goog.events.getListeners_(obj, type, capture) || [];
+  if (goog.events.Listenable.isImplementedBy(obj)) {
+    return obj.getListeners(type, capture);
+  } else {
+    return goog.events.getListeners_(obj, type, capture) || [];
+  }
 };
 
 
@@ -10975,7 +12845,7 @@ goog.events.getListeners_ = function(obj, type, capture) {
  * Gets the goog.events.Listener for the event or null if no such listener is
  * in use.
  *
- * @param {EventTarget|goog.events.EventTarget} src The node from which to get
+ * @param {goog.events.ListenableType} src The target from which to get
  *     listeners.
  * @param {?string} type The name of the event without the 'on' prefix.
  * @param {Function|Object} listener The listener function to get.
@@ -10983,10 +12853,17 @@ goog.events.getListeners_ = function(obj, type, capture) {
  *                            whether the listener is fired during the
  *                            capture or bubble phase of the event.
  * @param {Object=} opt_handler Element in whose scope to call the listener.
- * @return {goog.events.Listener?} the found listener or null if not found.
+ * @return {goog.events.ListenableKey} the found listener or null if not found.
  */
 goog.events.getListener = function(src, type, listener, opt_capt, opt_handler) {
   var capture = !!opt_capt;
+
+  listener = goog.events.wrapListener_(listener);
+  if (goog.events.Listenable.isImplementedBy(src)) {
+    return src.getListener(
+        /** @type {string} */ (type), listener, capture, opt_handler);
+  }
+
   var listenerArray = goog.events.getListeners_(src, type, capture);
   if (listenerArray) {
     for (var i = 0; i < listenerArray.length; i++) {
@@ -11011,7 +12888,7 @@ goog.events.getListener = function(src, type, listener, opt_capt, opt_handler) {
  * specified signature. If either the type or capture parameters are
  * unspecified, the function will match on the remaining criteria.
  *
- * @param {EventTarget|goog.events.EventTarget} obj Target to get listeners for.
+ * @param {goog.events.ListenableType} obj Target to get listeners for.
  * @param {string=} opt_type Event type.
  * @param {boolean=} opt_capture Whether to check for capture or bubble-phase
  *     listeners.
@@ -11019,6 +12896,10 @@ goog.events.getListener = function(src, type, listener, opt_capt, opt_handler) {
  *     the requested type and/or capture phase.
  */
 goog.events.hasListener = function(obj, opt_type, opt_capture) {
+  if (goog.events.Listenable.isImplementedBy(obj)) {
+    return obj.hasListener(opt_type, opt_capture);
+  }
+
   var objUid = goog.getUid(obj);
   var listeners = goog.events.sources_[objUid];
 
@@ -11092,6 +12973,10 @@ goog.events.getOnString_ = function(type) {
  * @return {boolean} True if all listeners returned true else false.
  */
 goog.events.fireListeners = function(obj, type, capture, eventObject) {
+  if (goog.events.Listenable.isImplementedBy(obj)) {
+    return obj.fireListeners(type, capture, eventObject);
+  }
+
   var map = goog.events.listenerTree_;
   if (type in map) {
     map = map[type];
@@ -11120,7 +13005,7 @@ goog.events.fireListeners_ = function(map, obj, type, capture, eventObject) {
 
   var objUid = goog.getUid(obj);
   if (map[objUid]) {
-    map.remaining_--;
+    var remaining = --map.remaining_;
     var listenerArray = map[objUid];
 
     // If locked_ is not set (and if already 0) initialize it to 1.
@@ -11144,6 +13029,11 @@ goog.events.fireListeners_ = function(map, obj, type, capture, eventObject) {
         }
       }
     } finally {
+      // Allow the count of targets remaining to increase (if perhaps we have
+      // added listeners) but do not allow it to decrease if we have reentered
+      // this method through a listener dispatching the same event type,
+      // resetting and exhausted the remaining count.
+      map.remaining_ = Math.max(remaining, map.remaining_);
       listenerArray.locked_--;
       goog.events.cleanUp_(type, capture, objUid, listenerArray);
     }
@@ -11161,11 +13051,13 @@ goog.events.fireListeners_ = function(map, obj, type, capture, eventObject) {
  * @return {boolean} Result of listener.
  */
 goog.events.fireListener = function(listener, eventObject) {
-  var rv = listener.handleEvent(eventObject);
+  var listenerFn = listener.listener;
+  var listenerHandler = listener.handler || listener.src;
+
   if (listener.callOnce) {
-    goog.events.unlistenByKey(listener.key);
+    goog.events.unlistenByKey(listener);
   }
-  return rv;
+  return listenerFn.call(listenerHandler, eventObject);
 };
 
 
@@ -11187,91 +13079,19 @@ goog.events.getTotalListenerCount = function() {
  * function will return false.  If one of the capture listeners calls
  * stopPropagation, then the bubble listeners won't fire.
  *
- * @param {goog.events.EventTarget} src  The event target.
- * @param {string|Object|goog.events.Event} e Event object.
+ * @param {goog.events.Listenable} src The event target.
+ * @param {goog.events.EventLike} e Event object.
  * @return {boolean} If anyone called preventDefault on the event object (or
  *     if any of the handlers returns false) this will also return false.
  *     If there are no handlers, or if all handlers return true, this returns
  *     true.
  */
 goog.events.dispatchEvent = function(src, e) {
-  var type = e.type || e;
-  var map = goog.events.listenerTree_;
-  if (!(type in map)) {
-    return true;
-  }
-
-  // If accepting a string or object, create a custom event object so that
-  // preventDefault and stopPropagation work with the event.
-  if (goog.isString(e)) {
-    e = new goog.events.Event(e, src);
-  } else if (!(e instanceof goog.events.Event)) {
-    var oldEvent = e;
-    e = new goog.events.Event(type, src);
-    goog.object.extend(e, oldEvent);
-  } else {
-    e.target = e.target || src;
-  }
-
-  var rv = 1, ancestors;
-
-  map = map[type];
-  var hasCapture = true in map;
-  var targetsMap;
-
-  if (hasCapture) {
-    // Build ancestors now
-    ancestors = [];
-    for (var parent = src; parent; parent = parent.getParentEventTarget()) {
-      ancestors.push(parent);
-    }
-
-    targetsMap = map[true];
-    targetsMap.remaining_ = targetsMap.count_;
-
-    // Call capture listeners
-    for (var i = ancestors.length - 1;
-         !e.propagationStopped_ && i >= 0 && targetsMap.remaining_;
-         i--) {
-      e.currentTarget = ancestors[i];
-      rv &= goog.events.fireListeners_(targetsMap, ancestors[i], e.type,
-                                       true, e) &&
-            e.returnValue_ != false;
-    }
-  }
-
-  var hasBubble = false in map;
-  if (hasBubble) {
-    targetsMap = map[false];
-    targetsMap.remaining_ = targetsMap.count_;
-
-    if (hasCapture) { // We have the ancestors.
-
-      // Call bubble listeners
-      for (var i = 0; !e.propagationStopped_ && i < ancestors.length &&
-           targetsMap.remaining_;
-           i++) {
-        e.currentTarget = ancestors[i];
-        rv &= goog.events.fireListeners_(targetsMap, ancestors[i], e.type,
-                                         false, e) &&
-              e.returnValue_ != false;
-      }
-    } else {
-      // In case we don't have capture we don't have to build up the
-      // ancestors array.
-
-      for (var current = src;
-           !e.propagationStopped_ && current && targetsMap.remaining_;
-           current = current.getParentEventTarget()) {
-        e.currentTarget = current;
-        rv &= goog.events.fireListeners_(targetsMap, current, e.type,
-                                         false, e) &&
-              e.returnValue_ != false;
-      }
-    }
-  }
-
-  return Boolean(rv);
+  goog.asserts.assert(
+      goog.events.Listenable.isImplementedBy(src),
+      'Can not use goog.events.dispatchEvent with ' +
+      'non-goog.events.Listenable instance.');
+  return src.dispatchEvent(e);
 };
 
 
@@ -11292,23 +13112,20 @@ goog.events.protectBrowserEventEntryPoint = function(errorHandler) {
  * Handles an event and dispatches it to the correct listeners. This
  * function is a proxy for the real listener the user specified.
  *
- * @param {number} key Unique key for the listener.
+ * @param {goog.events.Listener} listener The listener object.
  * @param {Event=} opt_evt Optional event object that gets passed in via the
  *     native event handlers.
  * @return {boolean} Result of the event handler.
  * @this {goog.events.EventTarget|Object} The object or Element that
- *     fired the event.
+ *     fired the event. TODO(user): Figure out why the type is
+ *     so weird?
  * @private
  */
-goog.events.handleBrowserEvent_ = function(key, opt_evt) {
-  // If the listener isn't there it was probably removed when processing
-  // another listener on the same event (e.g. the later listener is
-  // not managed by closure so that they are both fired under IE)
-  if (!goog.events.listeners_[key]) {
+goog.events.handleBrowserEvent_ = function(listener, opt_evt) {
+  if (listener.removed) {
     return true;
   }
 
-  var listener = goog.events.listeners_[key];
   var type = listener.type;
   var map = goog.events.listenerTree_;
 
@@ -11336,7 +13153,8 @@ goog.events.handleBrowserEvent_ = function(key, opt_evt) {
     }
 
     var evt = new goog.events.BrowserEvent();
-    evt.init(ieEvent, this);
+    // TODO(user): update @this for this function
+    evt.init(ieEvent, /** @type {EventTarget} */ (this));
 
     retval = true;
     try {
@@ -11385,18 +13203,14 @@ goog.events.handleBrowserEvent_ = function(key, opt_evt) {
       if (ancestors) {
         ancestors.length = 0;
       }
-      evt.dispose();
     }
     return retval;
   } // IE
 
   // Caught a non-IE DOM event. 1 additional argument which is the event object
-  var be = new goog.events.BrowserEvent(opt_evt, this);
-  try {
-    retval = goog.events.fireListener(listener, be);
-  } finally {
-    be.dispose();
-  }
+  var be = new goog.events.BrowserEvent(
+      opt_evt, /** @type {EventTarget} */ (this));
+  retval = goog.events.fireListener(listener, be);
   return retval;
 };
 
@@ -11464,9 +13278,45 @@ goog.events.uniqueIdCounter_ = 0;
  *
  * @param {string} identifier The identifier.
  * @return {string} A unique identifier.
+ * @idGenerator
  */
 goog.events.getUniqueId = function(identifier) {
   return identifier + '_' + goog.events.uniqueIdCounter_++;
+};
+
+
+/**
+ * Expando property for listener function wrapper for Object with
+ * handleEvent.
+ * @type {string}
+ * @private
+ */
+goog.events.LISTENER_WRAPPER_PROP_ = '__closure_events_fn_' +
+    ((Math.random() * 1e9) >>> 0);
+
+
+/**
+ * @param {Object|Function} listener The listener function or an
+ *     object that contains handleEvent method.
+ * @return {!Function} Either the original function or a function that
+ *     calls obj.handleEvent. If the same listener is passed to this
+ *     function more than once, the same function is guaranteed to be
+ *     returned.
+ * @private
+ */
+goog.events.wrapListener_ = function(listener) {
+  goog.asserts.assert(listener, 'Listener can not be null.');
+
+  if (goog.isFunction(listener)) {
+    return listener;
+  }
+
+  goog.asserts.assert(
+      listener.handleEvent, 'An object listener must have handleEvent method.');
+  return listener[goog.events.LISTENER_WRAPPER_PROP_] ||
+      (listener[goog.events.LISTENER_WRAPPER_PROP_] = function(e) {
+        return listener.handleEvent(e);
+      });
 };
 
 
@@ -11503,14 +13353,16 @@ goog.debug.entryPointRegistry.register(
  * @see ../demos/eventtarget.html
  */
 
-
-/**
- * Namespace for events
- */
 goog.provide('goog.events.EventTarget');
 
 goog.require('goog.Disposable');
+goog.require('goog.array');
+goog.require('goog.asserts');
 goog.require('goog.events');
+goog.require('goog.events.Event');
+goog.require('goog.events.Listenable');
+goog.require('goog.events.Listener');
+goog.require('goog.object');
 
 
 
@@ -11560,20 +13412,38 @@ goog.require('goog.events');
  *
  * @constructor
  * @extends {goog.Disposable}
+ * @implements {goog.events.Listenable}
  */
 goog.events.EventTarget = function() {
   goog.Disposable.call(this);
+
+  /**
+   * Maps of event type to an array of listeners.
+   *
+   * @type {Object.<string, !Array.<!goog.events.Listener>>}
+   * @private
+   */
+  this.eventTargetListeners_ = {};
+
+  /**
+   * The object to use for event.target. Useful when mixing in an
+   * EventTarget to another object.
+   * @type {!Object}
+   * @private
+   */
+  this.actualEventTarget_ = this;
 };
 goog.inherits(goog.events.EventTarget, goog.Disposable);
+goog.events.Listenable.addImplementation(goog.events.EventTarget);
 
 
 /**
- * Used to tell if an event is a real event in goog.events.listen() so we don't
- * get listen() calling addEventListener() and vice-versa.
- * @type {boolean}
+ * An artificial cap on the number of ancestors you can have. This is mainly
+ * for loop detection.
+ * @const {number}
  * @private
  */
-goog.events.EventTarget.prototype.customEvent_ = true;
+goog.events.EventTarget.MAX_ANCESTORS_ = 1000;
 
 
 /**
@@ -11613,6 +13483,8 @@ goog.events.EventTarget.prototype.setParentEventTarget = function(parent) {
  *
  * Supported for legacy but use goog.events.listen(src, type, handler) instead.
  *
+ * TODO(user): Deprecate this.
+ *
  * @param {string} type The type of the event to listen for.
  * @param {Function|Object} handler The function to handle the event. The
  *     handler can also be an object that implements the handleEvent method
@@ -11620,7 +13492,8 @@ goog.events.EventTarget.prototype.setParentEventTarget = function(parent) {
  * @param {boolean=} opt_capture In DOM-compliant browsers, this determines
  *     whether the listener is fired during the capture or bubble phase
  *     of the event.
- * @param {Object=} opt_handlerScope Object in whose scope to call the listener.
+ * @param {Object=} opt_handlerScope Object in whose scope to call
+ *     the listener.
  */
 goog.events.EventTarget.prototype.addEventListener = function(
     type, handler, opt_capture, opt_handlerScope) {
@@ -11632,6 +13505,9 @@ goog.events.EventTarget.prototype.addEventListener = function(
  * Removes an event listener from the event target. The handler must be the
  * same object as the one added. If the handler has not been added then
  * nothing is done.
+ *
+ * TODO(user): Deprecate this.
+ *
  * @param {string} type The type of the event to listen for.
  * @param {Function|Object} handler The function to handle the event. The
  *     handler can also be an object that implements the handleEvent method
@@ -11639,7 +13515,8 @@ goog.events.EventTarget.prototype.addEventListener = function(
  * @param {boolean=} opt_capture In DOM-compliant browsers, this determines
  *     whether the listener is fired during the capture or bubble phase
  *     of the event.
- * @param {Object=} opt_handlerScope Object in whose scope to call the listener.
+ * @param {Object=} opt_handlerScope Object in whose scope to call
+ *     the listener.
  */
 goog.events.EventTarget.prototype.removeEventListener = function(
     type, handler, opt_capture, opt_handlerScope) {
@@ -11647,21 +13524,24 @@ goog.events.EventTarget.prototype.removeEventListener = function(
 };
 
 
-/**
- * Dispatches an event (or event like object) and calls all listeners
- * listening for events of this type. The type of the event is decided by the
- * type property on the event object.
- *
- * If any of the listeners returns false OR calls preventDefault then this
- * function will return false.  If one of the capture listeners calls
- * stopPropagation, then the bubble listeners won't fire.
- *
- * @param {string|Object|goog.events.Event} e Event object.
- * @return {boolean} If anyone called preventDefault on the event object (or
- *     if any of the handlers returns false this will also return false.
- */
+/** @override */
 goog.events.EventTarget.prototype.dispatchEvent = function(e) {
-  return goog.events.dispatchEvent(this, e);
+  this.assertInitialized_();
+
+  var ancestorsTree, ancestor = this.getParentEventTarget();
+  if (ancestor) {
+    ancestorsTree = [];
+    var ancestorCount = 1;
+    for (; ancestor; ancestor = ancestor.getParentEventTarget()) {
+      ancestorsTree.push(ancestor);
+      goog.asserts.assert(
+          (++ancestorCount < goog.events.EventTarget.MAX_ANCESTORS_),
+          'infinite loop');
+    }
+  }
+
+  return goog.events.EventTarget.dispatchEventInternal_(
+      this.actualEventTarget_, e, ancestorsTree);
 };
 
 
@@ -11680,8 +13560,571 @@ goog.events.EventTarget.prototype.dispatchEvent = function(e) {
  */
 goog.events.EventTarget.prototype.disposeInternal = function() {
   goog.events.EventTarget.superClass_.disposeInternal.call(this);
-  goog.events.removeAll(this);
+
+  this.removeAllListeners();
   this.parentEventTarget_ = null;
+};
+
+
+/**
+ * Asserts that the event target instance is initialized properly.
+ * @private
+ */
+goog.events.EventTarget.prototype.assertInitialized_ = function() {
+  goog.asserts.assert(
+      this.eventTargetListeners_,
+      'Event target is not initialized. Did you call superclass ' +
+      '(goog.events.EventTarget) constructor?');
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.listen = function(
+    type, listener, opt_useCapture, opt_listenerScope) {
+  return this.listenInternal_(
+      type, listener, false /* callOnce */, opt_useCapture, opt_listenerScope);
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.listenOnce = function(
+    type, listener, opt_useCapture, opt_listenerScope) {
+  return this.listenInternal_(
+      type, listener, true /* callOnce */, opt_useCapture, opt_listenerScope);
+};
+
+
+/**
+ * Adds an event listener. A listener can only be added once to an
+ * object and if it is added again the key for the listener is
+ * returned.
+ *
+ * Note that a one-off listener will not change an existing listener,
+ * if any. On the other hand a normal listener will change existing
+ * one-off listener to become a normal listener.
+ *
+ * @param {string} type Event type to listen to.
+ * @param {!Function} listener Callback method.
+ * @param {boolean} callOnce Whether the listener is a one-off
+ *     listener or otherwise.
+ * @param {boolean=} opt_useCapture Whether to fire in capture phase
+ *     (defaults to false).
+ * @param {Object=} opt_listenerScope Object in whose scope to call the
+ *     listener.
+ * @return {goog.events.ListenableKey} Unique key for the listener.
+ * @private
+ */
+goog.events.EventTarget.prototype.listenInternal_ = function(
+    type, listener, callOnce, opt_useCapture, opt_listenerScope) {
+  this.assertInitialized_();
+
+  var listenerArray = this.eventTargetListeners_[type] ||
+      (this.eventTargetListeners_[type] = []);
+
+  var listenerObj;
+  var index = goog.events.EventTarget.findListenerIndex_(
+      listenerArray, listener, opt_useCapture, opt_listenerScope);
+  if (index > -1) {
+    listenerObj = listenerArray[index];
+    if (!callOnce) {
+      // Ensure that, if there is an existing callOnce listener, it is no
+      // longer a callOnce listener.
+      listenerObj.callOnce = false;
+    }
+    return listenerObj;
+  }
+
+  listenerObj = new goog.events.Listener(
+      listener, null, this, type, !!opt_useCapture, opt_listenerScope);
+  listenerObj.callOnce = callOnce;
+  listenerArray.push(listenerObj);
+
+  return listenerObj;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.unlisten = function(
+    type, listener, opt_useCapture, opt_listenerScope) {
+  if (!(type in this.eventTargetListeners_)) {
+    return false;
+  }
+
+  var listenerArray = this.eventTargetListeners_[type];
+  var index = goog.events.EventTarget.findListenerIndex_(
+      listenerArray, listener, opt_useCapture, opt_listenerScope);
+  if (index > -1) {
+    var listenerObj = listenerArray[index];
+    goog.events.cleanUp(listenerObj);
+    listenerObj.removed = true;
+    return goog.array.removeAt(listenerArray, index);
+  }
+  return false;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.unlistenByKey = function(key) {
+  var type = key.type;
+  if (!(type in this.eventTargetListeners_)) {
+    return false;
+  }
+
+  var removed = goog.array.remove(this.eventTargetListeners_[type], key);
+  if (removed) {
+    goog.events.cleanUp(key);
+    key.removed = true;
+  }
+  return removed;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.removeAllListeners = function(
+    opt_type, opt_capture) {
+  var count = 0;
+  for (var type in this.eventTargetListeners_) {
+    if (!opt_type || type == opt_type) {
+      var listenerArray = this.eventTargetListeners_[type];
+      for (var i = 0; i < listenerArray.length; i++) {
+        ++count;
+        goog.events.cleanUp(listenerArray[i]);
+        listenerArray[i].removed = true;
+      }
+      listenerArray.length = 0;
+    }
+  }
+  return count;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.fireListeners = function(
+    type, capture, eventObject) {
+  if (!(type in this.eventTargetListeners_)) {
+    return true;
+  }
+
+  var rv = true;
+  var listenerArray = goog.array.clone(this.eventTargetListeners_[type]);
+  for (var i = 0; i < listenerArray.length; ++i) {
+    var listener = listenerArray[i];
+    // We might not have a listener if the listener was removed.
+    if (listener && !listener.removed && listener.capture == capture) {
+      var listenerFn = listener.listener;
+      var listenerHandler = listener.handler || listener.src;
+
+      if (listener.callOnce) {
+        this.unlistenByKey(listener);
+      }
+      rv = listenerFn.call(listenerHandler, eventObject) !== false && rv;
+    }
+  }
+
+  return rv && eventObject.returnValue_ != false;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.getListeners = function(type, capture) {
+  var listenerArray = this.eventTargetListeners_[type];
+  var rv = [];
+  if (listenerArray) {
+    for (var i = 0; i < listenerArray.length; ++i) {
+      var listenerObj = listenerArray[i];
+      if (listenerObj.capture == capture) {
+        rv.push(listenerObj);
+      }
+    }
+  }
+  return rv;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.getListener = function(
+    type, listener, capture, opt_listenerScope) {
+  var listenerArray = this.eventTargetListeners_[type];
+  var i = -1;
+  if (listenerArray) {
+    i = goog.events.EventTarget.findListenerIndex_(
+        listenerArray, listener, capture, opt_listenerScope);
+  }
+  return i > -1 ? listenerArray[i] : null;
+};
+
+
+/** @override */
+goog.events.EventTarget.prototype.hasListener = function(
+    opt_type, opt_capture) {
+  var hasType = goog.isDef(opt_type);
+  var hasCapture = goog.isDef(opt_capture);
+
+  return goog.object.some(
+      this.eventTargetListeners_, function(listenersArray, type) {
+        for (var i = 0; i < listenersArray.length; ++i) {
+          if ((!hasType || listenersArray[i].type == opt_type) &&
+              (!hasCapture || listenersArray[i].capture == opt_capture)) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+};
+
+
+/**
+ * Sets the target to be used for {@code event.target} when firing
+ * event. Mainly used for testing. For example, see
+ * {@code goog.testing.events.mixinListenable}.
+ * @param {!Object} target The target.
+ */
+goog.events.EventTarget.prototype.setTargetForTesting = function(target) {
+  this.actualEventTarget_ = target;
+};
+
+
+/**
+ * Dispatches the given event on the ancestorsTree.
+ *
+ * TODO(user): Look for a way to reuse this logic in
+ * goog.events, if possible.
+ *
+ * @param {!Object} target The target to dispatch on.
+ * @param {goog.events.Event|Object|string} e The event object.
+ * @param {Array.<goog.events.Listenable>=} opt_ancestorsTree The ancestors
+ *     tree of the target, in reverse order from the closest ancestor
+ *     to the root event target. May be null if the target has no ancestor.
+ * @return {boolean} If anyone called preventDefault on the event object (or
+ *     if any of the listeners returns false) this will also return false.
+ * @private
+ */
+goog.events.EventTarget.dispatchEventInternal_ = function(
+    target, e, opt_ancestorsTree) {
+  var type = e.type || /** @type {string} */ (e);
+
+  // If accepting a string or object, create a custom event object so that
+  // preventDefault and stopPropagation work with the event.
+  if (goog.isString(e)) {
+    e = new goog.events.Event(e, target);
+  } else if (!(e instanceof goog.events.Event)) {
+    var oldEvent = e;
+    e = new goog.events.Event(type, target);
+    goog.object.extend(e, oldEvent);
+  } else {
+    e.target = e.target || target;
+  }
+
+  var rv = true, currentTarget;
+
+  // Executes all capture listeners on the ancestors, if any.
+  if (opt_ancestorsTree) {
+    for (var i = opt_ancestorsTree.length - 1; !e.propagationStopped_ && i >= 0;
+         i--) {
+      currentTarget = e.currentTarget = opt_ancestorsTree[i];
+      rv = currentTarget.fireListeners(type, true, e) && rv;
+    }
+  }
+
+  // Executes capture and bubble listeners on the target.
+  if (!e.propagationStopped_) {
+    currentTarget = e.currentTarget = target;
+    rv = currentTarget.fireListeners(type, true, e) && rv;
+    if (!e.propagationStopped_) {
+      rv = currentTarget.fireListeners(type, false, e) && rv;
+    }
+  }
+
+  // Executes all bubble listeners on the ancestors, if any.
+  if (opt_ancestorsTree) {
+    for (i = 0; !e.propagationStopped_ && i < opt_ancestorsTree.length; i++) {
+      currentTarget = e.currentTarget = opt_ancestorsTree[i];
+      rv = currentTarget.fireListeners(type, false, e) && rv;
+    }
+  }
+
+  return rv;
+};
+
+
+/**
+ * Finds the index of a matching goog.events.Listener in the given
+ * listenerArray.
+ * @param {!Array.<!goog.events.Listener>} listenerArray Array of listener.
+ * @param {!Function} listener The listener function.
+ * @param {boolean=} opt_useCapture The capture flag for the listener.
+ * @param {Object=} opt_listenerScope The listener scope.
+ * @return {number} The index of the matching listener within the
+ *     listenerArray.
+ * @private
+ */
+goog.events.EventTarget.findListenerIndex_ = function(
+    listenerArray, listener, opt_useCapture, opt_listenerScope) {
+  for (var i = 0; i < listenerArray.length; ++i) {
+    var listenerObj = listenerArray[i];
+    if (listenerObj.listener == listener &&
+        listenerObj.capture == !!opt_useCapture &&
+        listenerObj.handler == opt_listenerScope) {
+      return i;
+    }
+  }
+  return -1;
+};
+// Copyright 2008 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Utilities for creating functions. Loosely inspired by the
+ * java classes: http://go/functions.java and http://go/predicate.java.
+ *
+ * @author nicksantos@google.com (Nick Santos)
+ */
+
+
+goog.provide('goog.functions');
+
+
+/**
+ * Creates a function that always returns the same value.
+ * @param {T} retValue The value to return.
+ * @return {function():T} The new function.
+ * @template T
+ */
+goog.functions.constant = function(retValue) {
+  return function() {
+    return retValue;
+  };
+};
+
+
+/**
+ * Always returns false.
+ * @type {function(...): boolean}
+ */
+goog.functions.FALSE = goog.functions.constant(false);
+
+
+/**
+ * Always returns true.
+ * @type {function(...): boolean}
+ */
+goog.functions.TRUE = goog.functions.constant(true);
+
+
+/**
+ * Always returns NULL.
+ * @type {function(...): null}
+ */
+goog.functions.NULL = goog.functions.constant(null);
+
+
+/**
+ * A simple function that returns the first argument of whatever is passed
+ * into it.
+ * @param {T=} opt_returnValue The single value that will be returned.
+ * @param {...*} var_args Optional trailing arguments. These are ignored.
+ * @return {T} The first argument passed in, or undefined if nothing was passed.
+ * @template T
+ */
+goog.functions.identity = function(opt_returnValue, var_args) {
+  return opt_returnValue;
+};
+
+
+/**
+ * Creates a function that always throws an error with the given message.
+ * @param {string} message The error message.
+ * @return {!Function} The error-throwing function.
+ */
+goog.functions.error = function(message) {
+  return function() {
+    throw Error(message);
+  };
+};
+
+
+/**
+ * Creates a function that throws the given object.
+ * @param {*} err An object to be thrown.
+ * @return {!Function} The error-throwing function.
+ */
+goog.functions.fail = function(err) {
+  return function() {
+    throw err;
+  }
+};
+
+
+/**
+ * Given a function, create a function that keeps opt_numArgs arguments and
+ * silently discards all additional arguments.
+ * @param {Function} f The original function.
+ * @param {number=} opt_numArgs The number of arguments to keep. Defaults to 0.
+ * @return {!Function} A version of f that only keeps the first opt_numArgs
+ *     arguments.
+ */
+goog.functions.lock = function(f, opt_numArgs) {
+  opt_numArgs = opt_numArgs || 0;
+  return function() {
+    return f.apply(this, Array.prototype.slice.call(arguments, 0, opt_numArgs));
+  };
+};
+
+
+/**
+ * Given a function, create a new function that swallows its return value
+ * and replaces it with a new one.
+ * @param {Function} f A function.
+ * @param {T} retValue A new return value.
+ * @return {function(...[?]):T} A new function.
+ * @template T
+ */
+goog.functions.withReturnValue = function(f, retValue) {
+  return goog.functions.sequence(f, goog.functions.constant(retValue));
+};
+
+
+/**
+ * Creates the composition of the functions passed in.
+ * For example, (goog.functions.compose(f, g))(a) is equivalent to f(g(a)).
+ * @param {function(...[?]):T} fn The final function.
+ * @param {...Function} var_args A list of functions.
+ * @return {function(...[?]):T} The composition of all inputs.
+ * @template T
+ */
+goog.functions.compose = function(fn, var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    var result;
+    if (length) {
+      result = functions[length - 1].apply(this, arguments);
+    }
+
+    for (var i = length - 2; i >= 0; i--) {
+      result = functions[i].call(this, result);
+    }
+    return result;
+  };
+};
+
+
+/**
+ * Creates a function that calls the functions passed in in sequence, and
+ * returns the value of the last function. For example,
+ * (goog.functions.sequence(f, g))(x) is equivalent to f(x),g(x).
+ * @param {...Function} var_args A list of functions.
+ * @return {!Function} A function that calls all inputs in sequence.
+ */
+goog.functions.sequence = function(var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    var result;
+    for (var i = 0; i < length; i++) {
+      result = functions[i].apply(this, arguments);
+    }
+    return result;
+  };
+};
+
+
+/**
+ * Creates a function that returns true if each of its components evaluates
+ * to true. The components are evaluated in order, and the evaluation will be
+ * short-circuited as soon as a function returns false.
+ * For example, (goog.functions.and(f, g))(x) is equivalent to f(x) && g(x).
+ * @param {...Function} var_args A list of functions.
+ * @return {function(...[?]):boolean} A function that ANDs its component
+ *      functions.
+ */
+goog.functions.and = function(var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    for (var i = 0; i < length; i++) {
+      if (!functions[i].apply(this, arguments)) {
+        return false;
+      }
+    }
+    return true;
+  };
+};
+
+
+/**
+ * Creates a function that returns true if any of its components evaluates
+ * to true. The components are evaluated in order, and the evaluation will be
+ * short-circuited as soon as a function returns true.
+ * For example, (goog.functions.or(f, g))(x) is equivalent to f(x) || g(x).
+ * @param {...Function} var_args A list of functions.
+ * @return {function(...[?]):boolean} A function that ORs its component
+ *    functions.
+ */
+goog.functions.or = function(var_args) {
+  var functions = arguments;
+  var length = functions.length;
+  return function() {
+    for (var i = 0; i < length; i++) {
+      if (functions[i].apply(this, arguments)) {
+        return true;
+      }
+    }
+    return false;
+  };
+};
+
+
+/**
+ * Creates a function that returns the Boolean opposite of a provided function.
+ * For example, (goog.functions.not(f))(x) is equivalent to !f(x).
+ * @param {!Function} f The original function.
+ * @return {function(...[?]):boolean} A function that delegates to f and returns
+ * opposite.
+ */
+goog.functions.not = function(f) {
+  return function() {
+    return !f.apply(this, arguments);
+  };
+};
+
+
+/**
+ * Generic factory function to construct an object given the constructor
+ * and the arguments. Intended to be bound to create object factories.
+ *
+ * Callers should cast the result to the appropriate type for proper type
+ * checking by the compiler.
+ * @param {!Function} constructor The constructor for the Object.
+ * @param {...*} var_args The arguments to be passed to the constructor.
+ * @return {!Object} A new instance of the class given in {@code constructor}.
+ */
+goog.functions.create = function(constructor, var_args) {
+  /** @constructor */
+  var temp = function() {};
+  temp.prototype = constructor.prototype;
+
+  // obj will have constructor's prototype in its chain and
+  // 'obj instanceof constructor' will be true.
+  var obj = new temp();
+
+  // obj is initialized by constructor.
+  // arguments is only array-like so lacks shift(), but can be used with
+  // the Array prototype function.
+  constructor.apply(obj, Array.prototype.slice.call(arguments, 1));
+  return obj;
 };
 // Copyright 2007 Bob Ippolito. All Rights Reserved.
 // Modifications Copyright 2009 The Closure Library Authors. All Rights
@@ -11706,49 +14149,88 @@ goog.events.EventTarget.prototype.disposeInternal = function() {
 
 goog.provide('goog.async.Deferred');
 goog.provide('goog.async.Deferred.AlreadyCalledError');
-goog.provide('goog.async.Deferred.CancelledError');
+goog.provide('goog.async.Deferred.CanceledError');
 
 goog.require('goog.array');
 goog.require('goog.asserts');
 goog.require('goog.debug.Error');
+goog.require('goog.functions');
 
 
 
 /**
- * Represents the results of an asynchronous operation. A Deferred object
- * starts with no result, and then gets a result at some point in the future.
- * @param {Function=} opt_canceller A function that will be called if the
- *     deferred is cancelled.
- * @param {Object=} opt_defaultScope The default scope to call callbacks with.
+ * A Deferred represents the result of an asynchronous operation. A Deferred
+ * instance has no result when it is created, and is "fired" (given an initial
+ * result) by calling {@code callback} or {@code errback}.
+ *
+ * Once fired, the result is passed through a sequence of callback functions
+ * registered with {@code addCallback} or {@code addErrback}. The functions may
+ * mutate the result before it is passed to the next function in the sequence.
+ *
+ * Callbacks and errbacks may be added at any time, including after the Deferred
+ * has been "fired". If there are no pending actions in the execution sequence
+ * of a fired Deferred, any new callback functions will be called with the last
+ * computed result. Adding a callback function is the only way to access the
+ * result of the Deferred.
+ *
+ * If a Deferred operation is canceled, an optional user-provided cancellation
+ * function is invoked which may perform any special cleanup, followed by firing
+ * the Deferred's errback sequence with a {@code CanceledError}. If the
+ * Deferred has already fired, cancellation is ignored.
+ *
+ * @param {Function=} opt_onCancelFunction A function that will be called if the
+ *     Deferred is canceled. If provided, this function runs before the
+ *     Deferred is fired with a {@code CanceledError}.
+ * @param {Object=} opt_defaultScope The default object context to call
+ *     callbacks and errbacks in.
  * @constructor
  */
-goog.async.Deferred = function(opt_canceller, opt_defaultScope) {
+goog.async.Deferred = function(opt_onCancelFunction, opt_defaultScope) {
   /**
-   * Entries in the chain are arrays containing a callback, errback, and
-   * optional scope. Callbacks or errbacks may be null.
+   * Entries in the sequence are arrays containing a callback, an errback, and
+   * an optional scope. The callback or errback in an entry may be null.
    * @type {!Array.<!Array>}
    * @private
    */
-  this.chain_ = [];
+  this.sequence_ = [];
 
   /**
-   * If provided, this is the function to call when the deferred is cancelled.
+   * Optional function that will be called if the Deferred is canceled.
    * @type {Function|undefined}
    * @private
    */
-  this.canceller_ = opt_canceller;
+  this.onCancelFunction_ = opt_onCancelFunction;
 
   /**
-   * The default scope to execute callbacks in.
+   * The default scope to execute callbacks and errbacks in.
    * @type {Object}
    * @private
    */
   this.defaultScope_ = opt_defaultScope || null;
+
+  if (goog.async.Deferred.LONG_STACK_TRACES) {
+    /**
+     * Holds the stack trace at time of deferred creation if the JS engine
+     * provides the Error.captureStackTrace API.
+     * @private {?string}
+     */
+    this.constructorStack_ = null;
+    if (Error.captureStackTrace) {
+      var target = { stack: '' };
+      Error.captureStackTrace(target, goog.async.Deferred);
+      // Check if Error.captureStackTrace worked. It fails in gjstest.
+      if (typeof target.stack == 'string') {
+        // Remove first line and force stringify to prevent memory leak due to
+      // holding on to actual stack frames.
+        this.constructorStack_ = target.stack.replace(/^[^\n]*\n/, '');
+      }
+    }
+  }
 };
 
 
 /**
- * Whether the deferred has been fired.
+ * Whether the Deferred has been fired.
  * @type {boolean}
  * @private
  */
@@ -11756,7 +14238,7 @@ goog.async.Deferred.prototype.fired_ = false;
 
 
 /**
- * Whether the last result in the callback chain was an error.
+ * Whether the last result in the execution sequence was an error.
  * @type {boolean}
  * @private
  */
@@ -11764,7 +14246,7 @@ goog.async.Deferred.prototype.hadError_ = false;
 
 
 /**
- * The current Deferred result, updated by registered callbacks and errbacks.
+ * The current Deferred result, updated as callbacks and errbacks are executed.
  * @type {*}
  * @private
  */
@@ -11772,28 +14254,34 @@ goog.async.Deferred.prototype.result_;
 
 
 /**
- * The number of times this deferred has been paused.
- * @type {number}
- * @private
- */
-goog.async.Deferred.prototype.paused_ = 0;
-
-
-/**
- * If the deferred was cancelled but it did not have a canceller then this gets
- * set to true.
+ * Whether the Deferred is blocked waiting on another Deferred to fire. If a
+ * callback or errback returns a Deferred as a result, the execution sequence is
+ * blocked until that Deferred result becomes available.
  * @type {boolean}
  * @private
  */
-goog.async.Deferred.prototype.silentlyCancelled_ = false;
+goog.async.Deferred.prototype.blocked_ = false;
+
 
 /**
- * If a callback returns a deferred then this deferred is considered a chained
- * deferred and once it is chained we cannot add more callbacks.
+ * Whether this Deferred is blocking execution of another Deferred. If this
+ * instance was returned as a result in another Deferred's execution sequence,
+ * that other Deferred becomes blocked until this instance's execution sequence
+ * completes. No additional callbacks may be added to a Deferred once it
+ * is blocking another instance.
  * @type {boolean}
  * @private
  */
-goog.async.Deferred.prototype.chained_ = false;
+goog.async.Deferred.prototype.blocking_ = false;
+
+
+/**
+ * Whether the Deferred has been canceled without having a custom cancel
+ * function.
+ * @type {boolean}
+ * @private
+ */
+goog.async.Deferred.prototype.silentlyCanceled_ = false;
 
 
 /**
@@ -11816,7 +14304,7 @@ goog.async.Deferred.prototype.parent_;
 
 /**
  * The number of Deferred objects that have been branched off this one. This
- * will be decremented whenever a branch is fired or cancelled.
+ * will be decremented whenever a branch is fired or canceled.
  * @type {number}
  * @private
  */
@@ -11824,15 +14312,29 @@ goog.async.Deferred.prototype.branches_ = 0;
 
 
 /**
- * Cancels a deferred that has not yet received a value. If this Deferred is
- * paused waiting for a chained Deferred to fire, the chained Deferred will also
- * be cancelled.
+ * @define {boolean} Whether unhandled errors should always get rethrown to the
+ * global scope. Defaults to the value of goog.DEBUG.
+ */
+goog.define('goog.async.Deferred.STRICT_ERRORS', false);
+
+
+/**
+ * @define {boolean} Whether to attempt to make stack traces long.  Defaults to
+ * the value of goog.DEBUG.
+ */
+goog.define('goog.async.Deferred.LONG_STACK_TRACES', goog.DEBUG);
+
+
+/**
+ * Cancels a Deferred that has not yet been fired, or is blocked on another
+ * deferred operation. If this Deferred is waiting for a blocking Deferred to
+ * fire, the blocking Deferred will also be canceled.
  *
  * If this Deferred was created by calling branch() on a parent Deferred with
- * opt_propagateCancel set to true, the parent may also be cancelled. If
+ * opt_propagateCancel set to true, the parent may also be canceled. If
  * opt_deepCancel is set, cancel() will be called on the parent (as well as any
  * other ancestors if the parent is also a branch). If one or more branches were
- * created with opt_propagateCancel set to true, the parent will be cancelled if
+ * created with opt_propagateCancel set to true, the parent will be canceled if
  * cancel() is called on all of those branches.
  *
  * @param {boolean=} opt_deepCancel If true, cancels this Deferred's parent even
@@ -11843,8 +14345,8 @@ goog.async.Deferred.prototype.cancel = function(opt_deepCancel) {
   if (!this.hasFired()) {
     if (this.parent_) {
       // Get rid of the parent reference before potentially running the parent's
-      // canceller callback to ensure that this cancellation doesn't get
-      // double-counted in any way.
+      // canceler function to ensure that this cancellation isn't
+      // double-counted.
       var parent = this.parent_;
       delete this.parent_;
       if (opt_deepCancel) {
@@ -11854,14 +14356,14 @@ goog.async.Deferred.prototype.cancel = function(opt_deepCancel) {
       }
     }
 
-    if (this.canceller_) {
+    if (this.onCancelFunction_) {
       // Call in user-specified scope.
-      this.canceller_.call(this.defaultScope_, this);
+      this.onCancelFunction_.call(this.defaultScope_, this);
     } else {
-      this.silentlyCancelled_ = true;
+      this.silentlyCanceled_ = true;
     }
     if (!this.hasFired()) {
-      this.errback(new goog.async.Deferred.CancelledError(this));
+      this.errback(new goog.async.Deferred.CanceledError(this));
     }
   } else if (this.result_ instanceof goog.async.Deferred) {
     this.result_.cancel();
@@ -11870,8 +14372,9 @@ goog.async.Deferred.prototype.cancel = function(opt_deepCancel) {
 
 
 /**
- * Handle a single branch being cancelled. Once all branches are cancelled, this
- * Deferred will be cancelled as well.
+ * Handle a single branch being canceled. Once all branches are canceled, this
+ * Deferred will be canceled as well.
+ *
  * @private
  */
 goog.async.Deferred.prototype.branchCancel_ = function() {
@@ -11883,46 +14386,28 @@ goog.async.Deferred.prototype.branchCancel_ = function() {
 
 
 /**
- * Pauses the deferred.
- * @private
- */
-goog.async.Deferred.prototype.pause_ = function() {
-  this.paused_++;
-};
-
-
-/**
- * Resumes a paused deferred.
- * @private
- */
-goog.async.Deferred.prototype.unpause_ = function() {
-  // TODO(arv): Rename
-  this.paused_--;
-  if (this.paused_ == 0 && this.hasFired()) {
-    this.fire_();
-  }
-};
-
-
-/**
- * Called when a dependent deferred fires.
+ * Called after a blocking Deferred fires. Unblocks this Deferred and resumes
+ * its execution sequence.
+ *
  * @param {boolean} isSuccess Whether the result is a success or an error.
- * @param {*} res The result of the dependent deferred.
+ * @param {*} res The result of the blocking Deferred.
  * @private
  */
 goog.async.Deferred.prototype.continue_ = function(isSuccess, res) {
-  this.resback_(isSuccess, res);
-  this.unpause_();
+  this.blocked_ = false;
+  this.updateResult_(isSuccess, res);
 };
 
 
 /**
- * Called when either a success or a failure happens.
- * @param {boolean} isSuccess Whether the result is a success or an error.
+ * Updates the current result based on the success or failure of the last action
+ * in the execution sequence.
+ *
+ * @param {boolean} isSuccess Whether the new result is a success or an error.
  * @param {*} res The result.
  * @private
  */
-goog.async.Deferred.prototype.resback_ = function(isSuccess, res) {
+goog.async.Deferred.prototype.updateResult_ = function(isSuccess, res) {
   this.fired_ = true;
   this.result_ = res;
   this.hadError_ = !isSuccess;
@@ -11931,41 +14416,64 @@ goog.async.Deferred.prototype.resback_ = function(isSuccess, res) {
 
 
 /**
- * Verifies that the deferred has not yet been fired.
+ * Verifies that the Deferred has not yet been fired.
+ *
  * @private
  * @throws {Error} If this has already been fired.
  */
 goog.async.Deferred.prototype.check_ = function() {
   if (this.hasFired()) {
-    if (!this.silentlyCancelled_) {
+    if (!this.silentlyCanceled_) {
       throw new goog.async.Deferred.AlreadyCalledError(this);
     }
-    this.silentlyCancelled_ = false;
+    this.silentlyCanceled_ = false;
   }
 };
 
 
 /**
- * Record a successful result for this operation, and send the result
- * to all registered callback functions.
- * @param {*} result The result of the operation.
+ * Fire the execution sequence for this Deferred by passing the starting result
+ * to the first registered callback.
+ * @param {*=} opt_result The starting result.
  */
-goog.async.Deferred.prototype.callback = function(result) {
+goog.async.Deferred.prototype.callback = function(opt_result) {
   this.check_();
-  this.assertNotDeferred_(result);
-  this.resback_(true /* isSuccess */, result);
+  this.assertNotDeferred_(opt_result);
+  this.updateResult_(true /* isSuccess */, opt_result);
 };
 
 
 /**
- * Record that this operation failed with an error, and send the error
- * to all registered errback functions.
- * @param {*} result The error result of the operation.
+ * Fire the execution sequence for this Deferred by passing the starting error
+ * result to the first registered errback.
+ * @param {*=} opt_result The starting error.
  */
-goog.async.Deferred.prototype.errback = function(result) {
+goog.async.Deferred.prototype.errback = function(opt_result) {
   this.check_();
-  this.assertNotDeferred_(result);
-  this.resback_(false /* isSuccess */, result);
+  this.assertNotDeferred_(opt_result);
+  this.makeStackTraceLong_(opt_result);
+  this.updateResult_(false /* isSuccess */, opt_result);
+};
+
+
+/**
+ * Attempt to make the error's stack trace be long in that it contains the
+ * stack trace from the point where the deferred was created on top of the
+ * current stack trace to give additional context.
+ * @param {*} error
+ * @private
+ */
+goog.async.Deferred.prototype.makeStackTraceLong_ = function(error) {
+  if (!goog.async.Deferred.LONG_STACK_TRACES) {
+    return;
+  }
+  if (this.constructorStack_ && goog.isObject(error) && error.stack &&
+      // Stack looks like it was system generated. See
+      // https://code.google.com/p/v8/wiki/JavaScriptStackTraceApi
+      (/^[^\n]+(\n   [^\n]+)+/).test(error.stack)) {
+    error.stack = error.stack + '\nDEFERRED OPERATION:\n' +
+        this.constructorStack_;
+  }
 };
 
 
@@ -11978,17 +14486,28 @@ goog.async.Deferred.prototype.errback = function(result) {
 goog.async.Deferred.prototype.assertNotDeferred_ = function(obj) {
   goog.asserts.assert(
       !(obj instanceof goog.async.Deferred),
-      'Deferred instances can only be chained if they are the result of a ' +
-      'callback');
+      'An execution sequence may not be initiated with a blocking Deferred.');
 };
 
 
 /**
- * Register a callback function, to be called when a successful result
- * is available.
- * @param {!Function} cb The function to be called on a successful result.
- * @param {Object=} opt_scope An optional scope to call the callback in.
- * @return {!goog.async.Deferred} The deferred object for chaining.
+ * Register a callback function to be called with a successful result. If no
+ * value is returned by the callback function, the result value is unchanged. If
+ * a new value is returned, it becomes the Deferred result and will be passed to
+ * the next callback in the execution sequence.
+ *
+ * If the function throws an error, the error becomes the new result and will be
+ * passed to the next errback in the execution chain.
+ *
+ * If the function returns a Deferred, the execution sequence will be blocked
+ * until that Deferred fires. Its result will be passed to the next callback (or
+ * errback if it is an error result) in this Deferred's execution sequence.
+ *
+ * @param {!function(this:T,?):?} cb The function to be called with a successful
+ *     result.
+ * @param {T=} opt_scope An optional scope to call the callback in.
+ * @return {!goog.async.Deferred} This Deferred.
+ * @template T
  */
 goog.async.Deferred.prototype.addCallback = function(cb, opt_scope) {
   return this.addCallbacks(cb, null, opt_scope);
@@ -11996,10 +14515,23 @@ goog.async.Deferred.prototype.addCallback = function(cb, opt_scope) {
 
 
 /**
- * Register a callback function, to be called if this operation fails.
- * @param {!Function} eb The function to be called on an unsuccessful result.
- * @param {Object=} opt_scope An optional scope to call the errback in.
- * @return {!goog.async.Deferred} The deferred object for chaining.
+ * Register a callback function to be called with an error result. If no value
+ * is returned by the function, the error result is unchanged. If a new error
+ * value is returned or thrown, that error becomes the Deferred result and will
+ * be passed to the next errback in the execution sequence.
+ *
+ * If the errback function handles the error by returning a non-error value,
+ * that result will be passed to the next normal callback in the sequence.
+ *
+ * If the function returns a Deferred, the execution sequence will be blocked
+ * until that Deferred fires. Its result will be passed to the next callback (or
+ * errback if it is an error result) in this Deferred's execution sequence.
+ *
+ * @param {!function(this:T,?):?} eb The function to be called on an
+ *     unsuccessful result.
+ * @param {T=} opt_scope An optional scope to call the errback in.
+ * @return {!goog.async.Deferred} This Deferred.
+ * @template T
  */
 goog.async.Deferred.prototype.addErrback = function(eb, opt_scope) {
   return this.addCallbacks(null, eb, opt_scope);
@@ -12007,15 +14539,37 @@ goog.async.Deferred.prototype.addErrback = function(eb, opt_scope) {
 
 
 /**
- * Registers a callback function and errback function.
- * @param {Function} cb The function to be called on a successful result.
- * @param {Function} eb The function to be called on an unsuccessful result.
- * @param {Object=} opt_scope An optional scope to call the callbacks in.
- * @return {!goog.async.Deferred} The deferred object for chaining.
+ * Registers one function as both a callback and errback.
+ *
+ * @param {!function(this:T,?):?} f The function to be called on any result.
+ * @param {T=} opt_scope An optional scope to call the function in.
+ * @return {!goog.async.Deferred} This Deferred.
+ * @template T
+ */
+goog.async.Deferred.prototype.addBoth = function(f, opt_scope) {
+  return this.addCallbacks(f, f, opt_scope);
+};
+
+
+/**
+ * Registers a callback function and an errback function at the same position
+ * in the execution sequence. Only one of these functions will execute,
+ * depending on the error state during the execution sequence.
+ *
+ * NOTE: This is not equivalent to {@code def.addCallback().addErrback()}! If
+ * the callback is invoked, the errback will be skipped, and vice versa.
+ *
+ * @param {(function(this:T,?):?)|null} cb The function to be called on a
+ *     successful result.
+ * @param {(function(this:T,?):?)|null} eb The function to be called on an
+ *     unsuccessful result.
+ * @param {T=} opt_scope An optional scope to call the functions in.
+ * @return {!goog.async.Deferred} This Deferred.
+ * @template T
  */
 goog.async.Deferred.prototype.addCallbacks = function(cb, eb, opt_scope) {
-  goog.asserts.assert(!this.chained_, 'Chained Deferreds can not be re-used');
-  this.chain_.push([cb, eb, opt_scope]);
+  goog.asserts.assert(!this.blocking_, 'Blocking Deferreds can not be re-used');
+  this.sequence_.push([cb, eb, opt_scope]);
   if (this.hasFired()) {
     this.fire_();
   }
@@ -12024,13 +14578,12 @@ goog.async.Deferred.prototype.addCallbacks = function(cb, eb, opt_scope) {
 
 
 /**
- * Adds another deferred to the end of this deferred's processing chain.
- *
- * Use this when you want otherDeferred to be called at the end of
- * thisDeferred's previous callbacks.
+ * Links another Deferred to the end of this Deferred's execution sequence. The
+ * result of this execution sequence will be passed as the starting result for
+ * the chained Deferred, invoking either its first callback or errback.
  *
  * @param {!goog.async.Deferred} otherDeferred The Deferred to chain.
- * @return {!goog.async.Deferred} The deferred object for chaining.
+ * @return {!goog.async.Deferred} This Deferred.
  */
 goog.async.Deferred.prototype.chainDeferred = function(otherDeferred) {
   this.addCallbacks(
@@ -12040,14 +14593,15 @@ goog.async.Deferred.prototype.chainDeferred = function(otherDeferred) {
 
 
 /**
- * Makes this Deferred wait for otherDeferred to be called, and its preceding
- * callbacks to be executed, before continuing with the callback sequence.
+ * Makes this Deferred wait for another Deferred's execution sequence to
+ * complete before continuing.
  *
- * This is equivalent to adding a callback that returns otherDeferred, but
- * doesn't prevent additional callbacks from being added to otherDeferred.
+ * This is equivalent to adding a callback that returns {@code otherDeferred},
+ * but doesn't prevent additional callbacks from being added to
+ * {@code otherDeferred}.
  *
  * @param {!goog.async.Deferred} otherDeferred The Deferred to wait for.
- * @return {!goog.async.Deferred} The deferred object for chaining.
+ * @return {!goog.async.Deferred} This Deferred.
  */
 goog.async.Deferred.prototype.awaitDeferred = function(otherDeferred) {
   return this.addCallback(goog.bind(otherDeferred.branch, otherDeferred));
@@ -12055,20 +14609,19 @@ goog.async.Deferred.prototype.awaitDeferred = function(otherDeferred) {
 
 
 /**
- * Create a branch off this Deferred's callback chain, and return it as a new
- * Deferred. This means that the return value will have the value at the current
- * point in the callback chain, regardless of any further callbacks added to
- * this Deferred.
+ * Creates a branch off this Deferred's execution sequence, and returns it as a
+ * new Deferred. The branched Deferred's starting result will be shared with the
+ * parent at the point of the branch, even if further callbacks are added to the
+ * parent.
  *
- * Additional callbacks added to the original Deferred will not affect the value
- * of any branches. All branches at the same stage in the callback chain will
- * receive the same starting value.
+ * All branches at the same stage in the execution sequence will receive the
+ * same starting value.
  *
  * @param {boolean=} opt_propagateCancel If cancel() is called on every child
- *     branch created with opt_propagateCancel, the parent will be cancelled as
+ *     branch created with opt_propagateCancel, the parent will be canceled as
  *     well.
- * @return {!goog.async.Deferred} The deferred value at this point in the
- *     callback chain.
+ * @return {!goog.async.Deferred} A Deferred that will be started with the
+ *     computed result from this stage in the execution sequence.
  */
 goog.async.Deferred.prototype.branch = function(opt_propagateCancel) {
   var d = new goog.async.Deferred();
@@ -12082,19 +14635,8 @@ goog.async.Deferred.prototype.branch = function(opt_propagateCancel) {
 
 
 /**
- * Registers a function as both callback and errback.
- * @param {!Function} f The function to be called on any result.
- * @param {Object=} opt_scope An optional scope to call the callbacks in.
- * @return {!goog.async.Deferred} The deferred object for chaining.
- */
-goog.async.Deferred.prototype.addBoth = function(f, opt_scope) {
-  return this.addCallbacks(f, f, opt_scope);
-};
-
-
-/**
- * @return {boolean} Whether callback or errback has been called on this
- *     deferred.
+ * @return {boolean} Whether the execution sequence has been started on this
+ *     Deferred by invoking {@code callback} or {@code errback}.
  */
 goog.async.Deferred.prototype.hasFired = function() {
   return this.fired_;
@@ -12102,9 +14644,9 @@ goog.async.Deferred.prototype.hasFired = function() {
 
 
 /**
- * @param {*} res The current callback result.
+ * @param {*} res The latest result in the execution sequence.
  * @return {boolean} Whether the current result is an error that should cause
- *     registered errbacks to fire. May be overridden by subclasses to handle
+ *     the next errback to fire. May be overridden by subclasses to handle
  *     special error types.
  * @protected
  */
@@ -12114,19 +14656,22 @@ goog.async.Deferred.prototype.isError = function(res) {
 
 
 /**
- * @return {boolean} Whether an errback has been registered.
+ * @return {boolean} Whether an errback exists in the remaining sequence.
  * @private
  */
 goog.async.Deferred.prototype.hasErrback_ = function() {
-  return goog.array.some(this.chain_, function(chainRow) {
+  return goog.array.some(this.sequence_, function(sequenceRow) {
     // The errback is the second element in the array.
-    return goog.isFunction(chainRow[1]);
+    return goog.isFunction(sequenceRow[1]);
   });
 };
 
 
 /**
- * Exhausts the callback sequence once a result is available.
+ * Exhausts the execution sequence while a result is available. The result may
+ * be modified by callbacks or errbacks, and execution will block if the
+ * returned result is an incomplete Deferred.
+ *
  * @private
  */
 goog.async.Deferred.prototype.fire_ = function() {
@@ -12146,17 +14691,18 @@ goog.async.Deferred.prototype.fire_ = function() {
 
   var res = this.result_;
   var unhandledException = false;
-  var isChained = false;
+  var isNewlyBlocked = false;
 
-  while (this.chain_.length && this.paused_ == 0) {
-    var chainEntry = this.chain_.shift();
+  while (this.sequence_.length && !this.blocked_) {
+    var sequenceEntry = this.sequence_.shift();
 
-    var callback = chainEntry[0];
-    var errback = chainEntry[1];
-    var scope = chainEntry[2];
+    var callback = sequenceEntry[0];
+    var errback = sequenceEntry[1];
+    var scope = sequenceEntry[2];
 
     var f = this.hadError_ ? errback : callback;
     if (f) {
+      /** @preserveTry */
       try {
         var ret = f.call(scope || this.defaultScope_, res);
 
@@ -12168,13 +14714,14 @@ goog.async.Deferred.prototype.fire_ = function() {
         }
 
         if (res instanceof goog.async.Deferred) {
-          isChained = true;
-          this.pause_();
+          isNewlyBlocked = true;
+          this.blocked_ = true;
         }
 
       } catch (ex) {
         res = ex;
         this.hadError_ = true;
+        this.makeStackTraceLong_(res);
 
         if (!this.hasErrback_()) {
           // If an error is thrown with no additional errbacks in the queue,
@@ -12187,46 +14734,46 @@ goog.async.Deferred.prototype.fire_ = function() {
 
   this.result_ = res;
 
-  if (isChained && this.paused_) {
+  if (isNewlyBlocked) {
     res.addCallbacks(
         goog.bind(this.continue_, this, true /* isSuccess */),
         goog.bind(this.continue_, this, false /* isSuccess */));
-    res.chained_ = true;
+    res.blocking_ = true;
+  } else if (goog.async.Deferred.STRICT_ERRORS && this.isError(res) &&
+      !(res instanceof goog.async.Deferred.CanceledError)) {
+    this.hadError_ = true;
+    unhandledException = true;
   }
 
   if (unhandledException) {
     // Rethrow the unhandled error after a timeout. Execution will continue, but
-    // the error will be seen by global handlers and the user. The rethrow will
+    // the error will be seen by global handlers and the user. The throw will
     // be canceled if another errback is appended before the timeout executes.
-    this.unhandledExceptionTimeoutId_ = goog.global.setTimeout(function() {
-      // The stack trace is clobbered when the error is rethrown. Append the
-      // stack trace to the message if available. Since no one is capturing this
-      // error, the stack trace will be printed to the debug console.
-      if (goog.DEBUG && goog.isDef(res.message) && res.stack) {
-        res.message += '\n' + res.stack;
-      }
-      throw res;
-    }, 0);
+    // The error's original stack trace is preserved where available.
+    this.unhandledExceptionTimeoutId_ = goog.global.setTimeout(
+        goog.functions.fail(res), 0);
   }
 };
 
 
 /**
- * Creates a deferred that always succeeds.
- * @param {*} res The result.
- * @return {!goog.async.Deferred} The deferred object.
+ * Creates a Deferred that has an initial result.
+ *
+ * @param {*=} opt_result The result.
+ * @return {!goog.async.Deferred} The new Deferred.
  */
-goog.async.Deferred.succeed = function(res) {
+goog.async.Deferred.succeed = function(opt_result) {
   var d = new goog.async.Deferred();
-  d.callback(res);
+  d.callback(opt_result);
   return d;
 };
 
 
 /**
- * Creates a deferred that always fails.
+ * Creates a Deferred that has an initial error result.
+ *
  * @param {*} res The error result.
- * @return {!goog.async.Deferred} The deferred object.
+ * @return {!goog.async.Deferred} The new Deferred.
  */
 goog.async.Deferred.fail = function(res) {
   var d = new goog.async.Deferred();
@@ -12236,10 +14783,11 @@ goog.async.Deferred.fail = function(res) {
 
 
 /**
- * Creates a deferred that has already been cancelled.
- * @return {!goog.async.Deferred} The deferred object.
+ * Creates a Deferred that has already been canceled.
+ *
+ * @return {!goog.async.Deferred} The new Deferred.
  */
-goog.async.Deferred.cancelled = function() {
+goog.async.Deferred.canceled = function() {
   var d = new goog.async.Deferred();
   d.cancel();
   return d;
@@ -12247,15 +14795,14 @@ goog.async.Deferred.cancelled = function() {
 
 
 /**
- * Applies a callback to both deferred and non-deferred values, providing a
- * mechanism to normalize synchronous and asynchronous behavior.
+ * Normalizes values that may or may not be Deferreds.
  *
- * If the value is non-deferred, the callback will be executed immediately and
- * an already committed deferred returned.
+ * If the input value is a Deferred, the Deferred is branched (so the original
+ * execution sequence is not modified) and the input callback added to the new
+ * branch. The branch is returned to the caller.
  *
- * If the object is a deferred, it is branched (so the callback doesn't affect
- * the previous chain) and the callback is added to the new deferred.  The
- * branched deferred is then returned.
+ * If the input value is not a Deferred, the callback will be executed
+ * immediately and an already firing Deferred will be returned to the caller.
  *
  * In the following (contrived) example, if <code>isImmediate</code> is true
  * then 3 is alerted immediately, otherwise 6 is alerted after a 2-second delay.
@@ -12272,10 +14819,12 @@ goog.async.Deferred.cancelled = function() {
  * var d = goog.async.Deferred.when(value, alert);
  * </pre>
  *
- * @param {*} value Deferred or non-deferred value to pass to the callback.
- * @param {!Function} callback The callback to execute.
- * @param {Object=} opt_scope An optional scope to call the callback in.
- * @return {!goog.async.Deferred}
+ * @param {*} value Deferred or normal value to pass to the callback.
+ * @param {!function(this:T, ?):?} callback The callback to execute.
+ * @param {T=} opt_scope An optional scope to call the callback in.
+ * @return {!goog.async.Deferred} A new Deferred that will call the input
+ *     callback with the input value.
+ * @template T
  */
 goog.async.Deferred.when = function(value, callback, opt_scope) {
   if (value instanceof goog.async.Deferred) {
@@ -12288,8 +14837,9 @@ goog.async.Deferred.when = function(value, callback, opt_scope) {
 
 
 /**
- * An error sub class that is used when a deferred has already been called.
- * @param {!goog.async.Deferred} deferred The deferred object.
+ * An error sub class that is used when a Deferred has already been called.
+ * @param {!goog.async.Deferred} deferred The Deferred.
+ *
  * @constructor
  * @extends {goog.debug.Error}
  */
@@ -12297,7 +14847,7 @@ goog.async.Deferred.AlreadyCalledError = function(deferred) {
   goog.debug.Error.call(this);
 
   /**
-   * The deferred that raised this error.
+   * The Deferred that raised this error.
    * @type {goog.async.Deferred}
    */
   this.deferred = deferred;
@@ -12305,39 +14855,41 @@ goog.async.Deferred.AlreadyCalledError = function(deferred) {
 goog.inherits(goog.async.Deferred.AlreadyCalledError, goog.debug.Error);
 
 
-/**
- * Message text.
- * @type {string}
- * @override
- */
-goog.async.Deferred.AlreadyCalledError.prototype.message = 'Already called';
+/** @override */
+goog.async.Deferred.AlreadyCalledError.prototype.message =
+    'Deferred has already fired';
+
+
+/** @override */
+goog.async.Deferred.AlreadyCalledError.prototype.name = 'AlreadyCalledError';
 
 
 
 /**
- * An error sub class that is used when a deferred is cancelled.
- * @param {!goog.async.Deferred} deferred The deferred object.
+ * An error sub class that is used when a Deferred is canceled.
+ *
+ * @param {!goog.async.Deferred} deferred The Deferred object.
  * @constructor
  * @extends {goog.debug.Error}
  */
-goog.async.Deferred.CancelledError = function(deferred) {
+goog.async.Deferred.CanceledError = function(deferred) {
   goog.debug.Error.call(this);
 
   /**
-   * The deferred that raised this error.
+   * The Deferred that raised this error.
    * @type {goog.async.Deferred}
    */
   this.deferred = deferred;
 };
-goog.inherits(goog.async.Deferred.CancelledError, goog.debug.Error);
+goog.inherits(goog.async.Deferred.CanceledError, goog.debug.Error);
 
 
-/**
- * Message text.
- * @type {string}
- * @override
- */
-goog.async.Deferred.CancelledError.prototype.message = 'Deferred was cancelled';
+/** @override */
+goog.async.Deferred.CanceledError.prototype.message = 'Deferred was canceled';
+
+
+/** @override */
+goog.async.Deferred.CanceledError.prototype.name = 'CanceledError';
 // Copyright 2011 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12353,19 +14905,21 @@ goog.async.Deferred.CancelledError.prototype.message = 'Deferred was cancelled';
 // limitations under the License.
 
 /**
- * @fileoverview A utility to load JavaScript files.
- * Refactored from goog.net.Jsonp.
+ * @fileoverview A utility to load JavaScript files via DOM script tags.
+ * Refactored from goog.net.Jsonp. Works cross-domain.
  *
  */
 
 goog.provide('goog.net.jsloader');
 goog.provide('goog.net.jsloader.Error');
+goog.provide('goog.net.jsloader.ErrorCode');
+goog.provide('goog.net.jsloader.Options');
 
 goog.require('goog.array');
 goog.require('goog.async.Deferred');
 goog.require('goog.debug.Error');
 goog.require('goog.dom');
-goog.require('goog.userAgent');
+goog.require('goog.dom.TagName');
 
 
 /**
@@ -12413,7 +14967,18 @@ goog.net.jsloader.scriptsToLoad_ = [];
 
 
 /**
- * Loads and evaluates the JavaScript files at the specified URIs, in order.
+ * Loads and evaluates the JavaScript files at the specified URIs, guaranteeing
+ * the order of script loads.
+ *
+ * Because we have to load the scripts in serial (load script 1, exec script 1,
+ * load script 2, exec script 2, and so on), this will be slower than doing
+ * the network fetches in parallel.
+ *
+ * If you need to load a large number of scripts but dependency order doesn't
+ * matter, you should just call goog.net.jsloader.load N times.
+ *
+ * If you need to load a large number of scripts on the same domain,
+ * you may want to use goog.module.ModuleLoader.
  *
  * @param {Array.<string>} uris The URIs to load.
  * @param {goog.net.jsloader.Options=} opt_options Optional parameters. See
@@ -12430,34 +14995,24 @@ goog.net.jsloader.loadMany = function(uris, opt_options) {
     return;
   }
 
-  if (goog.userAgent.GECKO && !goog.userAgent.isVersion(2)) {
-    // For <script> tags that are loaded in this manner, Gecko 1.9 and earlier
-    // ensures that tag order is consistent with evaluation order.
-    // Unfortunately, other browsers do not make that guarantee. So the other
-    // browsers need a slower and more complex implementation.
-    for (var i = 0; i < uris.length; i++) {
-      goog.net.jsloader.load(uris[i], opt_options);
-    }
-  } else {
-    var isAnotherModuleLoading = goog.net.jsloader.scriptsToLoad_.length;
-    goog.array.extend(goog.net.jsloader.scriptsToLoad_, uris);
-    if (isAnotherModuleLoading) {
-      // jsloader is still loading some other scripts.
-      // In order to prevent the race condition noted above, we just add
-      // these URIs to the end of the scripts' queue and return.
-      return;
-    }
-
-    uris = goog.net.jsloader.scriptsToLoad_;
-    var popAndLoadNextScript = function() {
-      var uri = uris.shift();
-      var deferred = goog.net.jsloader.load(uri, opt_options);
-      if (uris.length) {
-        deferred.addBoth(popAndLoadNextScript);
-      }
-    };
-    popAndLoadNextScript();
+  var isAnotherModuleLoading = goog.net.jsloader.scriptsToLoad_.length;
+  goog.array.extend(goog.net.jsloader.scriptsToLoad_, uris);
+  if (isAnotherModuleLoading) {
+    // jsloader is still loading some other scripts.
+    // In order to prevent the race condition noted above, we just add
+    // these URIs to the end of the scripts' queue and return.
+    return;
   }
+
+  uris = goog.net.jsloader.scriptsToLoad_;
+  var popAndLoadNextScript = function() {
+    var uri = uris.shift();
+    var deferred = goog.net.jsloader.load(uri, opt_options);
+    if (uris.length) {
+      deferred.addBoth(popAndLoadNextScript);
+    }
+  };
+  popAndLoadNextScript();
 };
 
 
@@ -12572,7 +15127,8 @@ goog.net.jsloader.loadAndVerify = function(uri, verificationObjName, options) {
   var sendDeferred = goog.net.jsloader.load(uri, options);
 
   // Create a deferred object wrapping the send result.
-  var deferred = new goog.async.Deferred(sendDeferred.cancel);
+  var deferred = new goog.async.Deferred(
+      goog.bind(sendDeferred.cancel, sendDeferred));
 
   // Call user back with object that was set by the script.
   sendDeferred.addCallback(function() {
@@ -12764,14 +15320,14 @@ goog.Timer = function(opt_interval, opt_timerObject) {
    */
   this.boundTick_ = goog.bind(this.tick_, this);
 
- /**
-  * Firefox browser often fires the timer event sooner
-  * (sometimes MUCH sooner) than the requested timeout. So we
-  * compare the time to when the event was last fired, and
-  * reschedule if appropriate. See also goog.Timer.intervalScale
-  * @type {number}
-  * @private
-  */
+  /**
+   * Firefox browser often fires the timer event sooner
+   * (sometimes MUCH sooner) than the requested timeout. So we
+   * compare the time to when the event was last fired, and
+   * reschedule if appropriate. See also goog.Timer.intervalScale
+   * @type {number}
+   * @private
+   */
   this.last_ = goog.now();
 };
 goog.inherits(goog.Timer, goog.events.EventTarget);
@@ -12801,13 +15357,13 @@ goog.Timer.prototype.enabled = false;
 
 /**
  * An object that implements setTimout, setInterval, clearTimeout and
- * clearInterval. We default to the window object. Changing this on
- * goog.Timer.prototype changes the object for all timer instances which can be
- * useful if your environment has some other implementation of timers than the
- * window object.
+ * clearInterval. We default to the global object. Changing
+ * goog.Timer.defaultTimerObject changes the object for all timer instances
+ * which can be useful if your environment has some other implementation of
+ * timers you'd like to use.
  * @type {Object}
  */
-goog.Timer.defaultTimerObject = goog.global['window'];
+goog.Timer.defaultTimerObject = goog.global;
 
 
 /**
@@ -12865,6 +15421,13 @@ goog.Timer.prototype.tick_ = function() {
       this.timer_ = this.timerObject_.setTimeout(this.boundTick_,
           this.interval_ - elapsed);
       return;
+    }
+
+    // Prevents setInterval from registering a duplicate timeout when called
+    // in the timer event handler.
+    if (this.timer_) {
+      this.timerObject_.clearTimeout(this.timer_);
+      this.timer_ = null;
     }
 
     this.dispatchTick();
@@ -12947,7 +15510,8 @@ goog.Timer.TICK = 'tick';
  * is a common trick to schedule a function to run after a batch of browser
  * event processing.
  *
- * @param {Function} listener Function or object that has a handleEvent method.
+ * @param {Function|{handleEvent:Function}} listener Function or object that
+ *     has a handleEvent method.
  * @param {number=} opt_delay Milliseconds to wait; default is 0.
  * @param {Object=} opt_handler Object in whose scope to call the listener.
  * @return {number} A handle to the timer ID.
@@ -12961,7 +15525,7 @@ goog.Timer.callOnce = function(listener, opt_delay, opt_handler) {
     // using typeof to prevent strict js warning
     listener = goog.bind(listener.handleEvent, listener);
   } else {
-   throw Error('Invalid listener argument');
+    throw Error('Invalid listener argument');
   }
 
   if (opt_delay > goog.Timer.MAX_TIMEOUT_) {
@@ -13285,101 +15849,6 @@ calendarmailer.CalendarApi.Event = function(type, result, opt_id, opt_title) {
   this.title = opt_title;
 };
 goog.inherits(calendarmailer.CalendarApi.Event, goog.events.Event);
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Detection of JScript version.
- *
- * @author arv@google.com (Erik Arvidsson)
- */
-
-
-goog.provide('goog.userAgent.jscript');
-
-goog.require('goog.string');
-
-
-/**
- * @define {boolean} True if it is known at compile time that the runtime
- *     environment will not be using JScript.
- */
-goog.userAgent.jscript.ASSUME_NO_JSCRIPT = false;
-
-
-/**
- * Initializer for goog.userAgent.jscript.  Detects if the user agent is using
- * Microsoft JScript and which version of it.
- *
- * This is a named function so that it can be stripped via the jscompiler
- * option for stripping types.
- * @private
- */
-goog.userAgent.jscript.init_ = function() {
-  var hasScriptEngine = 'ScriptEngine' in goog.global;
-
-  /**
-   * @type {boolean}
-   * @private
-   */
-  goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ =
-      hasScriptEngine && goog.global['ScriptEngine']() == 'JScript';
-
-  /**
-   * @type {string}
-   * @private
-   */
-  goog.userAgent.jscript.DETECTED_VERSION_ =
-      goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ ?
-      (goog.global['ScriptEngineMajorVersion']() + '.' +
-       goog.global['ScriptEngineMinorVersion']() + '.' +
-       goog.global['ScriptEngineBuildVersion']()) :
-      '0';
-};
-
-if (!goog.userAgent.jscript.ASSUME_NO_JSCRIPT) {
-  goog.userAgent.jscript.init_();
-}
-
-
-/**
- * Whether we detect that the user agent is using Microsoft JScript.
- * @type {boolean}
- */
-goog.userAgent.jscript.HAS_JSCRIPT = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
-    false : goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_;
-
-
-/**
- * The installed version of JScript.
- * @type {string}
- */
-goog.userAgent.jscript.VERSION = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ?
-    '0' : goog.userAgent.jscript.DETECTED_VERSION_;
-
-
-/**
- * Whether the installed version of JScript is as new or newer than a given
- * version.
- * @param {string} version The version to check.
- * @return {boolean} Whether the installed version of JScript is as new or
- *     newer than the given version.
- */
-goog.userAgent.jscript.isVersion = function(version) {
-  return goog.string.compareVersions(goog.userAgent.jscript.VERSION,
-                                     version) >= 0;
-};
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13400,29 +15869,17 @@ goog.userAgent.jscript.isVersion = function(version) {
 
 goog.provide('goog.string.StringBuffer');
 
-goog.require('goog.userAgent.jscript');
-
 
 
 /**
- * Utility class to facilitate much faster string concatenation in IE,
- * using Array.join() rather than the '+' operator.  For other browsers
- * we simply use the '+' operator.
+ * Utility class to facilitate string concatenation.
  *
- * @param {Object|number|string|boolean=} opt_a1 Optional first initial item
- *     to append.
- * @param {...Object|number|string|boolean} var_args Other initial items to
+ * @param {*=} opt_a1 Optional first initial item to append.
+ * @param {...*} var_args Other initial items to
  *     append, e.g., new goog.string.StringBuffer('foo', 'bar').
  * @constructor
  */
 goog.string.StringBuffer = function(opt_a1, var_args) {
-  /**
-   * Internal buffer for the string to be concatenated.
-   * @type {string|Array}
-   * @private
-   */
-  this.buffer_ = goog.userAgent.jscript.HAS_JSCRIPT ? [] : '';
-
   if (opt_a1 != null) {
     this.append.apply(this, arguments);
   }
@@ -13430,122 +15887,70 @@ goog.string.StringBuffer = function(opt_a1, var_args) {
 
 
 /**
+ * Internal buffer for the string to be concatenated.
+ * @type {string}
+ * @private
+ */
+goog.string.StringBuffer.prototype.buffer_ = '';
+
+
+/**
  * Sets the contents of the string buffer object, replacing what's currently
  * there.
  *
- * @param {string} s String to set.
+ * @param {*} s String to set.
  */
 goog.string.StringBuffer.prototype.set = function(s) {
-  this.clear();
-  this.append(s);
+  this.buffer_ = '' + s;
 };
 
 
-if (goog.userAgent.jscript.HAS_JSCRIPT) {
-  /**
-   * Length of internal buffer (faster than calling buffer_.length).
-   * Only used if buffer_ is an array.
-   * @type {number}
-   * @private
-   */
-  goog.string.StringBuffer.prototype.bufferLength_ = 0;
-
-  /**
-   * Appends one or more items to the buffer.
-   *
-   * Calling this with null, undefined, or empty arguments is an error.
-   *
-   * @param {Object|number|string|boolean} a1 Required first string.
-   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
-   * @param {...Object|number|string|boolean} var_args Other items to append,
-   *     e.g., sb.append('foo', 'bar', 'baz').
-   * @return {goog.string.StringBuffer} This same StringBuffer object.
-   */
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    // IE version.
-
-    if (opt_a2 == null) { // second argument is undefined (null == undefined)
-      // Array assignment is 2x faster than Array push.  Also, use a1
-      // directly to avoid arguments instantiation, another 2x improvement.
-      this.buffer_[this.bufferLength_++] = a1;
-    } else {
-      this.buffer_.push.apply(/** @type {Array} */ (this.buffer_), arguments);
-      this.bufferLength_ = this.buffer_.length;
+/**
+ * Appends one or more items to the buffer.
+ *
+ * Calling this with null, undefined, or empty arguments is an error.
+ *
+ * @param {*} a1 Required first string.
+ * @param {*=} opt_a2 Optional second string.
+ * @param {...*} var_args Other items to append,
+ *     e.g., sb.append('foo', 'bar', 'baz').
+ * @return {goog.string.StringBuffer} This same StringBuffer object.
+ * @suppress {duplicate}
+ */
+goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
+  // Use a1 directly to avoid arguments instantiation for single-arg case.
+  this.buffer_ += a1;
+  if (opt_a2 != null) { // second argument is undefined (null == undefined)
+    for (var i = 1; i < arguments.length; i++) {
+      this.buffer_ += arguments[i];
     }
-    return this;
-  };
-} else {
-
-  /**
-   * Appends one or more items to the buffer.
-   *
-   * Calling this with null, undefined, or empty arguments is an error.
-   *
-   * @param {Object|number|string|boolean} a1 Required first string.
-   * @param {Object|number|string|boolean=} opt_a2 Optional second string.
-   * @param {...Object|number|string|boolean} var_args Other items to append,
-   *     e.g., sb.append('foo', 'bar', 'baz').
-   * @return {goog.string.StringBuffer} This same StringBuffer object.
-   * @suppress {duplicate}
-   */
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    // W3 version.
-
-    // Use a1 directly to avoid arguments instantiation for single-arg case.
-    this.buffer_ += a1;
-    if (opt_a2 != null) { // second argument is undefined (null == undefined)
-      for (var i = 1; i < arguments.length; i++) {
-        this.buffer_ += arguments[i];
-      }
-    }
-    return this;
-  };
-}
+  }
+  return this;
+};
 
 
 /**
  * Clears the internal buffer.
  */
 goog.string.StringBuffer.prototype.clear = function() {
-  if (goog.userAgent.jscript.HAS_JSCRIPT) {
-     this.buffer_.length = 0;  // Reuse the array to avoid creating new object.
-     this.bufferLength_ = 0;
-   } else {
-     this.buffer_ = '';
-   }
+  this.buffer_ = '';
 };
 
 
 /**
- * Returns the length of the current contents of the buffer.  In IE, this is
- * O(n) where n = number of appends, so to avoid quadratic behavior, do not call
- * this after every append.
- *
  * @return {number} the length of the current contents of the buffer.
  */
 goog.string.StringBuffer.prototype.getLength = function() {
-   return this.toString().length;
+  return this.buffer_.length;
 };
 
 
 /**
- * Returns the concatenated string.
- *
  * @return {string} The concatenated string.
+ * @override
  */
 goog.string.StringBuffer.prototype.toString = function() {
-  if (goog.userAgent.jscript.HAS_JSCRIPT) {
-    var str = this.buffer_.join('');
-    // Given a string with the entire contents, simplify the StringBuffer by
-    // setting its contents to only be this string, rather than many fragments.
-    this.clear();
-    if (str) {
-      this.append(str);
-    }
-    return str;
-  } else {
-    return /** @type {string} */ (this.buffer_);
-  }
+  return this.buffer_;
 };
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
 //
@@ -13646,7 +16051,7 @@ goog.structs.InversionMap.prototype.spliceInversion = function(
   // Figure out where to splice those arrays.
   var startRange = otherMap.rangeArray[0];
   var endRange =
-      (/** @type {number} */ goog.array.peek(otherMap.rangeArray));
+      /** @type {number} */ (goog.array.peek(otherMap.rangeArray));
   var startSplice = this.getLeast(startRange);
   var endSplice = this.getLeast(endRange);
 
@@ -13722,7 +16127,7 @@ goog.structs.InversionMap.prototype.getLeast = function(intKey) {
 
 /**
  * @fileoverview Detect Grapheme Cluster Break in a pair of codepoints. Follows
- * Unicode 5.1 UAX#29.
+ * Unicode 5.1 UAX#29. Tailoring for Virama × Indic Consonants is used.
  *
  */
 
@@ -13733,7 +16138,8 @@ goog.require('goog.structs.InversionMap');
 /**
  * Enum for all Grapheme Cluster Break properties.
  * These enums directly corresponds to Grapheme_Cluster_Break property values
- * mentioned in http://unicode.org/reports/tr29 table 2.
+ * mentioned in http://unicode.org/reports/tr29 table 2. VIRAMA and
+ * INDIC_CONSONANT are for the Virama × Base tailoring mentioned in the notes.
  *
  * CR and LF are moved to the bottom of the list because they occur only once
  * and so good candidates to take 2 decimal digit values.
@@ -13746,13 +16152,16 @@ goog.i18n.GraphemeBreak.property = {
   EXTEND: 2,
   PREPEND: 3,
   SPACING_MARK: 4,
-  L: 5,
-  V: 6,
-  T: 7,
-  LV: 8,
-  LVT: 9,
-  CR: 10,
-  LF: 11
+  INDIC_CONSONANT: 5,
+  VIRAMA: 6,
+  L: 7,
+  V: 8,
+  T: 9,
+  LV: 10,
+  LVT: 11,
+  CR: 12,
+  LF: 13,
+  REGIONAL_INDICATOR: 14
 };
 
 
@@ -13789,18 +16198,21 @@ goog.i18n.GraphemeBreak.applyLegacyBreakRules_ = function(prop_a, prop_b) {
     return true;
   }
   if ((prop_a == prop.L) &&
-    (prop_b == prop.L || prop_b == prop.V ||
-     prop_b == prop.LV || prop_b == prop.LVT)) {
+      (prop_b == prop.L || prop_b == prop.V ||
+      prop_b == prop.LV || prop_b == prop.LVT)) {
     return false;
   }
   if ((prop_a == prop.LV || prop_a == prop.V) &&
-    (prop_b == prop.V || prop_b == prop.T)) {
+      (prop_b == prop.V || prop_b == prop.T)) {
     return false;
   }
   if ((prop_a == prop.LVT || prop_a == prop.T) && (prop_b == prop.T)) {
     return false;
   }
-  if (prop_b == prop.EXTEND) {
+  if (prop_b == prop.EXTEND || prop_b == prop.VIRAMA) {
+    return false;
+  }
+  if (prop_a == prop.VIRAMA && prop_b == prop.INDIC_CONSONANT) {
     return false;
   }
   return true;
@@ -13825,45 +16237,70 @@ goog.i18n.GraphemeBreak.getBreakProp_ = function(acode) {
     if (!goog.i18n.GraphemeBreak.inversions_) {
       goog.i18n.GraphemeBreak.inversions_ = new goog.structs.InversionMap(
           [0, 10, 1, 2, 1, 18, 95, 33, 13, 1, 594, 112, 275, 7, 263, 45, 1, 1,
-           1, 2, 1, 2, 1, 1, 56, 4, 12, 11, 48, 20, 17, 1, 101, 7, 1, 7, 2, 2,
-           1, 4, 33, 1, 1, 1, 30, 27, 91, 11, 58, 9, 269, 2, 1, 56, 1, 1, 3, 8,
-           4, 1, 3, 4, 13, 2, 29, 1, 2, 56, 1, 1, 1, 2, 6, 6, 1, 9, 1, 10, 2,
-           29, 2, 1, 56, 2, 3, 17, 30, 2, 3, 14, 1, 56, 1, 1, 3, 8, 4, 1, 20,
-           2, 29, 1, 2, 56, 1, 1, 2, 1, 6, 6, 11, 10, 2, 30, 1, 59, 1, 1, 1,
-           12, 1, 9, 1, 41, 3, 58, 3, 5, 17, 11, 2, 30, 2, 56, 1, 1, 1, 1, 2,
-           1, 3, 1, 5, 11, 11, 2, 30, 2, 58, 1, 2, 5, 7, 11, 10, 2, 30, 2, 70,
-           6, 2, 6, 7, 19, 2, 60, 11, 5, 5, 1, 1, 8, 97, 13, 3, 5, 3, 6, 74, 2,
-           27, 1, 1, 1, 1, 1, 4, 2, 49, 14, 1, 5, 1, 2, 8, 45, 9, 1, 100, 2, 4,
-           1, 6, 1, 2, 2, 2, 23, 2, 2, 4, 3, 1, 3, 2, 7, 3, 4, 13, 1, 2, 2, 6,
-           1, 1, 1, 112, 96, 72, 82, 357, 1, 946, 3, 29, 3, 29, 2, 30, 2, 64,
-           2, 1, 7, 8, 1, 2, 11, 9, 1, 45, 3, 155, 1, 118, 3, 4, 2, 9, 1, 6, 3,
-           116, 17, 7, 2, 77, 2, 3, 228, 4, 1, 47, 1, 1, 5, 1, 1, 5, 1, 2, 38,
-           9, 12, 2, 1, 30, 1, 4, 2, 2, 1, 121, 8, 8, 2, 2, 392, 64, 523, 1, 2,
-           2, 24, 7, 49, 16, 96, 33, 3311, 32, 554, 6, 105, 2, 30164, 4, 9, 2,
-           388, 1, 3, 1, 4, 1, 23, 2, 2, 1, 88, 2, 50, 16, 1, 97, 8, 25, 11, 2,
-           213, 6, 2, 2, 2, 2, 12, 1, 8, 1, 1, 434, 11172, 1116, 1024, 6942, 1,
-           737, 16, 16, 7, 216, 1, 158, 2, 89, 3, 513, 1, 2051, 15, 40, 8,
-           50981, 1, 1, 3, 3, 1, 5, 8, 8, 2, 7, 30, 4, 148, 3, 798140, 255],
-          [1, 11, 1, 10, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0,
-           2, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 1, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0, 2,
-           0, 2, 0, 2, 0, 2, 4, 0, 2, 0, 4, 2, 4, 2, 0, 2, 0, 2, 0, 2, 4, 0, 2,
-           0, 2, 4, 2, 4, 2, 0, 2, 0, 2, 0, 2, 4, 0, 2, 4, 2, 0, 2, 0, 2, 4, 0,
-           2, 0, 4, 2, 4, 2, 0, 2, 0, 2, 4, 0, 2, 0, 2, 4, 2, 4, 2, 0, 2, 0, 2,
-           0, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4, 2, 0, 2, 0, 4, 0, 2, 0, 4, 2,
-           4, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4, 2, 4, 2, 0, 2, 0, 4, 0, 2, 4,
-           2, 4, 2, 4, 0, 2, 0, 3, 2, 0, 2, 0, 2, 0, 3, 0, 2, 0, 2, 0, 2, 0, 2,
-           0, 2, 0, 4, 0, 2, 4, 2, 0, 2, 0, 2, 0, 2, 0, 4, 2, 4, 2, 4, 2, 4, 2,
-           0, 4, 2, 0, 2, 0, 4, 0, 4, 0, 2, 0, 2, 4, 2, 4, 2, 0, 4, 0, 5, 6, 7,
-           0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 1, 4, 2, 4, 2, 4, 2, 0, 2, 0, 2, 0,
-           2, 0, 2, 4, 2, 4, 2, 4, 2, 0, 4, 0, 4, 0, 2, 4, 0, 2, 4, 0, 2, 4, 2,
-           4, 2, 4, 2, 4, 0, 2, 0, 2, 4, 0, 4, 2, 4, 2, 4, 0, 4, 2, 4, 2, 0, 2,
-           0, 1, 2, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0,
-           2, 0, 2, 0, 4, 2, 4, 0, 4, 0, 4, 2, 0, 2, 0, 2, 4, 0, 2, 4, 2, 4, 2,
-           0, 2, 0, 2, 4, 0, 9, 0, 2, 0, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0, 1, 0, 2,
-           0, 2, 0, 2, 0, 2, 4, 2, 0, 4, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 1, 2],
+           1, 2, 1, 2, 1, 1, 56, 5, 11, 11, 48, 21, 16, 1, 101, 7, 1, 1, 6, 2,
+           2, 1, 4, 33, 1, 1, 1, 30, 27, 91, 11, 58, 9, 34, 4, 1, 9, 1, 3, 1,
+           5, 43, 3, 136, 31, 1, 17, 37, 1, 1, 1, 1, 3, 8, 4, 1, 2, 1, 7, 8, 2,
+           2, 21, 8, 1, 2, 17, 39, 1, 1, 1, 2, 6, 6, 1, 9, 5, 4, 2, 2, 12, 2,
+           15, 2, 1, 17, 39, 2, 3, 12, 4, 8, 6, 17, 2, 3, 14, 1, 17, 39, 1, 1,
+           3, 8, 4, 1, 20, 2, 29, 1, 2, 17, 39, 1, 1, 2, 1, 6, 6, 9, 6, 4, 2,
+           2, 13, 1, 16, 1, 18, 41, 1, 1, 1, 12, 1, 9, 1, 41, 3, 17, 37, 4, 3,
+           5, 7, 8, 3, 2, 8, 2, 30, 2, 17, 39, 1, 1, 1, 1, 2, 1, 3, 1, 5, 1, 8,
+           9, 1, 3, 2, 30, 2, 17, 38, 3, 1, 2, 5, 7, 1, 9, 1, 10, 2, 30, 2, 22,
+           48, 5, 1, 2, 6, 7, 19, 2, 13, 46, 2, 1, 1, 1, 6, 1, 12, 8, 50, 46,
+           2, 1, 1, 1, 9, 11, 6, 14, 2, 58, 2, 27, 1, 1, 1, 1, 1, 4, 2, 49, 14,
+           1, 4, 1, 1, 2, 5, 48, 9, 1, 57, 33, 12, 4, 1, 6, 1, 2, 2, 2, 1, 16,
+           2, 4, 2, 2, 4, 3, 1, 3, 2, 7, 3, 4, 13, 1, 1, 1, 2, 6, 1, 1, 14, 1,
+           98, 96, 72, 88, 349, 3, 931, 15, 2, 1, 14, 15, 2, 1, 14, 15, 2, 15,
+           15, 14, 35, 17, 2, 1, 7, 8, 1, 2, 9, 1, 1, 9, 1, 45, 3, 155, 1, 87,
+           31, 3, 4, 2, 9, 1, 6, 3, 20, 19, 29, 44, 9, 3, 2, 1, 69, 23, 2, 3,
+           4, 45, 6, 2, 1, 1, 1, 8, 1, 1, 1, 2, 8, 6, 13, 128, 4, 1, 14, 33, 1,
+           1, 5, 1, 1, 5, 1, 1, 1, 7, 31, 9, 12, 2, 1, 7, 23, 1, 4, 2, 2, 2, 2,
+           2, 11, 3, 2, 36, 2, 1, 1, 2, 3, 1, 1, 3, 2, 12, 36, 8, 8, 2, 2, 21,
+           3, 128, 3, 1, 13, 1, 7, 4, 1, 4, 2, 1, 203, 64, 523, 1, 2, 2, 24, 7,
+           49, 16, 96, 33, 3070, 3, 141, 1, 96, 32, 554, 6, 105, 2, 30164, 4,
+           1, 10, 33, 1, 80, 2, 272, 1, 3, 1, 4, 1, 23, 2, 2, 1, 24, 30, 4, 4,
+           3, 8, 1, 1, 13, 2, 16, 34, 16, 1, 27, 18, 24, 24, 4, 8, 2, 23, 11,
+           1, 1, 12, 32, 3, 1, 5, 3, 3, 36, 1, 2, 4, 2, 1, 3, 1, 69, 35, 6, 2,
+           2, 2, 2, 12, 1, 8, 1, 1, 18, 16, 1, 3, 6, 1, 5, 48, 1, 1, 3, 2, 2,
+           5, 2, 1, 1, 32, 9, 1, 2, 2, 5, 1, 1, 201, 14, 2, 1, 1, 9, 8, 2, 1,
+           2, 1, 2, 1, 1, 1, 18, 11184, 27, 49, 1028, 1024, 6942, 1, 737, 16,
+           16, 7, 216, 1, 158, 2, 89, 3, 513, 1, 2051, 15, 40, 7, 1, 1472, 1,
+           1, 1, 53, 14, 1, 57, 2, 1, 45, 3, 4, 2, 1, 1, 2, 1, 66, 3, 36, 5, 1,
+           6, 2, 75, 2, 1, 48, 3, 9, 1, 1, 1258, 1, 1, 1, 2, 6, 1, 1, 22681,
+           62, 4, 25042, 1, 1, 3, 3, 1, 5, 8, 8, 2, 7, 30, 4, 148, 3, 8097, 26,
+           790017, 255],
+          [1, 13, 1, 12, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0,
+           2, 0, 1, 0, 2, 0, 2, 0, 2, 0, 2, 1, 0, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0,
+           2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 4, 0, 5, 2, 4, 2,
+           0, 4, 2, 4, 6, 4, 0, 2, 5, 0, 2, 0, 5, 2, 4, 0, 5, 2, 0, 2, 4, 2, 4,
+           6, 0, 2, 5, 0, 2, 0, 5, 0, 2, 4, 0, 5, 2, 4, 2, 6, 2, 5, 0, 2, 0, 2,
+           4, 0, 5, 2, 0, 4, 2, 4, 6, 0, 2, 0, 2, 4, 0, 5, 2, 0, 2, 4, 2, 4, 6,
+           2, 5, 0, 2, 0, 5, 0, 2, 0, 5, 2, 4, 2, 4, 6, 0, 2, 0, 4, 0, 5, 0, 2,
+           4, 2, 6, 2, 5, 0, 2, 0, 4, 0, 5, 2, 0, 4, 2, 4, 2, 4, 2, 4, 2, 6, 2,
+           5, 0, 2, 0, 4, 0, 5, 0, 2, 4, 2, 4, 6, 0, 2, 0, 2, 0, 4, 0, 5, 6, 2,
+           4, 2, 4, 2, 4, 0, 5, 0, 2, 0, 4, 2, 6, 0, 2, 0, 5, 0, 2, 0, 4, 2, 0,
+           2, 0, 5, 0, 2, 0, 2, 0, 2, 0, 2, 0, 4, 5, 2, 4, 2, 6, 0, 2, 0, 2, 0,
+           2, 0, 5, 0, 2, 4, 2, 0, 6, 4, 2, 5, 0, 5, 0, 4, 2, 5, 2, 5, 0, 5, 0,
+           5, 2, 5, 2, 0, 4, 2, 0, 2, 5, 0, 2, 0, 7, 8, 9, 0, 2, 0, 5, 2, 6, 0,
+           5, 2, 6, 0, 5, 2, 0, 5, 2, 5, 0, 2, 4, 2, 4, 2, 4, 2, 6, 2, 0, 2, 0,
+           2, 0, 2, 0, 5, 2, 4, 2, 4, 2, 4, 2, 0, 5, 0, 5, 0, 4, 0, 4, 0, 5, 2,
+           4, 0, 5, 0, 5, 4, 2, 4, 2, 6, 0, 2, 0, 2, 4, 2, 0, 2, 4, 0, 5, 2, 4,
+           2, 4, 2, 4, 2, 4, 6, 5, 0, 2, 0, 2, 4, 0, 5, 4, 2, 4, 2, 6, 4, 5, 0,
+           5, 0, 5, 0, 2, 4, 2, 4, 2, 4, 2, 6, 0, 5, 4, 2, 4, 2, 0, 5, 0, 2, 0,
+           2, 4, 2, 0, 2, 0, 4, 2, 0, 2, 0, 1, 2, 1, 0, 1, 0, 1, 0, 2, 0, 2, 0,
+           6, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 2, 0, 6, 5, 2, 5, 4,
+           2, 4, 0, 5, 0, 5, 0, 5, 0, 5, 0, 4, 0, 5, 4, 6, 0, 2, 0, 5, 0, 2, 0,
+           5, 2, 4, 6, 0, 7, 2, 4, 0, 5, 0, 5, 2, 4, 2, 4, 2, 4, 6, 0, 5, 2, 4,
+           2, 4, 2, 0, 2, 0, 2, 4, 0, 5, 0, 5, 0, 5, 0, 5, 2, 0, 2, 0, 2, 0, 2,
+           0, 2, 0, 5, 4, 2, 4, 0, 4, 6, 0, 5, 0, 5, 0, 5, 0, 4, 2, 4, 2, 4, 0,
+           4, 6, 0, 11, 8, 9, 0, 2, 0, 2, 0, 2, 0, 2, 0, 1, 0, 2, 0, 1, 0, 2,
+           0, 2, 0, 2, 6, 0, 4, 2, 4, 0, 2, 6, 0, 2, 4, 0, 4, 2, 4, 6, 2, 0, 1,
+           0, 2, 0, 2, 4, 2, 6, 0, 2, 4, 0, 4, 2, 4, 6, 0, 2, 4, 2, 4, 2, 6, 2,
+           0, 4, 2, 0, 2, 4, 2, 0, 4, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 14, 0, 1,
+           2],
           true);
     }
-    return (/** @type {number} */
+    return /** @type {number} */ (
         goog.i18n.GraphemeBreak.inversions_.at(acode));
   }
 };
@@ -13885,7 +16322,8 @@ goog.i18n.GraphemeBreak.hasGraphemeBreak = function(a, b, opt_extended) {
   var prop = goog.i18n.GraphemeBreak.property;
 
   return goog.i18n.GraphemeBreak.applyLegacyBreakRules_(prop_a, prop_b) &&
-    !(opt_extended && (prop_a == prop.PREPEND || prop_b == prop.SPACING_MARK));
+      !(opt_extended &&
+          (prop_a == prop.PREPEND || prop_b == prop.SPACING_MARK));
 };
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
@@ -14136,9 +16574,48 @@ goog.format.FIRST_GRAPHEME_EXTEND_ = 0x300;
 
 
 /**
+ * Returns true if and only if given character should be treated as a breaking
+ * space. All ASCII control characters, the main Unicode range of spacing
+ * characters (U+2000 to U+200B inclusive except for U+2007), and several other
+ * Unicode space characters are treated as breaking spaces.
+ * @param {number} charCode The character code under consideration.
+ * @return {boolean} True if the character is a breaking space.
+ * @private
+ */
+goog.format.isTreatedAsBreakingSpace_ = function(charCode) {
+  return (charCode <= goog.format.WbrToken_.SPACE) ||
+         (charCode >= 0x1000 &&
+          ((charCode >= 0x2000 && charCode <= 0x2006) ||
+           (charCode >= 0x2008 && charCode <= 0x200B) ||
+           charCode == 0x1680 ||
+           charCode == 0x180E ||
+           charCode == 0x2028 ||
+           charCode == 0x2029 ||
+           charCode == 0x205f ||
+           charCode == 0x3000));
+};
+
+
+/**
+ * Returns true if and only if given character is an invisible formatting
+ * character.
+ * @param {number} charCode The character code under consideration.
+ * @return {boolean} True if the character is an invisible formatting character.
+ * @private
+ */
+goog.format.isInvisibleFormattingCharacter_ = function(charCode) {
+  // See: http://unicode.org/charts/PDF/U2000.pdf
+  return (charCode >= 0x200C && charCode <= 0x200F) ||
+         (charCode >= 0x202A && charCode <= 0x202E);
+};
+
+
+/**
  * Inserts word breaks into an HTML string at a given interval.  The counter is
- * reset if a space is encountered.  WBRs aren't inserted into HTML tags or
- * entities.  Entites count towards the character count, HTML tags do not.
+ * reset if a space or a character which behaves like a space is encountered,
+ * but it isn't incremented if an invisible formatting character is encountered.
+ * WBRs aren't inserted into HTML tags or entities.  Entities count towards the
+ * character count, HTML tags do not.
  *
  * With common strings aliased, objects allocations are constant based on the
  * length of the string: N + 3. This guarantee does not hold if the string
@@ -14179,10 +16656,11 @@ goog.format.insertWordBreaksGeneric_ = function(str, hasGraphemeBreak,
         charCode >= goog.format.FIRST_GRAPHEME_EXTEND_ &&
         !hasGraphemeBreak(lastCharCode, charCode, true);
 
-    // Don't add a WBR at the end of a word.  For simplicity, all control
-    // characters are treated as whitespace.
+    // Don't add a WBR at the end of a word. For the purposes of determining
+    // work breaks, all ASCII control characters and some commonly encountered
+    // Unicode spacing characters are treated as breaking spaces.
     if (n >= maxlen &&
-        charCode > goog.format.WbrToken_.SPACE &&
+        !goog.format.isTreatedAsBreakingSpace_(charCode) &&
         !isPotentiallyGraphemeExtending) {
       // Flush everything seen so far, and append a word break.
       rv.push(str.substring(lastDumpPosition, i), goog.format.WORD_BREAK_HTML);
@@ -14198,11 +16676,11 @@ goog.format.insertWordBreaksGeneric_ = function(str, hasGraphemeBreak,
 
         // Entering an HTML Entity '&' or open tag '<'
         nestingCharCode = charCode;
-      } else if (charCode <= goog.format.WbrToken_.SPACE) {
+      } else if (goog.format.isTreatedAsBreakingSpace_(charCode)) {
 
         // A space or control character -- reset the token length
         n = 0;
-      } else {
+      } else if (!goog.format.isInvisibleFormattingCharacter_(charCode)) {
 
         // A normal flow character - increment.  For grapheme extending
         // characters, this is not *technically* a new character.  However,
@@ -14309,7 +16787,7 @@ goog.format.insertWordBreaksBasic = function(str, opt_maxlen) {
  * @private
  */
 goog.format.IS_IE8_OR_ABOVE_ = goog.userAgent.IE &&
-    goog.userAgent.isVersion(8);
+    goog.userAgent.isVersionOrHigher(8);
 
 
 /**
@@ -14371,13 +16849,20 @@ goog.provide('goog.i18n.bidi');
  *
  * {@see goog.i18n.bidi.IS_RTL}
  */
-goog.i18n.bidi.FORCE_RTL = false;
+goog.define('goog.i18n.bidi.FORCE_RTL', false);
 
 
 /**
  * Constant that defines whether or not the current locale is a RTL locale.
  * If {@link goog.i18n.bidi.FORCE_RTL} is not true, this constant will default
  * to check that {@link goog.LOCALE} is one of a few major RTL locales.
+ *
+ * <p>This is designed to be a maximally efficient compile-time constant. For
+ * example, for the default goog.LOCALE, compiling
+ * "if (goog.i18n.bidi.IS_RTL) alert('rtl') else {}" should produce no code. It
+ * is this design consideration that limits the implementation to only
+ * supporting a few major RTL locales, as opposed to the broader repertoire of
+ * something like goog.i18n.bidi.isRtlLanguage.
  *
  * <p>Since this constant refers to the directionality of the locale, it is up
  * to the caller to determine if this constant should also be used for the
@@ -14388,8 +16873,6 @@ goog.i18n.bidi.FORCE_RTL = false;
  * @type {boolean}
  *
  * TODO(user): write a test that checks that this is a compile-time constant.
- * For example, for the default goog.LOCALE, compiling
- * "if (goog.i18n.bidi.IS_RTL) alert('rtl') else {}" should produce no code.
  */
 goog.i18n.bidi.IS_RTL = goog.i18n.bidi.FORCE_RTL ||
     (goog.LOCALE.substring(0, 2).toLowerCase() == 'ar' ||
@@ -14636,7 +17119,7 @@ goog.i18n.bidi.isNeutralChar = function(str) {
 
 
 /**
- * Regular expressions to check if a piece of text if of LTR directionality
+ * Regular expressions to check if a piece of text is of LTR directionality
  * on first character with strong directionality.
  * @type {RegExp}
  * @private
@@ -14646,7 +17129,7 @@ goog.i18n.bidi.ltrDirCheckRe_ = new RegExp(
 
 
 /**
- * Regular expressions to check if a piece of text if of RTL directionality
+ * Regular expressions to check if a piece of text is of RTL directionality
  * on first character with strong directionality.
  * @type {RegExp}
  * @private
@@ -14813,7 +17296,8 @@ goog.i18n.bidi.isRtlExitText = goog.i18n.bidi.endsWithRtl;
  */
 goog.i18n.bidi.rtlLocalesRe_ = new RegExp(
     '^(ar|dv|he|iw|fa|nqo|ps|sd|ug|ur|yi|.*[-_](Arab|Hebr|Thaa|Nkoo|Tfng))' +
-    '(?!.*[-_](Latn|Cyrl)($|-|_))($|-|_)');
+    '(?!.*[-_](Latn|Cyrl)($|-|_))($|-|_)',
+    'i');
 
 
 /**
@@ -14965,7 +17449,7 @@ goog.i18n.bidi.enforceLtrInText = function(text) {
  * @private
  */
 goog.i18n.bidi.dimensionsRe_ =
-     /:\s*([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)/g;
+    /:\s*([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)\s+([.\d][.\w]*)/g;
 
 
 /**
@@ -15002,11 +17486,11 @@ goog.i18n.bidi.tempRe_ = /%%%%/g;
  */
 goog.i18n.bidi.mirrorCSS = function(cssStr) {
   return cssStr.
-    // reverse dimensions
-    replace(goog.i18n.bidi.dimensionsRe_, ':$1 $4 $3 $2').
-    replace(goog.i18n.bidi.leftRe_, '%%%%').          // swap left and right
-    replace(goog.i18n.bidi.rightRe_, goog.i18n.bidi.LEFT).
-    replace(goog.i18n.bidi.tempRe_, goog.i18n.bidi.RIGHT);
+      // reverse dimensions
+      replace(goog.i18n.bidi.dimensionsRe_, ':$1 $4 $3 $2').
+      replace(goog.i18n.bidi.leftRe_, '%%%%').          // swap left and right
+      replace(goog.i18n.bidi.rightRe_, goog.i18n.bidi.LEFT).
+      replace(goog.i18n.bidi.tempRe_, goog.i18n.bidi.RIGHT);
 };
 
 
@@ -15036,8 +17520,8 @@ goog.i18n.bidi.singleQuoteSubstituteRe_ = /([\u0591-\u05f2])'/g;
  */
 goog.i18n.bidi.normalizeHebrewQuote = function(str) {
   return str.
-    replace(goog.i18n.bidi.doubleQuoteSubstituteRe_, '$1\u05f4').
-    replace(goog.i18n.bidi.singleQuoteSubstituteRe_, '$1\u05f3');
+      replace(goog.i18n.bidi.doubleQuoteSubstituteRe_, '$1\u05f4').
+      replace(goog.i18n.bidi.singleQuoteSubstituteRe_, '$1\u05f3');
 };
 
 
@@ -15178,8 +17662,8 @@ goog.require('goog.string');
  * displayed incorrectly unless the inserted string is explicitly separated
  * from the surrounding text in a "wrapper" that declares its directionality at
  * the start and then resets it back at the end. This wrapping can be done in
- * HTML mark-up (e.g. a 'span dir=rtl' tag) or - only in contexts where mark-up
- * can not be used - in Unicode BiDi formatting codes (LRE|RLE and PDF).
+ * HTML mark-up (e.g. a 'span dir="rtl"' tag) or - only in contexts where
+ * mark-up can not be used - in Unicode BiDi formatting codes (LRE|RLE and PDF).
  * Providing such wrapping services is the basic purpose of the BiDi formatter.
  *
  * 2. Directionality estimation
@@ -15325,8 +17809,8 @@ goog.i18n.BidiFormatter.prototype.dirResetIfNeeded_ = function(str, dir,
         goog.i18n.bidi.endsWithRtl(str, opt_isHtml)) ||
        (this.contextDir_ == goog.i18n.bidi.Dir.RTL &&
         goog.i18n.bidi.endsWithLtr(str, opt_isHtml)))) {
-   return this.contextDir_ == goog.i18n.bidi.Dir.LTR ?
-       goog.i18n.bidi.Format.LRM : goog.i18n.bidi.Format.RLM;
+    return this.contextDir_ == goog.i18n.bidi.Dir.LTR ?
+        goog.i18n.bidi.Format.LRM : goog.i18n.bidi.Format.RLM;
   } else {
     return '';
   }
@@ -15339,7 +17823,9 @@ goog.i18n.BidiFormatter.prototype.dirResetIfNeeded_ = function(str, dir,
  * is RTL, and "ltr" otherwise.
  * Needed for GXP, which can't handle dirAttr.
  * Example use case:
- * <td expr:dir='bidiFormatter.dirAttrValue(foo)'><gxp:eval expr='foo'></td>
+ * &lt;td expr:dir='bidiFormatter.dirAttrValue(foo)'&gt;
+ *   &lt;gxp:eval expr='foo'&gt;
+ * &lt;/td&gt;
  *
  * @param {string} str Text whose directionality is to be estimated.
  * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
@@ -15369,15 +17855,15 @@ goog.i18n.BidiFormatter.prototype.knownDirAttrValue = function(dir) {
 
 
 /**
- * Returns "dir=ltr" or "dir=rtl", depending on {@code str}'s estimated
+ * Returns 'dir="ltr"' or 'dir="rtl"', depending on {@code str}'s estimated
  * directionality, if it is not the same as the context directionality.
  * Otherwise, returns the empty string.
  *
  * @param {string} str Text whose directionality is to be estimated.
  * @param {boolean=} opt_isHtml Whether {@code str} is HTML / HTML-escaped.
  *     Default: false.
- * @return {string} "dir=rtl" for RTL text in non-RTL context; "dir=ltr" for LTR
- *     text in non-LTR context; else, the empty string.
+ * @return {string} 'dir="rtl"' for RTL text in non-RTL context; 'dir="ltr"' for
+ *     LTR text in non-LTR context; else, the empty string.
  */
 goog.i18n.BidiFormatter.prototype.dirAttr = function(str, opt_isHtml) {
   return this.knownDirAttr(this.estimateDirection(str, opt_isHtml));
@@ -15385,18 +17871,18 @@ goog.i18n.BidiFormatter.prototype.dirAttr = function(str, opt_isHtml) {
 
 
 /**
- * Returns "dir=ltr" or "dir=rtl", depending on the given directionality, if it
- * is not the same as the context directionality. Otherwise, returns the empty
- * string.
+ * Returns 'dir="ltr"' or 'dir="rtl"', depending on the given directionality, if
+ * it is not the same as the context directionality. Otherwise, returns the
+ * empty string.
  *
  * @param {goog.i18n.bidi.Dir} dir A directionality.
- * @return {string} "dir=rtl" for RTL text in non-RTL context; "dir=ltr" for LTR
- *     text in non-LTR context; else, the empty string.
+ * @return {string} 'dir="rtl"' for RTL text in non-RTL context; 'dir="ltr"' for
+ *     LTR text in non-LTR context; else, the empty string.
  */
 goog.i18n.BidiFormatter.prototype.knownDirAttr = function(dir) {
   if (dir != this.contextDir_) {
-    return dir == goog.i18n.bidi.Dir.RTL ? 'dir=rtl' :
-        dir == goog.i18n.bidi.Dir.LTR ? 'dir=ltr' : '';
+    return dir == goog.i18n.bidi.Dir.RTL ? 'dir="rtl"' :
+        dir == goog.i18n.bidi.Dir.LTR ? 'dir="ltr"' : '';
   }
   return '';
 };
@@ -15408,9 +17894,9 @@ goog.i18n.BidiFormatter.prototype.knownDirAttr = function(dir) {
  * garbled nor garbles what follows it.
  * The algorithm: estimates the directionality of input argument {@code str}. In
  * case its directionality doesn't match the context directionality, wraps it
- * with a 'span' tag and adds a "dir" attribute (either 'dir=rtl' or 'dir=ltr').
- * If setAlwaysSpan(true) was used, the input is always wrapped with 'span',
- * skipping just the dir attribute when it's not needed.
+ * with a 'span' tag and adds a "dir" attribute (either 'dir="rtl"' or
+ * 'dir="ltr"'). If setAlwaysSpan(true) was used, the input is always wrapped
+ * with 'span', skipping just the dir attribute when it's not needed.
  *
  * If {@code opt_dirReset}, and if the overall directionality or the exit
  * directionality of {@code str} are opposite to the context directionality, a
@@ -15439,9 +17925,9 @@ goog.i18n.BidiFormatter.prototype.spanWrap = function(str, opt_isHtml,
  * context directionality, so an opposite-directionality string is neither
  * garbled nor garbles what follows it.
  * The algorithm: If {@code dir} doesn't match the context directionality, wraps
- * {@code str} with a 'span' tag and adds a "dir" attribute (either 'dir=rtl' or
- * 'dir=ltr'). If setAlwaysSpan(true) was used, the input is always wrapped with
- * 'span', skipping just the dir attribute when it's not needed.
+ * {@code str} with a 'span' tag and adds a "dir" attribute (either 'dir="rtl"'
+ * or 'dir="ltr"'). If setAlwaysSpan(true) was used, the input is always wrapped
+ * with 'span', skipping just the dir attribute when it's not needed.
  *
  * If {@code opt_dirReset}, and if {@code dir} or the exit directionality of
  * {@code str} are opposite to the context directionality, a trailing unicode
@@ -15472,7 +17958,7 @@ goog.i18n.BidiFormatter.prototype.spanWrapWithKnownDir = function(dir, str,
   if (this.alwaysSpan_ || dirCondition) {  // Wrap is needed
     result.push('<span');
     if (dirCondition) {
-      result.push(dir == goog.i18n.bidi.Dir.RTL ? ' dir=rtl' : ' dir=ltr');
+      result.push(dir == goog.i18n.bidi.Dir.RTL ? ' dir="rtl"' : ' dir="ltr"');
     }
     result.push('>' + str + '</span>');
   } else {
@@ -15592,11 +18078,11 @@ goog.i18n.BidiFormatter.prototype.markAfter = function(str, opt_isHtml) {
  */
 goog.i18n.BidiFormatter.prototype.mark = function() {
   switch (this.contextDir_) {
-  case (goog.i18n.bidi.Dir.LTR):
+    case (goog.i18n.bidi.Dir.LTR):
       return goog.i18n.bidi.Format.LRM;
-  case (goog.i18n.bidi.Dir.RTL):
+    case (goog.i18n.bidi.Dir.RTL):
       return goog.i18n.bidi.Format.RLM;
-  default:
+    default:
       return '';
   }
 };
@@ -15658,6 +18144,10 @@ goog.i18n.BidiFormatter.prototype.endEdge = function() {
  * by Soy-generated JS code. Please do not use these functions directly from
  * your hand-writen code. Their names all start with '$$'.
  *
+ * @author Garrett Boyer
+ * @author Mike Samuel
+ * @author Kai Huang
+ * @author Aharon Lanin
  */
 
 goog.provide('soy');
@@ -15666,8 +18156,10 @@ goog.provide('soy.esc');
 goog.provide('soydata');
 goog.provide('soydata.SanitizedHtml');
 goog.provide('soydata.SanitizedHtmlAttribute');
+goog.provide('soydata.SanitizedJs');
 goog.provide('soydata.SanitizedJsStrChars');
 goog.provide('soydata.SanitizedUri');
+goog.provide('soydata.VERY_UNSAFE');
 
 goog.require('goog.asserts');
 goog.require('goog.dom.DomHelper');
@@ -15675,6 +18167,7 @@ goog.require('goog.format');
 goog.require('goog.i18n.BidiFormatter');
 goog.require('goog.i18n.bidi');
 goog.require('goog.soy');
+goog.require('goog.soy.data.SanitizedContentKind');
 goog.require('goog.string');
 goog.require('goog.string.StringBuffer');
 
@@ -15685,7 +18178,7 @@ goog.require('goog.string.StringBuffer');
 
 /**
  * Utility class to facilitate much faster string concatenation in IE,
- * using Array.join() rather than the '+' operator.  For other browsers
+ * using Array.join() rather than the '+' operator. For other browsers
  * we simply use the '+' operator.
  *
  * @param {Object} var_args Initial items to append,
@@ -15702,94 +18195,67 @@ soy.StringBuilder = goog.string.StringBuffer;
 
 /**
  * A type of textual content.
- * @enum {number}
+ *
+ * This is an enum of type Object so that these values are unforgeable.
+ *
+ * @enum {!Object}
  */
-soydata.SanitizedContentKind = {
-
-  /**
-   * A snippet of HTML that does not start or end inside a tag, comment, entity,
-   * or DOCTYPE; and that does not contain any executable code
-   * (JS, {@code <object>}s, etc.) from a different trust domain.
-   */
-  HTML: 0,
-
-  /**
-   * A sequence of code units that can appear between quotes (either kind) in a
-   * JS program without causing a parse error, and without causing any side
-   * effects.
-   * <p>
-   * The content should not contain unescaped quotes, newlines, or anything else
-   * that would cause parsing to fail or to cause a JS parser to finish the
-   * string its parsing inside the content.
-   * <p>
-   * The content must also not end inside an escape sequence ; no partial octal
-   * escape sequences or odd number of '{@code \}'s at the end.
-   */
-  JS_STR_CHARS: 1,
-
-  /** A properly encoded portion of a URI. */
-  URI: 2,
-
-  /** An attribute name and value such as {@code dir="ltr"}. */
-  HTML_ATTRIBUTE: 3
-};
-
-
-/**
- * A string-like object that carries a content-type.
- * @param {string} content
- * @constructor
- * @private
- */
-soydata.SanitizedContent = function(content) {
-  /**
-   * The textual content.
-   * @type {string}
-   */
-  this.content = content;
-};
-
-/** @type {soydata.SanitizedContentKind} */
-soydata.SanitizedContent.prototype.contentKind;
-
-/** @override */
-soydata.SanitizedContent.prototype.toString = function() {
-  return this.content;
-};
+soydata.SanitizedContentKind = goog.soy.data.SanitizedContentKind;
 
 
 /**
  * Content of type {@link soydata.SanitizedContentKind.HTML}.
- * @param {string} content A string of HTML that can safely be embedded in
- *     a PCDATA context in your app.  If you would be surprised to find that an
- *     HTML sanitizer produced {@code s} (e.g. it runs code or fetches bad URLs)
- *     and you wouldn't write a template that produces {@code s} on security or
- *     privacy grounds, then don't pass {@code s} here.
+ *
+ * The content is a string of HTML that can safely be embedded in a PCDATA
+ * context in your app.  If you would be surprised to find that an HTML
+ * sanitizer produced {@code s} (e.g.  it runs code or fetches bad URLs) and
+ * you wouldn't write a template that produces {@code s} on security or privacy
+ * grounds, then don't pass {@code s} here.
+ *
  * @constructor
- * @extends {soydata.SanitizedContent}
+ * @extends {goog.soy.data.SanitizedContent}
  */
-soydata.SanitizedHtml = function(content) {
-  soydata.SanitizedContent.call(this, content);
+soydata.SanitizedHtml = function() {
+  goog.soy.data.SanitizedContent.call(this);  // Throws an exception.
 };
-goog.inherits(soydata.SanitizedHtml, soydata.SanitizedContent);
+goog.inherits(soydata.SanitizedHtml, goog.soy.data.SanitizedContent);
 
 /** @override */
 soydata.SanitizedHtml.prototype.contentKind = soydata.SanitizedContentKind.HTML;
 
 
 /**
- * Content of type {@link soydata.SanitizedContentKind.JS_STR_CHARS}.
- * @param {string} content A string of JS that when evaled, produces a
- *     value that does not depend on any sensitive data and has no side effects
- *     <b>OR</b> a string of JS that does not reference any variables or have
- *     any side effects not known statically to the app authors.
+ * Content of type {@link soydata.SanitizedContentKind.JS}.
+ *
+ * The content is Javascript source that when evaluated does not execute any
+ * attacker-controlled scripts.
+ *
  * @constructor
- * @extends {soydata.SanitizedContent}
+ * @extends {goog.soy.data.SanitizedContent}
  */
-soydata.SanitizedJsStrChars = function(content) {
-  soydata.SanitizedContent.call(this, content);
+soydata.SanitizedJs = function() {
+  goog.soy.data.SanitizedContent.call(this);  // Throws an exception.
 };
-goog.inherits(soydata.SanitizedJsStrChars, soydata.SanitizedContent);
+goog.inherits(soydata.SanitizedJs, goog.soy.data.SanitizedContent);
+
+/** @override */
+soydata.SanitizedJs.prototype.contentKind =
+    soydata.SanitizedContentKind.JS;
+
+
+/**
+ * Content of type {@link soydata.SanitizedContentKind.JS_STR_CHARS}.
+ *
+ * The content can be safely inserted as part of a single- or double-quoted
+ * string without terminating the string.
+ *
+ * @constructor
+ * @extends {goog.soy.data.SanitizedContent}
+ */
+soydata.SanitizedJsStrChars = function() {
+  goog.soy.data.SanitizedContent.call(this);  // Throws an exception.
+};
+goog.inherits(soydata.SanitizedJsStrChars, goog.soy.data.SanitizedContent);
 
 /** @override */
 soydata.SanitizedJsStrChars.prototype.contentKind =
@@ -15798,35 +18264,217 @@ soydata.SanitizedJsStrChars.prototype.contentKind =
 
 /**
  * Content of type {@link soydata.SanitizedContentKind.URI}.
- * @param {string} content A chunk of URI that the caller knows is safe to
- *     emit in a template.
+ *
+ * The content is a URI chunk that the caller knows is safe to emit in a
+ * template.
+ *
  * @constructor
- * @extends {soydata.SanitizedContent}
+ * @extends {goog.soy.data.SanitizedContent}
  */
-soydata.SanitizedUri = function(content) {
-  soydata.SanitizedContent.call(this, content);
+soydata.SanitizedUri = function() {
+  goog.soy.data.SanitizedContent.call(this);  // Throws an exception.
 };
-goog.inherits(soydata.SanitizedUri, soydata.SanitizedContent);
+goog.inherits(soydata.SanitizedUri, goog.soy.data.SanitizedContent);
 
 /** @override */
 soydata.SanitizedUri.prototype.contentKind = soydata.SanitizedContentKind.URI;
 
 
 /**
- * Content of type {@link soydata.SanitizedContentKind.HTML_ATTRIBUTE}.
- * @param {string} content An attribute name and value, such as
- *     {@code dir="ltr"}.
+ * Content of type {@link soydata.SanitizedContentKind.ATTRIBUTES}.
+ *
+ * The content should be safely embeddable within an open tag, such as a
+ * key="value" pair.
+ *
  * @constructor
- * @extends {soydata.SanitizedContent}
+ * @extends {goog.soy.data.SanitizedContent}
  */
-soydata.SanitizedHtmlAttribute = function(content) {
-  soydata.SanitizedContent.call(this, content);
+soydata.SanitizedHtmlAttribute = function() {
+  goog.soy.data.SanitizedContent.call(this);  // Throws an exception.
 };
-goog.inherits(soydata.SanitizedHtmlAttribute, soydata.SanitizedContent);
+goog.inherits(soydata.SanitizedHtmlAttribute, goog.soy.data.SanitizedContent);
 
 /** @override */
 soydata.SanitizedHtmlAttribute.prototype.contentKind =
-    soydata.SanitizedContentKind.HTML_ATTRIBUTE;
+    soydata.SanitizedContentKind.ATTRIBUTES;
+
+
+/**
+ * Content of type {@link soydata.SanitizedContentKind.CSS}.
+ *
+ * The content is non-attacker-exploitable CSS, such as {@code color:#c3d9ff}.
+ *
+ * @constructor
+ * @extends {goog.soy.data.SanitizedContent}
+ */
+soydata.SanitizedCss = function() {
+  goog.soy.data.SanitizedContent.call(this);  // Throws an exception.
+};
+goog.inherits(soydata.SanitizedCss, goog.soy.data.SanitizedContent);
+
+/** @override */
+soydata.SanitizedCss.prototype.contentKind =
+    soydata.SanitizedContentKind.CSS;
+
+
+/**
+ * Unsanitized plain text string.
+ *
+ * While all strings are effectively safe to use as a plain text, there are no
+ * guarantees about safety in any other context such as HTML. This is
+ * sometimes used to mark that should never be used unescaped.
+ *
+ * @param {*} content Plain text with no guarantees.
+ * @constructor
+ * @extends {goog.soy.data.SanitizedContent}
+ */
+soydata.UnsanitizedText = function(content) {
+  /** @override */
+  this.content = String(content);
+};
+goog.inherits(soydata.UnsanitizedText, goog.soy.data.SanitizedContent);
+
+/** @override */
+soydata.UnsanitizedText.prototype.contentKind =
+    soydata.SanitizedContentKind.TEXT;
+
+
+/**
+ * Creates a factory for SanitizedContent types.
+ *
+ * This is a hack so that the soydata.VERY_UNSAFE.ordainSanitized* can
+ * instantiate Sanitized* classes, without making the Sanitized* constructors
+ * publicly usable. Requiring all construction to use the VERY_UNSAFE names
+ * helps callers and their reviewers easily tell that creating SanitizedContent
+ * is not always safe and calls for careful review.
+ *
+ * @param {function(new: T, string)} ctor A constructor.
+ * @return {!function(*): T} A factory that takes content and returns a
+ *     new instance.
+ * @template T
+ * @private
+ */
+soydata.$$makeSanitizedContentFactory_ = function(ctor) {
+  /** @constructor */
+  function InstantiableCtor() {}
+  InstantiableCtor.prototype = ctor.prototype;
+  return function(content) {
+    var result = new InstantiableCtor();
+    result.content = String(content);
+    return result;
+  };
+};
+
+
+// -----------------------------------------------------------------------------
+// Sanitized content ordainers. Please use these with extreme caution (with the
+// exception of markUnsanitizedText). A good recommendation is to limit usage
+// of these to just a handful of files in your source tree where usages can be
+// carefully audited.
+
+
+/**
+ * Protects a string from being used in an noAutoescaped context.
+ *
+ * This is useful for content where there is significant risk of accidental
+ * unescaped usage in a Soy template. A great case is for user-controlled
+ * data that has historically been a source of vulernabilities.
+ *
+ * @param {*} content Text to protect.
+ * @return {!soydata.UnsanitizedText} A wrapper that is rejected by the
+ *     Soy noAutoescape print directive.
+ */
+soydata.markUnsanitizedText = function(content) {
+  return new soydata.UnsanitizedText(content);
+};
+
+
+/**
+ * Takes a leap of faith that the provided content is "safe" HTML.
+ *
+ * @param {*} content A string of HTML that can safely be embedded in
+ *     a PCDATA context in your app. If you would be surprised to find that an
+ *     HTML sanitizer produced {@code s} (e.g. it runs code or fetches bad URLs)
+ *     and you wouldn't write a template that produces {@code s} on security or
+ *     privacy grounds, then don't pass {@code s} here.
+ * @return {!soydata.SanitizedHtml} Sanitized content wrapper that
+ *     indicates to Soy not to escape when printed as HTML.
+ */
+soydata.VERY_UNSAFE.ordainSanitizedHtml =
+    soydata.$$makeSanitizedContentFactory_(soydata.SanitizedHtml);
+
+
+/**
+ * Takes a leap of faith that the provided content is "safe" (non-attacker-
+ * controlled, XSS-free) Javascript.
+ *
+ * @param {*} content Javascript source that when evaluated does not
+ *     execute any attacker-controlled scripts.
+ * @return {!soydata.SanitizedJs} Sanitized content wrapper that indicates to
+ *     Soy not to escape when printed as Javascript source.
+ */
+soydata.VERY_UNSAFE.ordainSanitizedJs =
+    soydata.$$makeSanitizedContentFactory_(soydata.SanitizedJs);
+
+
+// TODO: This function is probably necessary, either externally or internally
+// as an implementation detail. Generally, plain text will always work here,
+// as there's no harm to unescaping the string and then re-escaping when
+// finally printed.
+/**
+ * Takes a leap of faith that the provided content can be safely embedded in
+ * a Javascript string without re-esacping.
+ *
+ * @param {*} content Content that can be safely inserted as part of a
+ *     single- or double-quoted string without terminating the string.
+ * @return {!soydata.SanitizedJsStrChars} Sanitized content wrapper that
+ *     indicates to Soy not to escape when printed in a JS string.
+ */
+soydata.VERY_UNSAFE.ordainSanitizedJsStrChars =
+    soydata.$$makeSanitizedContentFactory_(soydata.SanitizedJsStrChars);
+
+
+/**
+ * Takes a leap of faith that the provided content is "safe" to use as a URI
+ * in a Soy template.
+ *
+ * This creates a Soy SanitizedContent object which indicates to Soy there is
+ * no need to escape it when printed as a URI (e.g. in an href or src
+ * attribute), such as if it's already been encoded or  if it's a Javascript:
+ * URI.
+ *
+ * @param {*} content A chunk of URI that the caller knows is safe to
+ *     emit in a template.
+ * @return {!soydata.SanitizedUri} Sanitized content wrapper that indicates to
+ *     Soy not to escape or filter when printed in URI context.
+ */
+soydata.VERY_UNSAFE.ordainSanitizedUri =
+    soydata.$$makeSanitizedContentFactory_(soydata.SanitizedUri);
+
+
+/**
+ * Takes a leap of faith that the provided content is "safe" to use as an
+ * HTML attribute.
+ *
+ * @param {*} content An attribute name and value, such as
+ *     {@code dir="ltr"}.
+ * @return {!soydata.SanitizedHtmlAttribute} Sanitized content wrapper that
+ *     indicates to Soy not to escape when printed as an HTML attribute.
+ */
+soydata.VERY_UNSAFE.ordainSanitizedHtmlAttribute =
+    soydata.$$makeSanitizedContentFactory_(soydata.SanitizedHtmlAttribute);
+
+
+/**
+ * Takes a leap of faith that the provided content is "safe" to use as CSS
+ * in a style attribute or block.
+ *
+ * @param {*} content CSS, such as {@code color:#c3d9ff}.
+ * @return {!soydata.SanitizedCss} Sanitized CSS wrapper that indicates to
+ *     Soy there is no need to escape or filter when printed in CSS context.
+ */
+soydata.VERY_UNSAFE.ordainSanitizedCss =
+    soydata.$$makeSanitizedContentFactory_(soydata.SanitizedCss);
 
 
 // -----------------------------------------------------------------------------
@@ -15903,32 +18551,45 @@ soy.renderAsElement = function(
 
 
 /**
- * Builds an augmented data object to be passed when a template calls another,
- * and needs to pass both original data and additional params. The returned
- * object will contain both the original data and the additional params. If the
- * same key appears in both, then the value from the additional params will be
- * visible, while the value from the original data will be hidden. The original
- * data object will be used, but not modified.
+ * Builds an augmented map. The returned map will contain mappings from both
+ * the base map and the additional map. If the same key appears in both, then
+ * the value from the additional map will be visible, while the value from the
+ * base map will be hidden. The base map will be used, but not modified.
  *
- * @param {!Object} origData The original data to pass.
- * @param {Object} additionalParams The additional params to pass.
- * @return {Object} An augmented data object containing both the original data
- *     and the additional params.
+ * @param {!Object} baseMap The original map to augment.
+ * @param {!Object} additionalMap A map containing the additional mappings.
+ * @return {!Object} An augmented map containing both the original and
+ *     additional mappings.
  */
-soy.$$augmentData = function(origData, additionalParams) {
+soy.$$augmentMap = function(baseMap, additionalMap) {
 
-  // Create a new object whose '__proto__' field is set to origData.
+  // Create a new map whose '__proto__' field is set to baseMap.
   /** @constructor */
   function TempCtor() {}
-  TempCtor.prototype = origData;
-  var newData = new TempCtor();
+  TempCtor.prototype = baseMap;
+  var augmentedMap = new TempCtor();
 
-  // Add the additional params to the new object.
-  for (var key in additionalParams) {
-    newData[key] = additionalParams[key];
+  // Add the additional mappings to the new map.
+  for (var key in additionalMap) {
+    augmentedMap[key] = additionalMap[key];
   }
 
-  return newData;
+  return augmentedMap;
+};
+
+
+/**
+ * Checks that the given map key is a string.
+ * @param {*} key Key to check.
+ * @return {string} The given key.
+ */
+soy.$$checkMapKey = function(key) {
+  if ((typeof key) != 'string') {
+    throw Error(
+        'Map literal\'s key expression must evaluate to string' +
+        ' (encountered type "' + (typeof key) + '").');
+  }
+  return key;
 };
 
 
@@ -15964,13 +18625,13 @@ soy.$$getMapKeys = function(map) {
  *
  * @consistentIdGenerator
  */
-soy.$$getDelegateId = function(delTemplateName) {
+soy.$$getDelTemplateId = function(delTemplateName) {
   return delTemplateName;
 };
 
 
 /**
- * Map from registered delegate template id/name to the priority of the
+ * Map from registered delegate template key to the priority of the
  * implementation.
  * @type {Object}
  * @private
@@ -15978,7 +18639,7 @@ soy.$$getDelegateId = function(delTemplateName) {
 soy.$$DELEGATE_REGISTRY_PRIORITIES_ = {};
 
 /**
- * Map from registered delegate template id/name to the implementation function.
+ * Map from registered delegate template key to the implementation function.
  * @type {Object}
  * @private
  */
@@ -15986,17 +18647,21 @@ soy.$$DELEGATE_REGISTRY_FUNCTIONS_ = {};
 
 
 /**
- * Registers a delegate implementation. If the same delegate template id/name
- * has been registered previously, then priority values are compared and only
- * the higher priority implementation is stored (if priorities are equal, an
- * error is thrown).
+ * Registers a delegate implementation. If the same delegate template key (id
+ * and variant) has been registered previously, then priority values are
+ * compared and only the higher priority implementation is stored (if
+ * priorities are equal, an error is thrown).
  *
- * @param {string} delTemplateId The delegate template id/name to register.
+ * @param {string} delTemplateId The delegate template id.
+ * @param {string} delTemplateVariant The delegate template variant (can be
+ *     empty string).
  * @param {number} delPriority The implementation's priority value.
  * @param {Function} delFn The implementation function.
  */
-soy.$$registerDelegateFn = function(delTemplateId, delPriority, delFn) {
-  var mapKey = 'key_' + delTemplateId;
+soy.$$registerDelegateFn = function(
+    delTemplateId, delTemplateVariant, delPriority, delFn) {
+
+  var mapKey = 'key_' + delTemplateId + ':' + delTemplateVariant;
   var currPriority = soy.$$DELEGATE_REGISTRY_PRIORITIES_[mapKey];
   if (currPriority === undefined || delPriority > currPriority) {
     // Registering new or higher-priority function: replace registry entry.
@@ -16005,8 +18670,8 @@ soy.$$registerDelegateFn = function(delTemplateId, delPriority, delFn) {
   } else if (delPriority == currPriority) {
     // Registering same-priority function: error.
     throw Error(
-        'Encountered two active delegates with same priority (id/name "' +
-        delTemplateId + '").');
+        'Encountered two active delegates with the same priority ("' +
+            delTemplateId + ':' + delTemplateVariant + '").');
   } else {
     // Registering lower-priority function: do nothing.
   }
@@ -16015,16 +18680,38 @@ soy.$$registerDelegateFn = function(delTemplateId, delPriority, delFn) {
 
 /**
  * Retrieves the (highest-priority) implementation that has been registered for
- * a given delegate template id/name. If no implementation has been registered
- * for the id/name, then returns an implementation that is equivalent to an
- * empty template (i.e. rendered output would be empty string).
+ * a given delegate template key (id and variant). If no implementation has
+ * been registered for the key, then the fallback is the same id with empty
+ * variant. If the fallback is also not registered, and allowsEmptyDefault is
+ * true, then returns an implementation that is equivalent to an empty template
+ * (i.e. rendered output would be empty string).
  *
- * @param {string} delTemplateId The delegate template id/name to get.
+ * @param {string} delTemplateId The delegate template id.
+ * @param {string} delTemplateVariant The delegate template variant (can be
+ *     empty string).
+ * @param {boolean} allowsEmptyDefault Whether to default to the empty template
+ *     function if there's no active implementation.
  * @return {Function} The retrieved implementation function.
  */
-soy.$$getDelegateFn = function(delTemplateId) {
-  var delFn = soy.$$DELEGATE_REGISTRY_FUNCTIONS_['key_' + delTemplateId];
-  return delFn ? delFn : soy.$$EMPTY_TEMPLATE_FN_;
+soy.$$getDelegateFn = function(
+    delTemplateId, delTemplateVariant, allowsEmptyDefault) {
+
+  var delFn = soy.$$DELEGATE_REGISTRY_FUNCTIONS_[
+      'key_' + delTemplateId + ':' + delTemplateVariant];
+  if (! delFn && delTemplateVariant != '') {
+    // Fallback to empty variant.
+    delFn = soy.$$DELEGATE_REGISTRY_FUNCTIONS_['key_' + delTemplateId + ':'];
+  }
+
+  if (delFn) {
+    return delFn;
+  } else if (allowsEmptyDefault) {
+    return soy.$$EMPTY_TEMPLATE_FN_;
+  } else {
+    throw Error(
+        'Found no active impl for delegate call to "' + delTemplateId + ':' +
+            delTemplateVariant + '" (and not allowemptydefault="true").');
+  }
 };
 
 
@@ -16048,21 +18735,44 @@ soy.$$EMPTY_TEMPLATE_FN_ = function(opt_data, opt_sb, opt_ijData) {
 
 
 /**
- * Escapes HTML special characters in a string.  Escapes double quote '"' in
+ * Escapes HTML special characters in a string. Escapes double quote '"' in
  * addition to '&', '<', and '>' so that a string can be included in an HTML
  * tag attribute value within double quotes.
  * Will emit known safe HTML as-is.
  *
- * @param {*} value The string-like value to be escaped.  May not be a string,
+ * @param {*} value The string-like value to be escaped. May not be a string,
  *     but the value will be coerced to a string.
  * @return {string} An escaped version of value.
  */
 soy.$$escapeHtml = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
+  // TODO: Perhaps we should just ignore the contentKind property and instead
+  // look only at the constructor.
+  if (value && value.contentKind &&
+      value.contentKind === goog.soy.data.SanitizedContentKind.HTML) {
+    goog.asserts.assert(
+        value.constructor === soydata.SanitizedHtml);
     return value.content;
   }
   return soy.esc.$$escapeHtmlHelper(value);
+};
+
+
+/**
+ * Strips unsafe tags to convert a string of untrusted HTML into HTML that
+ * is safe to embed.
+ *
+ * @param {*} value The string-like value to be escaped. May not be a string,
+ *     but the value will be coerced to a string.
+ * @return {string} A sanitized and normalized version of value.
+ */
+soy.$$cleanHtml = function(value) {
+  if (value && value.contentKind &&
+      value.contentKind === goog.soy.data.SanitizedContentKind.HTML) {
+    goog.asserts.assert(
+        value.constructor === soydata.SanitizedHtml);
+    return value.content;
+  }
+  return soy.$$stripHtmlTags(value, soy.esc.$$SAFE_TAG_WHITELIST_);
 };
 
 
@@ -16071,7 +18781,7 @@ soy.$$escapeHtml = function(value) {
  * RCDATA.
  * <p>
  * Escapes HTML special characters so that the value will not prematurely end
- * the body of a tag like {@code <textarea>} or {@code <title>}.  RCDATA tags
+ * the body of a tag like {@code <textarea>} or {@code <title>}. RCDATA tags
  * cannot contain other HTML entities, so it is not strictly necessary to escape
  * HTML special characters except when part of that text looks like an HTML
  * entity or like a close tag : {@code </textarea>}.
@@ -16080,13 +18790,15 @@ soy.$$escapeHtml = function(value) {
  * contain an innocuous {@code </textarea>} don't prematurely end an RCDATA
  * element.
  *
- * @param {*} value The string-like value to be escaped.  May not be a string,
+ * @param {*} value The string-like value to be escaped. May not be a string,
  *     but the value will be coerced to a string.
  * @return {string} An escaped version of value.
  */
 soy.$$escapeHtmlRcdata = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
+  if (value && value.contentKind &&
+      value.contentKind === goog.soy.data.SanitizedContentKind.HTML) {
+    goog.asserts.assert(
+        value.constructor === soydata.SanitizedHtml);
     return soy.esc.$$normalizeHtmlHelper(value.content);
   }
   return soy.esc.$$escapeHtmlHelper(value);
@@ -16094,30 +18806,137 @@ soy.$$escapeHtmlRcdata = function(value) {
 
 
 /**
- * Removes HTML tags from a string of known safe HTML so it can be used as an
- * attribute value.
- *
- * @param {*} value The HTML to be escaped.  May not be a string, but the
- *     value will be coerced to a string.
- * @return {string} A representation of value without tags, HTML comments, or
- *     other content.
+ * Matches any/only HTML5 void elements' start tags.
+ * See http://www.w3.org/TR/html-markup/syntax.html#syntax-elements
+ * @type {RegExp}
+ * @private
  */
-soy.$$stripHtmlTags = function(value) {
-  return String(value).replace(soy.esc.$$HTML_TAG_REGEX_, '');
+soy.$$HTML5_VOID_ELEMENTS_ = new RegExp(
+    '^<(?:area|base|br|col|command|embed|hr|img|input' +
+    '|keygen|link|meta|param|source|track|wbr)\\b');
+
+
+/**
+ * Removes HTML tags from a string of known safe HTML.
+ * If opt_tagWhitelist is not specified or is empty, then
+ * the result can be used as an attribute value.
+ *
+ * @param {*} value The HTML to be escaped. May not be a string, but the
+ *     value will be coerced to a string.
+ * @param {Object.<string, number>=} opt_tagWhitelist Has an own property whose
+ *     name is a lower-case tag name and whose value is {@code 1} for
+ *     each element that is allowed in the output.
+ * @return {string} A representation of value without disallowed tags,
+ *     HTML comments, or other non-text content.
+ */
+soy.$$stripHtmlTags = function(value, opt_tagWhitelist) {
+  if (!opt_tagWhitelist) {
+    // If we have no white-list, then use a fast track which elides all tags.
+    return String(value).replace(soy.esc.$$HTML_TAG_REGEX_, '')
+        // This is just paranoia since callers should normalize the result
+        // anyway, but if they didn't, it would be necessary to ensure that
+        // after the first replace non-tag uses of < do not recombine into
+        // tags as in "<<foo>script>alert(1337)</<foo>script>".
+        .replace(soy.esc.$$LT_REGEX_, '&lt;');
+  }
+
+  // Escapes '[' so that we can use [123] below to mark places where tags
+  // have been removed.
+  var html = String(value).replace(/\[/g, '&#91;');
+
+  // Consider all uses of '<' and replace whitelisted tags with markers like
+  // [1] which are indices into a list of approved tag names.
+  // Replace all other uses of < and > with entities.
+  var tags = [];
+  html = html.replace(
+    soy.esc.$$HTML_TAG_REGEX_,
+    function(tok, tagName) {
+      if (tagName) {
+        tagName = tagName.toLowerCase();
+        if (opt_tagWhitelist.hasOwnProperty(tagName) &&
+            opt_tagWhitelist[tagName]) {
+          var start = tok.charAt(1) === '/' ? '</' : '<';
+          var index = tags.length;
+          tags[index] = start + tagName + '>';
+          return '[' + index + ']';
+        }
+      }
+      return '';
+    });
+
+  // Escape HTML special characters. Now there are no '<' in html that could
+  // start a tag.
+  html = soy.esc.$$normalizeHtmlHelper(html);
+
+  var finalCloseTags = soy.$$balanceTags_(tags);
+
+  // Now html contains no tags or less-than characters that could become
+  // part of a tag via a replacement operation and tags only contains
+  // approved tags.
+  // Reinsert the white-listed tags.
+  html = html.replace(
+       /\[(\d+)\]/g, function(_, index) { return tags[index]; });
+
+  // Close any still open tags.
+  // This prevents unclosed formatting elements like <ol> and <table> from
+  // breaking the layout of containing HTML.
+  return html + finalCloseTags;
+};
+
+
+/**
+ * Throw out any close tags that don't correspond to start tags.
+ * If {@code <table>} is used for formatting, embedded HTML shouldn't be able
+ * to use a mismatched {@code </table>} to break page layout.
+ *
+ * @param {Array.<string>} tags an array of tags that will be modified in place
+ *    include tags, the empty string, or concatenations of empty tags.
+ * @return {string} zero or more closed tags that close all elements that are
+ *    opened in tags but not closed.
+ * @private
+ */
+soy.$$balanceTags_ = function(tags) {
+  var open = [];
+  for (var i = 0, n = tags.length; i < n; ++i) {
+    var tag = tags[i];
+    if (tag.charAt(1) === '/') {
+      var openTagIndex = open.length - 1;
+      // NOTE: This is essentially lastIndexOf, but it's not supported in IE.
+      while (openTagIndex >= 0 && open[openTagIndex] != tag) {
+        openTagIndex--;
+      }
+      if (openTagIndex < 0) {
+        tags[i] = '';  // Drop close tag.
+      } else {
+        tags[i] = open.slice(openTagIndex).reverse().join('');
+        open.length = openTagIndex;
+      }
+    } else if (!soy.$$HTML5_VOID_ELEMENTS_.test(tag)) {
+      open.push('</' + tag.substring(1));
+    }
+  }
+  return open.reverse().join('');
 };
 
 
 /**
  * Escapes HTML special characters in an HTML attribute value.
  *
- * @param {*} value The HTML to be escaped.  May not be a string, but the
+ * @param {*} value The HTML to be escaped. May not be a string, but the
  *     value will be coerced to a string.
  * @return {string} An escaped version of value.
  */
 soy.$$escapeHtmlAttribute = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
-    return soy.esc.$$normalizeHtmlHelper(soy.$$stripHtmlTags(value.content));
+  if (value && value.contentKind) {
+    // NOTE: We don't accept ATTRIBUTES here because ATTRIBUTES is
+    // actually not the attribute value context, but instead k/v pairs.
+    if (value.contentKind === goog.soy.data.SanitizedContentKind.HTML) {
+      // NOTE: After removing tags, we also escape quotes ("normalize") so that
+      // the HTML can be embedded in attribute context.
+      goog.asserts.assert(
+          value.constructor === soydata.SanitizedHtml);
+      return soy.esc.$$normalizeHtmlHelper(soy.$$stripHtmlTags(value.content));
+    }
   }
   return soy.esc.$$escapeHtmlHelper(value);
 };
@@ -16127,15 +18946,18 @@ soy.$$escapeHtmlAttribute = function(value) {
  * Escapes HTML special characters in a string including space and other
  * characters that can end an unquoted HTML attribute value.
  *
- * @param {*} value The HTML to be escaped.  May not be a string, but the
+ * @param {*} value The HTML to be escaped. May not be a string, but the
  *     value will be coerced to a string.
  * @return {string} An escaped version of value.
  */
 soy.$$escapeHtmlAttributeNospace = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML) {
-    return soy.esc.$$normalizeHtmlNospaceHelper(
-        soy.$$stripHtmlTags(value.content));
+  if (value && value.contentKind) {
+    if (value.contentKind === goog.soy.data.SanitizedContentKind.HTML) {
+      goog.asserts.assert(value.constructor ===
+          soydata.SanitizedHtml);
+      return soy.esc.$$normalizeHtmlNospaceHelper(
+          soy.$$stripHtmlTags(value.content));
+    }
   }
   return soy.esc.$$escapeHtmlNospaceHelper(value);
 };
@@ -16144,29 +18966,48 @@ soy.$$escapeHtmlAttributeNospace = function(value) {
 /**
  * Filters out strings that cannot be a substring of a valid HTML attribute.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * Note the input is expected to be key=value pairs.
+ *
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} A valid HTML attribute name part or name/value pair.
  *     {@code "zSoyz"} if the input is invalid.
  */
-soy.$$filterHtmlAttribute = function(value) {
-  if (typeof value === 'object' && value &&
-      value.contentKind === soydata.SanitizedContentKind.HTML_ATTRIBUTE) {
-    return value.content.replace(/=([^"']*)$/, '="$1"');
+soy.$$filterHtmlAttributes = function(value) {
+  // NOTE: Explicitly no support for SanitizedContentKind.HTML, since that is
+  // meaningless in this context, which is generally *between* html attributes.
+  if (value &&
+      value.contentKind === goog.soy.data.SanitizedContentKind.ATTRIBUTES) {
+    goog.asserts.assert(value.constructor ===
+        soydata.SanitizedHtmlAttribute);
+    // Add a space at the end to ensure this won't get merged into following
+    // attributes, unless the interpretation is unambiguous (ending with quotes
+    // or a space).
+    return value.content.replace(/([^"'\s])$/, '$1 ');
   }
-  return soy.esc.$$filterHtmlAttributeHelper(value);
+  // TODO: Dynamically inserting attributes that aren't marked as trusted is
+  // probably unnecessary.  Any filtering done here will either be inadequate
+  // for security or not flexible enough.  Having clients use kind="attributes"
+  // in parameters seems like a wiser idea.
+  return soy.esc.$$filterHtmlAttributesHelper(value);
 };
 
 
 /**
  * Filters out strings that cannot be a substring of a valid HTML element name.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} A valid HTML element name part.
  *     {@code "zSoyz"} if the input is invalid.
  */
 soy.$$filterHtmlElementName = function(value) {
+  // NOTE: We don't accept any SanitizedContent here. HTML indicates valid
+  // PCDATA, not tag names. A sloppy developer shouldn't be able to cause an
+  // exploit:
+  // ... {let userInput}script src=http://evil.com/evil.js{/let} ...
+  // ... {param tagName kind="html"}{$userInput}{/param} ...
+  // ... <{$tagName}>Hello World</{$tagName}>
   return soy.esc.$$filterHtmlElementNameHelper(value);
 };
 
@@ -16175,7 +19016,7 @@ soy.$$filterHtmlElementName = function(value) {
  * Escapes characters in the value to make it valid content for a JS string
  * literal.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} An escaped version of value.
  * @deprecated
@@ -16189,13 +19030,17 @@ soy.$$escapeJs = function(value) {
  * Escapes characters in the value to make it valid content for a JS string
  * literal.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} An escaped version of value.
  */
 soy.$$escapeJsString = function(value) {
-  if (typeof value === 'object' &&
-      value.contentKind === soydata.SanitizedContentKind.JS_STR_CHARS) {
+  if (value &&
+      value.contentKind === goog.soy.data.SanitizedContentKind.JS_STR_CHARS) {
+    // TODO: It might still be worthwhile to normalize it to remove
+    // unescaped quotes, null, etc: replace(/(?:^|[^\])['"]/g, '\\$
+    goog.asserts.assert(value.constructor ===
+        soydata.SanitizedJsStrChars);
     return value.content;
   }
   return soy.esc.$$escapeJsStringHelper(value);
@@ -16205,7 +19050,7 @@ soy.$$escapeJsString = function(value) {
 /**
  * Encodes a value as a JavaScript literal.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} A JavaScript code representation of the input.
  */
@@ -16220,6 +19065,11 @@ soy.$$escapeJsValue = function(value) {
     // distinct undefined value.
     return ' null ';
   }
+  if (value.contentKind == goog.soy.data.SanitizedContentKind.JS) {
+    goog.asserts.assert(value.constructor ===
+        soydata.SanitizedJs);
+    return value.content;
+  }
   switch (typeof value) {
     case 'boolean': case 'number':
       return ' ' + value + ' ';
@@ -16233,7 +19083,7 @@ soy.$$escapeJsValue = function(value) {
  * Escapes characters in the string to make it valid content for a JS regular
  * expression literal.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} An escaped version of value.
  */
@@ -16267,13 +19117,14 @@ soy.$$pctEncode_ = function(ch) {
 /**
  * Escapes a string so that it can be safely included in a URI.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} An escaped version of value.
  */
 soy.$$escapeUri = function(value) {
-  if (typeof value === 'object' &&
-      value.contentKind === soydata.SanitizedContentKind.URI) {
+  if (value && value.contentKind === goog.soy.data.SanitizedContentKind.URI) {
+    goog.asserts.assert(value.constructor ===
+        soydata.SanitizedUri);
     return soy.$$normalizeUri(value);
   }
   // Apostophes and parentheses are not matched by encodeURIComponent.
@@ -16292,7 +19143,7 @@ soy.$$escapeUri = function(value) {
 /**
  * Removes rough edges from a URI by escaping any raw HTML/JS string delimiters.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} An escaped version of value.
  */
@@ -16305,11 +19156,16 @@ soy.$$normalizeUri = function(value) {
  * Vets a URI's protocol and removes rough edges from a URI by escaping
  * any raw HTML/JS string delimiters.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} An escaped version of value.
  */
 soy.$$filterNormalizeUri = function(value) {
+  if (value && value.contentKind == goog.soy.data.SanitizedContentKind.URI) {
+    goog.asserts.assert(value.constructor ===
+        soydata.SanitizedUri);
+    return soy.$$normalizeUri(value);
+  }
   return soy.esc.$$filterNormalizeUriHelper(value);
 };
 
@@ -16317,7 +19173,7 @@ soy.$$filterNormalizeUri = function(value) {
 /**
  * Escapes a string so it can safely be included inside a quoted CSS string.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} An escaped version of value.
  */
@@ -16329,16 +19185,43 @@ soy.$$escapeCssString = function(value) {
 /**
  * Encodes a value as a CSS identifier part, keyword, or quantity.
  *
- * @param {*} value The value to escape.  May not be a string, but the value
+ * @param {*} value The value to escape. May not be a string, but the value
  *     will be coerced to a string.
  * @return {string} A safe CSS identifier part, keyword, or quanitity.
  */
 soy.$$filterCssValue = function(value) {
+  if (value && value.contentKind === goog.soy.data.SanitizedContentKind.CSS) {
+    goog.asserts.assert(value.constructor ===
+        soydata.SanitizedCss);
+    return value.content;
+  }
   // Uses == to intentionally match null and undefined for Java compatibility.
   if (value == null) {
     return '';
   }
   return soy.esc.$$filterCssValueHelper(value);
+};
+
+
+/**
+ * Sanity-checks noAutoescape input for explicitly tainted content.
+ *
+ * SanitizedContentKind.TEXT is used to explicitly mark input that was never
+ * meant to be used unescaped.
+ *
+ * @param {*} value The value to filter.
+ * @return {string} The value, that we dearly hope will not cause an attack.
+ */
+soy.$$filterNoAutoescape = function(value) {
+  if (value && value.contentKind === goog.soy.data.SanitizedContentKind.TEXT) {
+    // Fail in development mode.
+    goog.asserts.fail(
+        'Tainted SanitizedContentKind.TEXT for |noAutoescape: `%s`',
+        [value.content]);
+    // Return innocuous data in production.
+    return 'zSoyz';
+  }
+  return String(value);
 };
 
 
@@ -16485,7 +19368,7 @@ soy.$$bidiTextDir = function(text, opt_isHtml) {
 
 
 /**
- * Returns "dir=ltr" or "dir=rtl", depending on text's estimated
+ * Returns 'dir="ltr"' or 'dir="rtl"', depending on text's estimated
  * directionality, if it is not the same as bidiGlobalDir.
  * Otherwise, returns the empty string.
  * If opt_isHtml, makes sure to ignore the LTR nature of the mark-up and escapes
@@ -16495,12 +19378,12 @@ soy.$$bidiTextDir = function(text, opt_isHtml) {
  * @param {string} text The text whose directionality is to be estimated.
  * @param {boolean=} opt_isHtml Whether text is HTML/HTML-escaped.
  *     Default: false.
- * @return {soydata.SanitizedHtmlAttribute} "dir=rtl" for RTL text in non-RTL
- *     context; "dir=ltr" for LTR text in non-LTR context;
+ * @return {soydata.SanitizedHtmlAttribute} 'dir="rtl"' for RTL text in non-RTL
+ *     context; 'dir="ltr"' for LTR text in non-LTR context;
  *     else, the empty string.
  */
 soy.$$bidiDirAttr = function(bidiGlobalDir, text, opt_isHtml) {
-  return new soydata.SanitizedHtmlAttribute(
+  return soydata.VERY_UNSAFE.ordainSanitizedHtmlAttribute(
       soy.$$getBidiFormatterInstance_(bidiGlobalDir).dirAttr(text, opt_isHtml));
 };
 
@@ -16527,8 +19410,8 @@ soy.$$bidiMarkAfter = function(bidiGlobalDir, text, opt_isHtml) {
 
 
 /**
- * Returns str wrapped in a <span dir=ltr|rtl> according to its directionality -
- * but only if that is neither neutral nor the same as the global context.
+ * Returns str wrapped in a <span dir="ltr|rtl"> according to its directionality
+ * - but only if that is neither neutral nor the same as the global context.
  * Otherwise, returns str unchanged.
  * Always treats str as HTML/HTML-escaped, i.e. ignores mark-up and escapes when
  * estimating str's directionality.
@@ -16871,7 +19754,7 @@ soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_URI_ = /^(?:(?:https?|mailto):|[^&:\/?#]*(
  * @type RegExp
  * @private
  */
-soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTE_ = /^(?!style|on|action|archive|background|cite|classid|codebase|data|dsync|href|longdesc|src|usemap)(?:[a-z0-9_$:-]*)$/i;
+soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTES_ = /^(?!style|on|action|archive|background|cite|classid|codebase|data|dsync|href|longdesc|src|usemap)(?:[a-z0-9_$:-]*)$/i;
 
 /**
  * A pattern that vets values produced by the named directives.
@@ -16999,7 +19882,7 @@ soy.esc.$$filterNormalizeUriHelper = function(value) {
   var str = String(value);
   if (!soy.esc.$$FILTER_FOR_FILTER_NORMALIZE_URI_.test(str)) {
     goog.asserts.fail('Bad value `%s` for |filterNormalizeUri', [str]);
-    return 'zSoyz';
+    return '#zSoyz';
   }
   return str.replace(
       soy.esc.$$MATCHER_FOR_NORMALIZE_URI__AND__FILTER_NORMALIZE_URI_,
@@ -17007,14 +19890,14 @@ soy.esc.$$filterNormalizeUriHelper = function(value) {
 };
 
 /**
- * A helper for the Soy directive |filterHtmlAttribute
+ * A helper for the Soy directive |filterHtmlAttributes
  * @param {*} value Can be of any type but will be coerced to a string.
  * @return {string} The escaped text.
  */
-soy.esc.$$filterHtmlAttributeHelper = function(value) {
+soy.esc.$$filterHtmlAttributesHelper = function(value) {
   var str = String(value);
-  if (!soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTE_.test(str)) {
-    goog.asserts.fail('Bad value `%s` for |filterHtmlAttribute', [str]);
+  if (!soy.esc.$$FILTER_FOR_FILTER_HTML_ATTRIBUTES_.test(str)) {
+    goog.asserts.fail('Bad value `%s` for |filterHtmlAttributes', [str]);
     return 'zSoyz';
   }
   return str;
@@ -17036,11 +19919,30 @@ soy.esc.$$filterHtmlElementNameHelper = function(value) {
 
 /**
  * Matches all tags, HTML comments, and DOCTYPEs in tag soup HTML.
+ * By removing these, and replacing any '<' or '>' characters with
+ * entities we guarantee that the result can be embedded into a
+ * an attribute without introducing a tag boundary.
  *
  * @type {RegExp}
  * @private
  */
-soy.esc.$$HTML_TAG_REGEX_ = /<(?:!|\/?[a-zA-Z])(?:[^>'"]|"[^"]*"|'[^']*')*>/g;
+soy.esc.$$HTML_TAG_REGEX_ = /<(?:!|\/?([a-zA-Z][a-zA-Z0-9:\-]*))(?:[^>'"]|"[^"]*"|'[^']*')*>/g;
+
+/**
+ * Matches all occurrences of '<'.
+ *
+ * @type {RegExp}
+ * @private
+ */
+soy.esc.$$LT_REGEX_ = /</g;
+
+/**
+ * Maps lower-case names of innocuous tags to 1.
+ *
+ * @type {Object.<string,number>}
+ * @private
+ */
+soy.esc.$$SAFE_TAG_WHITELIST_ = {'b': 1, 'br': 1, 'em': 1, 'i': 1, 's': 1, 'sub': 1, 'sup': 1, 'u': 1};
 
 // END GENERATED CODE
 // This file was automatically generated from emailpreview.soy.
@@ -17049,19 +19951,17 @@ soy.esc.$$HTML_TAG_REGEX_ = /<(?:!|\/?[a-zA-Z])(?:[^>'"]|"[^"]*"|'[^']*')*>/g;
 goog.provide('calendarmailer.soy.email');
 
 goog.require('soy');
-goog.require('soy.StringBuilder');
+goog.require('soydata');
 
 
 /**
  * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
+ * @param {(null|undefined)=} opt_ignored
  * @return {string}
  * @notypecheck
  */
-calendarmailer.soy.email.all = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="email-preview-title">Sample email</div><div class="email-preview-outer">Hello [name]<br>Your friendly calendar cleanup bot here. I\'ve noticed you are the owner of one or more recurring events that books a room at a particular time for the unending forseeable future. Here are some details of the recurring events you own:<br>[Event name] [Event time(s)] [Room name]<br>If you no longer need any of these rooms, please remove your event to free up the room for other users.<br>Regards, [Operator name]</div>');
-  return opt_sb ? '' : output.toString();
+calendarmailer.soy.email.all = function(opt_data, opt_ignored) {
+  return '<div class="email-preview-title">Sample email</div><div class="email-preview-outer">Hello [name]<br>Your friendly calendar cleanup bot here. I\'ve noticed you are the owner of one or more recurring events that books a room at a particular time for the unending forseeable future. Here are some details of the recurring events you own:<br>[Event name] [Event time(s)] [Room name]<br>If you no longer need any of these rooms, please remove your event to free up the room for other users.<br>Regards, [Operator name]</div>';
 };
 // Copyright 2011 The Closure Library Authors. All Rights Reserved.
 //
@@ -17081,7 +19981,8 @@ calendarmailer.soy.email.all = function(opt_data, opt_sb) {
  * @fileoverview Date/time formatting symbols for all locales.
  *
  * This file is autogenerated by script.  See
- * http://go/generate_datetime_constants.py using the --for_closure flag.
+ * http://go/generate_datetime_constants.py using --for_closure
+ * File generated from CLDR ver. 23
  *
  * To reduce the file size (which may cause issues in some JS
  * developing environments), this file will only contain locales
@@ -17093,6 +19994,9 @@ calendarmailer.soy.email.all = function(opt_data, opt_sb) {
  * to incorporate changes before we could correct CLDR. All manual
  * modification must be documented in this section, and should be
  * removed after those changes land to CLDR.
+ *
+ * May 9, 2013 - Manually added dot for italian era ('a.D.' vs. 'd.C')
+ * cldr bug #6062
  */
 
 goog.provide('goog.i18n.DateTimeSymbols');
@@ -17101,8 +20005,11 @@ goog.provide('goog.i18n.DateTimeSymbols_am');
 goog.provide('goog.i18n.DateTimeSymbols_ar');
 goog.provide('goog.i18n.DateTimeSymbols_bg');
 goog.provide('goog.i18n.DateTimeSymbols_bn');
+goog.provide('goog.i18n.DateTimeSymbols_br');
 goog.provide('goog.i18n.DateTimeSymbols_ca');
+goog.provide('goog.i18n.DateTimeSymbols_chr');
 goog.provide('goog.i18n.DateTimeSymbols_cs');
+goog.provide('goog.i18n.DateTimeSymbols_cy');
 goog.provide('goog.i18n.DateTimeSymbols_da');
 goog.provide('goog.i18n.DateTimeSymbols_de');
 goog.provide('goog.i18n.DateTimeSymbols_de_AT');
@@ -17119,6 +20026,7 @@ goog.provide('goog.i18n.DateTimeSymbols_en_US');
 goog.provide('goog.i18n.DateTimeSymbols_en_ZA');
 goog.provide('goog.i18n.DateTimeSymbols_es');
 goog.provide('goog.i18n.DateTimeSymbols_es_419');
+goog.provide('goog.i18n.DateTimeSymbols_es_ES');
 goog.provide('goog.i18n.DateTimeSymbols_et');
 goog.provide('goog.i18n.DateTimeSymbols_eu');
 goog.provide('goog.i18n.DateTimeSymbols_fa');
@@ -17129,6 +20037,7 @@ goog.provide('goog.i18n.DateTimeSymbols_fr_CA');
 goog.provide('goog.i18n.DateTimeSymbols_gl');
 goog.provide('goog.i18n.DateTimeSymbols_gsw');
 goog.provide('goog.i18n.DateTimeSymbols_gu');
+goog.provide('goog.i18n.DateTimeSymbols_haw');
 goog.provide('goog.i18n.DateTimeSymbols_he');
 goog.provide('goog.i18n.DateTimeSymbols_hi');
 goog.provide('goog.i18n.DateTimeSymbols_hr');
@@ -17148,6 +20057,7 @@ goog.provide('goog.i18n.DateTimeSymbols_ml');
 goog.provide('goog.i18n.DateTimeSymbols_mr');
 goog.provide('goog.i18n.DateTimeSymbols_ms');
 goog.provide('goog.i18n.DateTimeSymbols_mt');
+goog.provide('goog.i18n.DateTimeSymbols_nb');
 goog.provide('goog.i18n.DateTimeSymbols_nl');
 goog.provide('goog.i18n.DateTimeSymbols_no');
 goog.provide('goog.i18n.DateTimeSymbols_or');
@@ -17186,19 +20096,19 @@ goog.i18n.DateTimeSymbols_en_ISO = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
@@ -17208,6 +20118,8 @@ goog.i18n.DateTimeSymbols_en_ISO = {
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, y MMMM dd', 'y MMMM d', 'y MMM d', 'yyyy-MM-dd'],
   TIMEFORMATS: ['HH:mm:ss v', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} \'at\' {0}', '{1} \'at\' {0}',
+    '{1}, {0}', '{1}, {0}'],
   AVAILABLEFORMATS: {'Md': 'M/d', 'MMMMd': 'MMMM d', 'MMMd': 'MMM d'},
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
@@ -17223,19 +20135,19 @@ goog.i18n.DateTimeSymbols_af = {
   ERANAMES: ['voor Christus', 'na Christus'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januarie', 'Februarie', 'Maart', 'April', 'Mei', 'Junie', 'Julie',
-      'Augustus', 'September', 'Oktober', 'November', 'Desember'],
+    'Augustus', 'September', 'Oktober', 'November', 'Desember'],
   STANDALONEMONTHS: ['Januarie', 'Februarie', 'Maart', 'April', 'Mei', 'Junie',
-      'Julie', 'Augustus', 'September', 'Oktober', 'November', 'Desember'],
+    'Julie', 'Augustus', 'September', 'Oktober', 'November', 'Desember'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Okt', 'Nov', 'Des'],
+    'Okt', 'Nov', 'Des'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Okt', 'Nov', 'Des'],
+    'Aug', 'Sep', 'Okt', 'Nov', 'Des'],
   WEEKDAYS: ['Sondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrydag',
-      'Saterdag'],
+    'Saterdag'],
   STANDALONEWEEKDAYS: ['Sondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag',
-      'Vrydag', 'Saterdag'],
+    'Vrydag', 'Saterdag'],
   SHORTWEEKDAYS: ['So', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Sa'],
   STANDALONESHORTWEEKDAYS: ['So', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Sa'],
   NARROWWEEKDAYS: ['S', 'M', 'D', 'W', 'D', 'V', 'S'],
@@ -17243,8 +20155,9 @@ goog.i18n.DateTimeSymbols_af = {
   SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
   QUARTERS: ['1ste kwartaal', '2de kwartaal', '3de kwartaal', '4de kwartaal'],
   AMPMS: ['vm.', 'nm.'],
-  DATEFORMATS: ['EEEE dd MMMM y', 'dd MMMM y', 'dd MMM y', 'yyyy-MM-dd'],
+  DATEFORMATS: ['EEEE dd MMMM y', 'dd MMMM y', 'dd MMM y', 'y-MM-dd'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -17258,38 +20171,39 @@ goog.i18n.DateTimeSymbols_am = {
   ERAS: ['ዓ/ዓ', 'ዓ/ም'],
   ERANAMES: ['ዓመተ ዓለም', 'ዓመተ ምሕረት'],
   NARROWMONTHS: ['ጃ', 'ፌ', 'ማ', 'ኤ', 'ሜ', 'ጁ', 'ጁ', 'ኦ', 'ሴ',
-      'ኦ', 'ኖ', 'ዲ'],
+    'ኦ', 'ኖ', 'ዲ'],
   STANDALONENARROWMONTHS: ['ጃ', 'ፌ', 'ማ', 'ኤ', 'ሜ', 'ጁ', 'ጁ',
-      'ኦ', 'ሴ', 'ኦ', 'ኖ', 'ዲ'],
-  MONTHS: ['ጃንዩወሪ', 'ፌብሩወሪ', 'ማርች', 'ኤፕረል',
-      'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስት', 'ሴፕቴምበር',
-      'ኦክተውበር', 'ኖቬምበር', 'ዲሴምበር'],
+    'ኦ', 'ሴ', 'ኦ', 'ኖ', 'ዲ'],
+  MONTHS: ['ጃንዩወሪ', 'ፌብሩወሪ', 'ማርች', 'ኤፕሪል',
+    'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስት', 'ሴፕቴምበር',
+    'ኦክተውበር', 'ኖቬምበር', 'ዲሴምበር'],
   STANDALONEMONTHS: ['ጃንዩወሪ', 'ፌብሩወሪ', 'ማርች',
-      'ኤፕረል', 'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስት',
-      'ሴፕቴምበር', 'ኦክተውበር', 'ኖቬምበር',
-      'ዲሴምበር'],
-  SHORTMONTHS: ['ጃንዩ', 'ፌብሩ', 'ማርች', 'ኤፕረ', 'ሜይ',
-      'ጁን', 'ጁላይ', 'ኦገስ', 'ሴፕቴ', 'ኦክተ', 'ኖቬም',
-      'ዲሴም'],
-  STANDALONESHORTMONTHS: ['ጃንዩ', 'ፌብሩ', 'ማርች', 'ኤፕረ',
-      'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስ', 'ሴፕቴ', 'ኦክተ',
-      'ኖቬም', 'ዲሴም'],
+    'ኤፕሪል', 'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስት',
+    'ሴፕቴምበር', 'ኦክቶበር', 'ኖቬምበር',
+    'ዲሴምበር'],
+  SHORTMONTHS: ['ጃንዩ', 'ፌብሩ', 'ማርች', 'ኤፕሪ', 'ሜይ',
+    'ጁን', 'ጁላይ', 'ኦገስ', 'ሴፕቴ', 'ኦክተ', 'ኖቬም',
+    'ዲሴም'],
+  STANDALONESHORTMONTHS: ['ጃንዩ', 'ፌብሩ', 'ማርች', 'ኤፕሪ',
+    'ሜይ', 'ጁን', 'ጁላይ', 'ኦገስ', 'ሴፕቴ', 'ኦክቶ',
+    'ኖቬም', 'ዲሴም'],
   WEEKDAYS: ['እሑድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ',
-      'ዓርብ', 'ቅዳሜ'],
+    'ዓርብ', 'ቅዳሜ'],
   STANDALONEWEEKDAYS: ['እሑድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ',
-      'ሐሙስ', 'ዓርብ', 'ቅዳሜ'],
+    'ሐሙስ', 'ዓርብ', 'ቅዳሜ'],
   SHORTWEEKDAYS: ['እሑድ', 'ሰኞ', 'ማክሰ', 'ረቡዕ', 'ሐሙስ',
-      'ዓርብ', 'ቅዳሜ'],
+    'ዓርብ', 'ቅዳሜ'],
   STANDALONESHORTWEEKDAYS: ['እሑድ', 'ሰኞ', 'ማክሰ', 'ረቡዕ',
-      'ሐሙስ', 'ዓርብ', 'ቅዳሜ'],
+    'ሐሙስ', 'ዓርብ', 'ቅዳሜ'],
   NARROWWEEKDAYS: ['እ', 'ሰ', 'ማ', 'ረ', 'ሐ', 'ዓ', 'ቅ'],
   STANDALONENARROWWEEKDAYS: ['እ', 'ሰ', 'ማ', 'ረ', 'ሐ', 'ዓ', 'ቅ'],
-  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  SHORTQUARTERS: ['ሩብ1', 'ሩብ2', 'ሩብ3', 'ሩብ4'],
   QUARTERS: ['1ኛው ሩብ', 'ሁለተኛው ሩብ', '3ኛው ሩብ',
-      '4ኛው ሩብ'],
-  AMPMS: ['ጡዋት', 'ከሳዓት'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yyyy'],
+    '4ኛው ሩብ'],
+  AMPMS: ['ጥዋት', 'ከሰዓት'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/y'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -17300,42 +20214,44 @@ goog.i18n.DateTimeSymbols_am = {
  * Date/time formatting symbols for locale ar.
  */
 goog.i18n.DateTimeSymbols_ar = {
+  ZERODIGIT: 0x0660,
   ERAS: ['ق.م', 'م'],
   ERANAMES: ['قبل الميلاد', 'ميلادي'],
   NARROWMONTHS: ['ي', 'ف', 'م', 'أ', 'و', 'ن', 'ل', 'غ', 'س', 'ك',
-      'ب', 'د'],
+    'ب', 'د'],
   STANDALONENARROWMONTHS: ['ي', 'ف', 'م', 'أ', 'و', 'ن', 'ل', 'غ', 'س',
-      'ك', 'ب', 'د'],
+    'ك', 'ب', 'د'],
   MONTHS: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو',
-      'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر',
-      'نوفمبر', 'ديسمبر'],
+    'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر',
+    'نوفمبر', 'ديسمبر'],
   STANDALONEMONTHS: ['يناير', 'فبراير', 'مارس', 'أبريل',
-      'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر',
-      'أكتوبر', 'نوفمبر', 'ديسمبر'],
+    'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر',
+    'أكتوبر', 'نوفمبر', 'ديسمبر'],
   SHORTMONTHS: ['يناير', 'فبراير', 'مارس', 'أبريل',
-      'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر',
-      'أكتوبر', 'نوفمبر', 'ديسمبر'],
+    'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر',
+    'أكتوبر', 'نوفمبر', 'ديسمبر'],
   STANDALONESHORTMONTHS: ['يناير', 'فبراير', 'مارس',
-      'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس',
-      'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
+    'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس',
+    'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
   WEEKDAYS: ['الأحد', 'الاثنين', 'الثلاثاء',
-      'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+    'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
   STANDALONEWEEKDAYS: ['الأحد', 'الاثنين', 'الثلاثاء',
-      'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+    'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
   SHORTWEEKDAYS: ['الأحد', 'الاثنين', 'الثلاثاء',
-      'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+    'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
   STANDALONESHORTWEEKDAYS: ['الأحد', 'الاثنين', 'الثلاثاء',
-      'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+    'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
   NARROWWEEKDAYS: ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'],
   STANDALONENARROWWEEKDAYS: ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'],
   SHORTQUARTERS: ['الربع الأول', 'الربع الثاني',
-      'الربع الثالث', 'الربع الرابع'],
+    'الربع الثالث', 'الربع الرابع'],
   QUARTERS: ['الربع الأول', 'الربع الثاني',
-      'الربع الثالث', 'الربع الرابع'],
+    'الربع الثالث', 'الربع الرابع'],
   AMPMS: ['ص', 'م'],
-  DATEFORMATS: ['EEEE، d MMMM، y', 'd MMMM، y', 'dd‏/MM‏/yyyy',
-      'd‏/M‏/yyyy'],
-  TIMEFORMATS: ['zzzz h:mm:ss a', 'z h:mm:ss a', 'h:mm:ss a', 'h:mm a'],
+  DATEFORMATS: ['EEEE، d MMMM، y', 'd MMMM، y', 'dd‏/MM‏/y',
+    'd‏/M‏/y'],
+  TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 5,
   WEEKENDRANGE: [4, 5],
   FIRSTWEEKCUTOFFDAY: 4
@@ -17349,37 +20265,38 @@ goog.i18n.DateTimeSymbols_bg = {
   ERAS: ['пр. н. е.', 'от н. е.'],
   ERANAMES: ['пр.Хр.', 'сл.Хр.'],
   NARROWMONTHS: ['я', 'ф', 'м', 'а', 'м', 'ю', 'ю', 'а', 'с', 'о',
-      'н', 'д'],
+    'н', 'д'],
   STANDALONENARROWMONTHS: ['я', 'ф', 'м', 'а', 'м', 'ю', 'ю', 'а', 'с',
-      'о', 'н', 'д'],
+    'о', 'н', 'д'],
   MONTHS: ['януари', 'февруари', 'март', 'април',
-      'май', 'юни', 'юли', 'август', 'септември',
-      'октомври', 'ноември', 'декември'],
+    'май', 'юни', 'юли', 'август', 'септември',
+    'октомври', 'ноември', 'декември'],
   STANDALONEMONTHS: ['януари', 'февруари', 'март',
-      'април', 'май', 'юни', 'юли', 'август',
-      'септември', 'октомври', 'ноември',
-      'декември'],
+    'април', 'май', 'юни', 'юли', 'август',
+    'септември', 'октомври', 'ноември',
+    'декември'],
   SHORTMONTHS: ['ян.', 'февр.', 'март', 'апр.', 'май', 'юни',
-      'юли', 'авг.', 'септ.', 'окт.', 'ноем.', 'дек.'],
+    'юли', 'авг.', 'септ.', 'окт.', 'ноем.', 'дек.'],
   STANDALONESHORTMONTHS: ['ян.', 'февр.', 'март', 'апр.', 'май',
-      'юни', 'юли', 'авг.', 'септ.', 'окт.', 'ноем.',
-      'дек.'],
+    'юни', 'юли', 'авг.', 'септ.', 'окт.', 'ноем.',
+    'дек.'],
   WEEKDAYS: ['неделя', 'понеделник', 'вторник',
-      'сряда', 'четвъртък', 'петък', 'събота'],
+    'сряда', 'четвъртък', 'петък', 'събота'],
   STANDALONEWEEKDAYS: ['неделя', 'понеделник', 'вторник',
-      'сряда', 'четвъртък', 'петък', 'събота'],
+    'сряда', 'четвъртък', 'петък', 'събота'],
   SHORTWEEKDAYS: ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
   STANDALONESHORTWEEKDAYS: ['нд', 'пн', 'вт', 'ср', 'чт', 'пт',
-      'сб'],
+    'сб'],
   NARROWWEEKDAYS: ['н', 'п', 'в', 'с', 'ч', 'п', 'с'],
   STANDALONENARROWWEEKDAYS: ['н', 'п', 'в', 'с', 'ч', 'п', 'с'],
   SHORTQUARTERS: ['I трим.', 'II трим.', 'III трим.',
-      'IV трим.'],
+    'IV трим.'],
   QUARTERS: ['1-во тримесечие', '2-ро тримесечие',
-      '3-то тримесечие', '4-то тримесечие'],
+    '3-то тримесечие', '4-то тримесечие'],
   AMPMS: ['пр. об.', 'сл. об.'],
-  DATEFORMATS: ['dd MMMM y, EEEE', 'dd MMMM y', 'dd.MM.yyyy', 'dd.MM.yy'],
+  DATEFORMATS: ['dd MMMM y, EEEE', 'dd MMMM y', 'dd.MM.y', 'dd.MM.yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1}, {0}', '{1}, {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -17390,63 +20307,102 @@ goog.i18n.DateTimeSymbols_bg = {
  * Date/time formatting symbols for locale bn.
  */
 goog.i18n.DateTimeSymbols_bn = {
+  ZERODIGIT: 0x09E6,
   ERAS: ['খৃষ্টপূর্ব', 'খৃষ্টাব্দ'],
   ERANAMES: ['খৃষ্টপূর্ব', 'খৃষ্টাব্দ'],
   NARROWMONTHS: ['জা', 'ফে', 'মা', 'এ', 'মে', 'জুন',
-      'জু', 'আ', 'সে', 'অ', 'ন', 'ডি'],
+    'জু', 'আ', 'সে', 'অ', 'ন', 'ডি'],
   STANDALONENARROWMONTHS: ['জা', 'ফে', 'মা', 'এ', 'মে',
-      'জুন', 'জু', 'আ', 'সে', 'অ', 'ন', 'ডি'],
+    'জুন', 'জু', 'আ', 'সে', 'অ', 'ন', 'ডি'],
   MONTHS: ['জানুয়ারী', 'ফেব্রুয়ারী',
-      'মার্চ', 'এপ্রিল', 'মে', 'জুন',
-      'জুলাই', 'আগস্ট', 'সেপ্টেম্বর',
-      'অক্টোবর', 'নভেম্বর',
-      'ডিসেম্বর'],
+    'মার্চ', 'এপ্রিল', 'মে', 'জুন',
+    'জুলাই', 'আগস্ট', 'সেপ্টেম্বর',
+    'অক্টোবর', 'নভেম্বর',
+    'ডিসেম্বর'],
   STANDALONEMONTHS: ['জানুয়ারী',
-      'ফেব্রুয়ারী', 'মার্চ',
-      'এপ্রিল', 'মে', 'জুন', 'জুলাই',
-      'আগস্ট', 'সেপ্টেম্বর',
-      'অক্টোবর', 'নভেম্বর',
-      'ডিসেম্বর'],
+    'ফেব্রুয়ারী', 'মার্চ',
+    'এপ্রিল', 'মে', 'জুন', 'জুলাই',
+    'আগস্ট', 'সেপ্টেম্বর',
+    'অক্টোবর', 'নভেম্বর',
+    'ডিসেম্বর'],
   SHORTMONTHS: ['জানুয়ারী',
-      'ফেব্রুয়ারী', 'মার্চ',
-      'এপ্রিল', 'মে', 'জুন', 'জুলাই',
-      'আগস্ট', 'সেপ্টেম্বর',
-      'অক্টোবর', 'নভেম্বর',
-      'ডিসেম্বর'],
+    'ফেব্রুয়ারী', 'মার্চ',
+    'এপ্রিল', 'মে', 'জুন', 'জুলাই',
+    'আগস্ট', 'সেপ্টেম্বর',
+    'অক্টোবর', 'নভেম্বর',
+    'ডিসেম্বর'],
   STANDALONESHORTMONTHS: ['জানুয়ারী',
-      'ফেব্রুয়ারী', 'মার্চ',
-      'এপ্রিল', 'মে', 'জুন', 'জুলাই',
-      'আগস্ট', 'সেপ্টেম্বর',
-      'অক্টোবর', 'নভেম্বর',
-      'ডিসেম্বর'],
+    'ফেব্রুয়ারী', 'মার্চ',
+    'এপ্রিল', 'মে', 'জুন', 'জুলাই',
+    'আগস্ট', 'সেপ্টেম্বর',
+    'অক্টোবর', 'নভেম্বর',
+    'ডিসেম্বর'],
   WEEKDAYS: ['রবিবার', 'সোমবার',
-      'মঙ্গলবার', 'বুধবার',
-      'বৃহষ্পতিবার', 'শুক্রবার',
-      'শনিবার'],
+    'মঙ্গলবার', 'বুধবার',
+    'বৃহষ্পতিবার', 'শুক্রবার',
+    'শনিবার'],
   STANDALONEWEEKDAYS: ['রবিবার', 'সোমবার',
-      'মঙ্গলবার', 'বুধবার',
-      'বৃহষ্পতিবার', 'শুক্রবার',
-      'শনিবার'],
+    'মঙ্গলবার', 'বুধবার',
+    'বৃহষ্পতিবার', 'শুক্রবার',
+    'শনিবার'],
   SHORTWEEKDAYS: ['রবি', 'সোম', 'মঙ্গল', 'বুধ',
-      'বৃহস্পতি', 'শুক্র', 'শনি'],
+    'বৃহস্পতি', 'শুক্র', 'শনি'],
   STANDALONESHORTWEEKDAYS: ['রবি', 'সোম', 'মঙ্গল',
-      'বুধ', 'বৃহস্পতি', 'শুক্র', 'শনি'],
+    'বুধ', 'বৃহস্পতি', 'শুক্র', 'শনি'],
   NARROWWEEKDAYS: ['র', 'সো', 'ম', 'বু', 'বৃ', 'শু', 'শ'],
   STANDALONENARROWWEEKDAYS: ['র', 'সো', 'ম', 'বু', 'বৃ',
-      'শু', 'শ'],
+    'শু', 'শ'],
   SHORTQUARTERS: ['চতুর্থাংশ ১',
-      'চতুর্থাংশ ২', 'চতুর্থাংশ ৩',
-      'চতুর্থাংশ ৪'],
+    'চতুর্থাংশ ২', 'চতুর্থাংশ ৩',
+    'চতুর্থাংশ ৪'],
   QUARTERS: ['প্রথম চতুর্থাংশ',
-      'দ্বিতীয় চতুর্থাংশ',
-      'তৃতীয় চতুর্থাংশ',
-      'চতুর্থ চতুর্থাংশ'],
+    'দ্বিতীয় চতুর্থাংশ',
+    'তৃতীয় চতুর্থাংশ',
+    'চতুর্থ চতুর্থাংশ'],
   AMPMS: ['am', 'pm'],
   DATEFORMATS: ['EEEE, d MMMM, y', 'd MMMM, y', 'd MMM, y', 'd/M/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 4,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
+};
+
+
+/**
+ * Date/time formatting symbols for locale br.
+ */
+goog.i18n.DateTimeSymbols_br = {
+  ERAS: ['BCE', 'CE'],
+  ERANAMES: ['BCE', 'CE'],
+  NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+  STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+    '11', '12'],
+  MONTHS: ['Genver', 'Cʼhwevrer', 'Meurzh', 'Ebrel', 'Mae', 'Mezheven',
+    'Gouere', 'Eost', 'Gwengolo', 'Here', 'Du', 'Kerzu'],
+  STANDALONEMONTHS: ['Genver', 'Cʼhwevrer', 'Meurzh', 'Ebrel', 'Mae',
+    'Mezheven', 'Gouere', 'Eost', 'Gwengolo', 'Here', 'Du', 'Kerzu'],
+  SHORTMONTHS: ['Gen', 'Cʼhwe', 'Meur', 'Ebr', 'Mae', 'Mezh', 'Goue', 'Eost',
+    'Gwen', 'Here', 'Du', 'Ker'],
+  STANDALONESHORTMONTHS: ['Gen', 'Cʼhwe', 'Meur', 'Ebr', 'Mae', 'Mezh', 'Goue',
+    'Eost', 'Gwen', 'Here', 'Du', 'Ker'],
+  WEEKDAYS: ['Sul', 'Lun', 'Meurzh', 'Mercʼher', 'Yaou', 'Gwener', 'Sadorn'],
+  STANDALONEWEEKDAYS: ['Sul', 'Lun', 'Meurzh', 'Mercʼher', 'Yaou', 'Gwener',
+    'Sadorn'],
+  SHORTWEEKDAYS: ['sul', 'lun', 'meu.', 'mer.', 'yaou', 'gwe.', 'sad.'],
+  STANDALONESHORTWEEKDAYS: ['sul', 'lun', 'meu.', 'mer.', 'yaou', 'gwe.',
+    'sad.'],
+  NARROWWEEKDAYS: ['su', 'lu', 'mz', 'mc', 'ya', 'gw', 'sa'],
+  STANDALONENARROWWEEKDAYS: ['su', 'lu', 'mz', 'mc', 'ya', 'gw', 'sa'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['y MMMM d, EEEE', 'y MMMM d', 'y MMM d', 'y-MM-dd'],
+  TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
+  FIRSTDAYOFWEEK: 0,
+  WEEKENDRANGE: [5, 6],
+  FIRSTWEEKCUTOFFDAY: 6
 };
 
 
@@ -17456,36 +20412,82 @@ goog.i18n.DateTimeSymbols_bn = {
 goog.i18n.DateTimeSymbols_ca = {
   ERAS: ['aC', 'dC'],
   ERANAMES: ['abans de Crist', 'després de Crist'],
-  NARROWMONTHS: ['G', 'F', 'M', 'A', 'M', 'J', 'G', 'A', 'S', 'O', 'N', 'D'],
+  NARROWMONTHS: ['G', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['g', 'f', 'm', 'a', 'm', 'j', 'j', 'a', 's', 'o',
-      'n', 'd'],
+    'n', 'd'],
   MONTHS: ['de gener', 'de febrer', 'de març', 'd’abril', 'de maig',
-      'de juny', 'de juliol', 'd’agost', 'de setembre', 'd’octubre',
-      'de novembre', 'de desembre'],
+    'de juny', 'de juliol', 'd’agost', 'de setembre', 'd’octubre',
+    'de novembre', 'de desembre'],
   STANDALONEMONTHS: ['gener', 'febrer', 'març', 'abril', 'maig', 'juny',
-      'juliol', 'agost', 'setembre', 'octubre', 'novembre', 'desembre'],
+    'juliol', 'agost', 'setembre', 'octubre', 'novembre', 'desembre'],
   SHORTMONTHS: ['de gen.', 'de febr.', 'de març', 'd’abr.', 'de maig',
-      'de juny', 'de jul.', 'd’ag.', 'de set.', 'd’oct.', 'de nov.',
-      'de des.'],
+    'de juny', 'de jul.', 'd’ag.', 'de set.', 'd’oct.', 'de nov.',
+    'de des.'],
   STANDALONESHORTMONTHS: ['gen.', 'febr.', 'març', 'abr.', 'maig', 'juny',
-      'jul.', 'ag.', 'set.', 'oct.', 'nov.', 'des.'],
+    'jul.', 'ag.', 'set.', 'oct.', 'nov.', 'des.'],
   WEEKDAYS: ['diumenge', 'dilluns', 'dimarts', 'dimecres', 'dijous',
-      'divendres', 'dissabte'],
+    'divendres', 'dissabte'],
   STANDALONEWEEKDAYS: ['Diumenge', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous',
-      'Divendres', 'Dissabte'],
+    'Divendres', 'Dissabte'],
   SHORTWEEKDAYS: ['dg.', 'dl.', 'dt.', 'dc.', 'dj.', 'dv.', 'ds.'],
   STANDALONESHORTWEEKDAYS: ['dg', 'dl', 'dt', 'dc', 'dj', 'dv', 'ds'],
-  NARROWWEEKDAYS: ['G', 'l', 'T', 'C', 'J', 'V', 'S'],
-  STANDALONENARROWWEEKDAYS: ['g', 'l', 't', 'c', 'j', 'v', 's'],
+  NARROWWEEKDAYS: ['dg', 'dl', 'dt', 'dc', 'dj', 'dv', 'ds'],
+  STANDALONENARROWWEEKDAYS: ['dg', 'dl', 'dt', 'dc', 'dj', 'dv', 'ds'],
   SHORTQUARTERS: ['1T', '2T', '3T', '4T'],
   QUARTERS: ['1r trimestre', '2n trimestre', '3r trimestre', '4t trimestre'],
   AMPMS: ['a.m.', 'p.m.'],
-  DATEFORMATS: ['EEEE d MMMM \'de\' y', 'd MMMM \'de\' y', 'dd/MM/yyyy',
-      'dd/MM/yy'],
-  TIMEFORMATS: ['H:mm:ss zzzz', 'H:mm:ss z', 'H:mm:ss', 'H:mm'],
+  DATEFORMATS: ['EEEE d MMMM \'de\' y', 'd MMMM \'de\' y', 'dd/MM/y',
+    'dd/MM/yy'],
+  TIMEFORMATS: ['H.mm.ss zzzz', 'H.mm.ss z', 'H.mm.ss', 'H.mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
+};
+
+
+/**
+ * Date/time formatting symbols for locale chr.
+ */
+goog.i18n.DateTimeSymbols_chr = {
+  ERAS: ['ᎤᏓᎷᎸ', 'ᎤᎶᏐᏅ'],
+  ERANAMES: ['Ꮟ ᏥᏌ ᎾᏕᎲᏍᎬᎾ',
+    'ᎠᎩᏃᎮᎵᏓᏍᏗᏱ ᎠᏕᏘᏱᏍᎬ ᏱᎰᏩ ᏧᏓᏂᎸᎢᏍᏗ'],
+  NARROWMONTHS: ['Ꭴ', 'Ꭷ', 'Ꭰ', 'Ꭷ', 'Ꭰ', 'Ꮥ', 'Ꭻ', 'Ꭶ', 'Ꮪ',
+    'Ꮪ', 'Ꮕ', 'Ꭴ'],
+  STANDALONENARROWMONTHS: ['Ꭴ', 'Ꭷ', 'Ꭰ', 'Ꭷ', 'Ꭰ', 'Ꮥ', 'Ꭻ',
+    'Ꭶ', 'Ꮪ', 'Ꮪ', 'Ꮕ', 'Ꭴ'],
+  MONTHS: ['ᎤᏃᎸᏔᏅ', 'ᎧᎦᎵ', 'ᎠᏅᏱ', 'ᎧᏬᏂ',
+    'ᎠᏂᏍᎬᏘ', 'ᏕᎭᎷᏱ', 'ᎫᏰᏉᏂ', 'ᎦᎶᏂ',
+    'ᏚᎵᏍᏗ', 'ᏚᏂᏅᏗ', 'ᏅᏓᏕᏆ', 'ᎤᏍᎩᏱ'],
+  STANDALONEMONTHS: ['ᎤᏃᎸᏔᏅ', 'ᎧᎦᎵ', 'ᎠᏅᏱ', 'ᎧᏬᏂ',
+    'ᎠᏂᏍᎬᏘ', 'ᏕᎭᎷᏱ', 'ᎫᏰᏉᏂ', 'ᎦᎶᏂ',
+    'ᏚᎵᏍᏗ', 'ᏚᏂᏅᏗ', 'ᏅᏓᏕᏆ', 'ᎤᏍᎩᏱ'],
+  SHORTMONTHS: ['ᎤᏃ', 'ᎧᎦ', 'ᎠᏅ', 'ᎧᏬ', 'ᎠᏂ', 'ᏕᎭ',
+    'ᎫᏰ', 'ᎦᎶ', 'ᏚᎵ', 'ᏚᏂ', 'ᏅᏓ', 'ᎤᏍ'],
+  STANDALONESHORTMONTHS: ['ᎤᏃ', 'ᎧᎦ', 'ᎠᏅ', 'ᎧᏬ', 'ᎠᏂ',
+    'ᏕᎭ', 'ᎫᏰ', 'ᎦᎶ', 'ᏚᎵ', 'ᏚᏂ', 'ᏅᏓ', 'ᎤᏍ'],
+  WEEKDAYS: ['ᎤᎾᏙᏓᏆᏍᎬ', 'ᎤᎾᏙᏓᏉᏅᎯ',
+    'ᏔᎵᏁᎢᎦ', 'ᏦᎢᏁᎢᎦ', 'ᏅᎩᏁᎢᎦ',
+    'ᏧᎾᎩᎶᏍᏗ', 'ᎤᎾᏙᏓᏈᏕᎾ'],
+  STANDALONEWEEKDAYS: ['ᎤᎾᏙᏓᏆᏍᎬ', 'ᎤᎾᏙᏓᏉᏅᎯ',
+    'ᏔᎵᏁᎢᎦ', 'ᏦᎢᏁᎢᎦ', 'ᏅᎩᏁᎢᎦ',
+    'ᏧᎾᎩᎶᏍᏗ', 'ᎤᎾᏙᏓᏈᏕᎾ'],
+  SHORTWEEKDAYS: ['ᏆᏍᎬ', 'ᏉᏅᎯ', 'ᏔᎵᏁ', 'ᏦᎢᏁ',
+    'ᏅᎩᏁ', 'ᏧᎾᎩ', 'ᏈᏕᎾ'],
+  STANDALONESHORTWEEKDAYS: ['ᏆᏍᎬ', 'ᏉᏅᎯ', 'ᏔᎵᏁ', 'ᏦᎢᏁ',
+    'ᏅᎩᏁ', 'ᏧᎾᎩ', 'ᏈᏕᎾ'],
+  NARROWWEEKDAYS: ['Ꮖ', 'Ꮙ', 'Ꮤ', 'Ꮶ', 'Ꮕ', 'Ꮷ', 'Ꭴ'],
+  STANDALONENARROWWEEKDAYS: ['Ꮖ', 'Ꮙ', 'Ꮤ', 'Ꮶ', 'Ꮕ', 'Ꮷ', 'Ꭴ'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  AMPMS: ['ᏌᎾᎴ', 'ᏒᎯᏱᎢᏗᏢ'],
+  DATEFORMATS: ['EEEE, MMMM d, y', 'MMMM d, y', 'MMM d, y', 'M/d/yy'],
+  TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
+  FIRSTDAYOFWEEK: 0,
+  WEEKENDRANGE: [5, 6],
+  FIRSTWEEKCUTOFFDAY: 6
 };
 
 
@@ -17497,29 +20499,67 @@ goog.i18n.DateTimeSymbols_cs = {
   ERANAMES: ['př. n. l.', 'n. l.'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   STANDALONENARROWMONTHS: ['l', 'ú', 'b', 'd', 'k', 'č', 'č', 's', 'z', 'ř',
-      'l', 'p'],
+    'l', 'p'],
   MONTHS: ['ledna', 'února', 'března', 'dubna', 'května', 'června',
-      'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'],
+    'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'],
   STANDALONEMONTHS: ['leden', 'únor', 'březen', 'duben', 'květen', 'červen',
-      'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'],
-  SHORTMONTHS: ['Led', 'Úno', 'Bře', 'Dub', 'Kvě', 'Čer', 'Čvc', 'Srp',
-      'Zář', 'Říj', 'Lis', 'Pro'],
-  STANDALONESHORTMONTHS: ['1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.',
-      '10.', '11.', '12.'],
+    'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'],
+  SHORTMONTHS: ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp',
+    'zář', 'říj', 'lis', 'pro'],
+  STANDALONESHORTMONTHS: ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc',
+    'srp', 'zář', 'říj', 'lis', 'pro'],
   WEEKDAYS: ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek',
-      'sobota'],
+    'sobota'],
   STANDALONEWEEKDAYS: ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek',
-      'pátek', 'sobota'],
+    'pátek', 'sobota'],
   SHORTWEEKDAYS: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
   STANDALONESHORTWEEKDAYS: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
   NARROWWEEKDAYS: ['N', 'P', 'Ú', 'S', 'Č', 'P', 'S'],
   STANDALONENARROWWEEKDAYS: ['N', 'P', 'Ú', 'S', 'Č', 'P', 'S'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1. čtvrtletí', '2. čtvrtletí', '3. čtvrtletí',
-      '4. čtvrtletí'],
+    '4. čtvrtletí'],
   AMPMS: ['dop.', 'odp.'],
-  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'd.M.yyyy', 'dd.MM.yy'],
+  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'd. M. y', 'dd.MM.yy'],
   TIMEFORMATS: ['H:mm:ss zzzz', 'H:mm:ss z', 'H:mm:ss', 'H:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
+  FIRSTDAYOFWEEK: 0,
+  WEEKENDRANGE: [5, 6],
+  FIRSTWEEKCUTOFFDAY: 3
+};
+
+
+/**
+ * Date/time formatting symbols for locale cy.
+ */
+goog.i18n.DateTimeSymbols_cy = {
+  ERAS: ['CC', 'OC'],
+  ERANAMES: ['Cyn Crist', 'Oed Crist'],
+  NARROWMONTHS: ['I', 'Ch', 'M', 'E', 'M', 'M', 'G', 'A', 'M', 'H', 'T', 'Rh'],
+  STANDALONENARROWMONTHS: ['I', 'Ch', 'M', 'E', 'M', 'M', 'G', 'A', 'M', 'H',
+    'T', 'Rh'],
+  MONTHS: ['Ionawr', 'Chwefror', 'Mawrth', 'Ebrill', 'Mai', 'Mehefin',
+    'Gorffennaf', 'Awst', 'Medi', 'Hydref', 'Tachwedd', 'Rhagfyr'],
+  STANDALONEMONTHS: ['Ionawr', 'Chwefror', 'Mawrth', 'Ebrill', 'Mai', 'Mehefin',
+    'Gorffennaf', 'Awst', 'Medi', 'Hydref', 'Tachwedd', 'Rhagfyr'],
+  SHORTMONTHS: ['Ion', 'Chwef', 'Mawrth', 'Ebrill', 'Mai', 'Meh', 'Gorff',
+    'Awst', 'Medi', 'Hyd', 'Tach', 'Rhag'],
+  STANDALONESHORTMONTHS: ['Ion', 'Chw', 'Maw', 'Ebr', 'Mai', 'Meh', 'Gor',
+    'Awst', 'Medi', 'Hyd', 'Tach', 'Rhag'],
+  WEEKDAYS: ['Dydd Sul', 'Dydd Llun', 'Dydd Mawrth', 'Dydd Mercher', 'Dydd Iau',
+    'Dydd Gwener', 'Dydd Sadwrn'],
+  STANDALONEWEEKDAYS: ['Dydd Sul', 'Dydd Llun', 'Dydd Mawrth', 'Dydd Mercher',
+    'Dydd Iau', 'Dydd Gwener', 'Dydd Sadwrn'],
+  SHORTWEEKDAYS: ['Sul', 'Llun', 'Maw', 'Mer', 'Iau', 'Gwen', 'Sad'],
+  STANDALONESHORTWEEKDAYS: ['Sul', 'Llun', 'Maw', 'Mer', 'Iau', 'Gwe', 'Sad'],
+  NARROWWEEKDAYS: ['S', 'Ll', 'M', 'M', 'I', 'G', 'S'],
+  STANDALONENARROWWEEKDAYS: ['S', 'Ll', 'M', 'M', 'I', 'G', 'S'],
+  SHORTQUARTERS: ['Ch1', 'Ch2', 'Ch3', 'Ch4'],
+  QUARTERS: ['Chwarter 1af', '2il chwarter', '3ydd chwarter', '4ydd chwarter'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/y'],
+  TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -17534,28 +20574,29 @@ goog.i18n.DateTimeSymbols_da = {
   ERANAMES: ['f.Kr.', 'e.Kr.'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli',
-      'august', 'september', 'oktober', 'november', 'december'],
+    'august', 'september', 'oktober', 'november', 'december'],
   STANDALONEMONTHS: ['januar', 'februar', 'marts', 'april', 'maj', 'juni',
-      'juli', 'august', 'september', 'oktober', 'november', 'december'],
+    'juli', 'august', 'september', 'oktober', 'november', 'december'],
   SHORTMONTHS: ['jan.', 'feb.', 'mar.', 'apr.', 'maj', 'jun.', 'jul.', 'aug.',
-      'sep.', 'okt.', 'nov.', 'dec.'],
+    'sep.', 'okt.', 'nov.', 'dec.'],
   STANDALONESHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul',
-      'aug', 'sep', 'okt', 'nov', 'dec'],
+    'aug', 'sep', 'okt', 'nov', 'dec'],
   WEEKDAYS: ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag',
-      'lørdag'],
+    'lørdag'],
   STANDALONEWEEKDAYS: ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag',
-      'fredag', 'lørdag'],
-  SHORTWEEKDAYS: ['søn', 'man', 'tir', 'ons', 'tor', 'fre', 'lør'],
+    'fredag', 'lørdag'],
+  SHORTWEEKDAYS: ['søn.', 'man.', 'tir.', 'ons.', 'tor.', 'fre.', 'lør.'],
   STANDALONESHORTWEEKDAYS: ['søn', 'man', 'tir', 'ons', 'tor', 'fre', 'lør'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
   STANDALONENARROWWEEKDAYS: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
   SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
   QUARTERS: ['1. kvartal', '2. kvartal', '3. kvartal', '4. kvartal'],
-  AMPMS: ['f.m.', 'e.m.'],
-  DATEFORMATS: ['EEEE \'den\' d. MMMM y', 'd. MMM y', 'dd/MM/yyyy', 'dd/MM/yy'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE \'den\' d. MMMM y', 'd. MMM y', 'dd/MM/y', 'dd/MM/yy'],
   TIMEFORMATS: ['HH.mm.ss zzzz', 'HH.mm.ss z', 'HH.mm.ss', 'HH.mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -17570,19 +20611,19 @@ goog.i18n.DateTimeSymbols_de = {
   ERANAMES: ['v. Chr.', 'n. Chr.'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
-      'August', 'September', 'Oktober', 'November', 'Dezember'],
+    'August', 'September', 'Oktober', 'November', 'Dezember'],
   STANDALONEMONTHS: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-      'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
-  SHORTMONTHS: ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Okt', 'Nov', 'Dez'],
+    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+  SHORTMONTHS: ['Jan.', 'Feb.', 'Mär.', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.',
+    'Sep.', 'Okt.', 'Nov.', 'Dez.'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
+    'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
   WEEKDAYS: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
-      'Freitag', 'Samstag'],
+    'Freitag', 'Samstag'],
   STANDALONEWEEKDAYS: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch',
-      'Donnerstag', 'Freitag', 'Samstag'],
+    'Donnerstag', 'Freitag', 'Samstag'],
   SHORTWEEKDAYS: ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'],
   STANDALONESHORTWEEKDAYS: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
   NARROWWEEKDAYS: ['S', 'M', 'D', 'M', 'D', 'F', 'S'],
@@ -17590,8 +20631,9 @@ goog.i18n.DateTimeSymbols_de = {
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1. Quartal', '2. Quartal', '3. Quartal', '4. Quartal'],
   AMPMS: ['vorm.', 'nachm.'],
-  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'dd.MM.yyyy', 'dd.MM.yy'],
+  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'dd.MM.y', 'dd.MM.yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -17606,19 +20648,19 @@ goog.i18n.DateTimeSymbols_de_AT = {
   ERANAMES: ['v. Chr.', 'n. Chr.'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Jänner', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
-      'August', 'September', 'Oktober', 'November', 'Dezember'],
-  STANDALONEMONTHS: ['Jänner', 'Februar', 'März', 'April', 'Mai', 'Juni',
-      'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
-  SHORTMONTHS: ['Jän', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Okt', 'Nov', 'Dez'],
+    'August', 'September', 'Oktober', 'November', 'Dezember'],
+  STANDALONEMONTHS: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+  SHORTMONTHS: ['Jän', 'Feb.', 'Mär.', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.',
+    'Sep.', 'Okt.', 'Nov.', 'Dez.'],
   STANDALONESHORTMONTHS: ['Jän', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
+    'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
   WEEKDAYS: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
-      'Freitag', 'Samstag'],
+    'Freitag', 'Samstag'],
   STANDALONEWEEKDAYS: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch',
-      'Donnerstag', 'Freitag', 'Samstag'],
+    'Donnerstag', 'Freitag', 'Samstag'],
   SHORTWEEKDAYS: ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'],
   STANDALONESHORTWEEKDAYS: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
   NARROWWEEKDAYS: ['S', 'M', 'D', 'M', 'D', 'F', 'S'],
@@ -17626,8 +20668,9 @@ goog.i18n.DateTimeSymbols_de_AT = {
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1. Quartal', '2. Quartal', '3. Quartal', '4. Quartal'],
   AMPMS: ['vorm.', 'nachm.'],
-  DATEFORMATS: ['EEEE, dd. MMMM y', 'dd. MMMM y', 'dd.MM.yyyy', 'dd.MM.yy'],
+  DATEFORMATS: ['EEEE, dd. MMMM y', 'dd. MMMM y', 'dd.MM.y', 'dd.MM.yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -17647,37 +20690,38 @@ goog.i18n.DateTimeSymbols_el = {
   ERAS: ['π.Χ.', 'μ.Χ.'],
   ERANAMES: ['π.Χ.', 'μ.Χ.'],
   NARROWMONTHS: ['Ι', 'Φ', 'Μ', 'Α', 'Μ', 'Ι', 'Ι', 'Α', 'Σ', 'Ο',
-      'Ν', 'Δ'],
+    'Ν', 'Δ'],
   STANDALONENARROWMONTHS: ['Ι', 'Φ', 'Μ', 'Α', 'Μ', 'Ι', 'Ι', 'Α', 'Σ',
-      'Ο', 'Ν', 'Δ'],
+    'Ο', 'Ν', 'Δ'],
   MONTHS: ['Ιανουαρίου', 'Φεβρουαρίου', 'Μαρτίου',
-      'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου',
-      'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου',
-      'Νοεμβρίου', 'Δεκεμβρίου'],
+    'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου',
+    'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου',
+    'Νοεμβρίου', 'Δεκεμβρίου'],
   STANDALONEMONTHS: ['Ιανουάριος', 'Φεβρουάριος',
-      'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος',
-      'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος',
-      'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'],
+    'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος',
+    'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος',
+    'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'],
   SHORTMONTHS: ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μαϊ', 'Ιουν',
-      'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ'],
+    'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ'],
   STANDALONESHORTMONTHS: ['Ιαν', 'Φεβ', 'Μάρ', 'Απρ', 'Μάι',
-      'Ιούν', 'Ιούλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοέ', 'Δεκ'],
+    'Ιούν', 'Ιούλ', 'Αύγ', 'Σεπ', 'Οκτ', 'Νοέ', 'Δεκ'],
   WEEKDAYS: ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη',
-      'Πέμπτη', 'Παρασκευή', 'Σάββατο'],
+    'Πέμπτη', 'Παρασκευή', 'Σάββατο'],
   STANDALONEWEEKDAYS: ['Κυριακή', 'Δευτέρα', 'Τρίτη',
-      'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'],
-  SHORTWEEKDAYS: ['Κυρ', 'Δευ', 'Τρι', 'Τετ', 'Πεμ', 'Παρ',
-      'Σαβ'],
+    'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'],
+  SHORTWEEKDAYS: ['Κυρ', 'Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ',
+    'Σάβ'],
   STANDALONESHORTWEEKDAYS: ['Κυρ', 'Δευ', 'Τρί', 'Τετ', 'Πέμ',
-      'Παρ', 'Σάβ'],
+    'Παρ', 'Σάβ'],
   NARROWWEEKDAYS: ['Κ', 'Δ', 'Τ', 'Τ', 'Π', 'Π', 'Σ'],
   STANDALONENARROWWEEKDAYS: ['Κ', 'Δ', 'Τ', 'Τ', 'Π', 'Π', 'Σ'],
   SHORTQUARTERS: ['Τ1', 'Τ2', 'Τ3', 'Τ4'],
   QUARTERS: ['1ο τρίμηνο', '2ο τρίμηνο', '3ο τρίμηνο',
-      '4ο τρίμηνο'],
+    '4ο τρίμηνο'],
   AMPMS: ['π.μ.', 'μ.μ.'],
   DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'd/M/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} - {0}', '{1} - {0}', '{1} - {0}', '{1} - {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -17692,19 +20736,19 @@ goog.i18n.DateTimeSymbols_en = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
@@ -17714,6 +20758,7 @@ goog.i18n.DateTimeSymbols_en = {
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, MMMM d, y', 'MMMM d, y', 'MMM d, y', 'M/d/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} \'at\' {0}', '{1} \'at\' {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -17728,19 +20773,19 @@ goog.i18n.DateTimeSymbols_en_AU = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
@@ -17748,8 +20793,9 @@ goog.i18n.DateTimeSymbols_en_AU = {
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1st quarter', '2nd quarter', '3rd quarter', '4th quarter'],
   AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd/MM/yyyy', 'd/MM/yy'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd/MM/y', 'd/MM/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} \'at\' {0}', '{1} \'at\' {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -17764,28 +20810,29 @@ goog.i18n.DateTimeSymbols_en_GB = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
   STANDALONENARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1st quarter', '2nd quarter', '3rd quarter', '4th quarter'],
-  AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yyyy'],
+  AMPMS: ['am', 'pm'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -17800,19 +20847,19 @@ goog.i18n.DateTimeSymbols_en_IE = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
@@ -17820,11 +20867,12 @@ goog.i18n.DateTimeSymbols_en_IE = {
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1st quarter', '2nd quarter', '3rd quarter', '4th quarter'],
   AMPMS: ['a.m.', 'p.m.'],
-  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yyyy'],
-  TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
-  FIRSTDAYOFWEEK: 0,
+  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/y'],
+  TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} \'at\' {0}', '{1} \'at\' {0}', '{1}, {0}', '{1}, {0}'],
+  FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
-  FIRSTWEEKCUTOFFDAY: 3
+  FIRSTWEEKCUTOFFDAY: 2
 };
 
 
@@ -17836,19 +20884,19 @@ goog.i18n.DateTimeSymbols_en_IN = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
@@ -17858,6 +20906,7 @@ goog.i18n.DateTimeSymbols_en_IN = {
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'dd-MMM-y', 'dd/MM/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} \'at\' {0}', '{1} \'at\' {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -17872,19 +20921,19 @@ goog.i18n.DateTimeSymbols_en_SG = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
@@ -17894,6 +20943,7 @@ goog.i18n.DateTimeSymbols_en_SG = {
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, d MMMM, y', 'd MMMM, y', 'd MMM, y', 'd/M/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} \'at\' {0}', '{1} \'at\' {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -17914,19 +20964,19 @@ goog.i18n.DateTimeSymbols_en_ZA = {
   ERANAMES: ['Before Christ', 'Anno Domini'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-      'August', 'September', 'October', 'November', 'December'],
+    'August', 'September', 'October', 'November', 'December'],
   STANDALONEMONTHS: ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'],
+    'July', 'August', 'September', 'October', 'November', 'December'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Oct', 'Nov', 'Dec'],
+    'Oct', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
   WEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
-      'Saturday'],
+    'Saturday'],
   STANDALONEWEEKDAYS: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday'],
+    'Friday', 'Saturday'],
   SHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   STANDALONESHORTWEEKDAYS: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
@@ -17934,8 +20984,9 @@ goog.i18n.DateTimeSymbols_en_ZA = {
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1st quarter', '2nd quarter', '3rd quarter', '4th quarter'],
   AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE dd MMMM y', 'dd MMMM y', 'dd MMM y', 'yyyy/MM/dd'],
+  DATEFORMATS: ['EEEE dd MMMM y', 'dd MMMM y', 'dd MMM y', 'y/MM/dd'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} \'at\' {0}', '{1} \'at\' {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -17950,33 +21001,34 @@ goog.i18n.DateTimeSymbols_es = {
   ERANAMES: ['antes de Cristo', 'anno Dómini'],
   NARROWMONTHS: ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
-      'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
+    'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
   STANDALONEMONTHS: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
   SHORTMONTHS: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep',
-      'oct', 'nov', 'dic'],
+    'oct', 'nov', 'dic'],
   STANDALONESHORTMONTHS: ['ene', 'feb', 'mar', 'abr', 'mayo', 'jun', 'jul',
-      'ago', 'sep', 'oct', 'nov', 'dic'],
+    'ago', 'sep', 'oct', 'nov', 'dic'],
   WEEKDAYS: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes',
-      'sábado'],
+    'sábado'],
   STANDALONEWEEKDAYS: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves',
-      'viernes', 'sábado'],
+    'viernes', 'sábado'],
   SHORTWEEKDAYS: ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'],
   STANDALONESHORTWEEKDAYS: ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'],
   NARROWWEEKDAYS: ['D', 'L', 'M', 'X', 'J', 'V', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'L', 'M', 'X', 'J', 'V', 'S'],
   SHORTQUARTERS: ['T1', 'T2', 'T3', 'T4'],
   QUARTERS: ['1er trimestre', '2º trimestre', '3er trimestre',
-      '4º trimestre'],
+    '4º trimestre'],
   AMPMS: ['a.m.', 'p.m.'],
-  DATEFORMATS: ['EEEE d \'de\' MMMM \'de\' y', 'd \'de\' MMMM \'de\' y',
-      'dd/MM/yyyy', 'dd/MM/yy'],
+  DATEFORMATS: ['EEEE, d \'de\' MMMM \'de\' y', 'd \'de\' MMMM \'de\' y',
+    'dd/MM/y', 'dd/MM/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
-  FIRSTDAYOFWEEK: 6,
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
+  FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
-  FIRSTWEEKCUTOFFDAY: 5
+  FIRSTWEEKCUTOFFDAY: 3
 };
 
 
@@ -17988,34 +21040,41 @@ goog.i18n.DateTimeSymbols_es_419 = {
   ERANAMES: ['antes de Cristo', 'anno Dómini'],
   NARROWMONTHS: ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
-      'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
+    'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
   STANDALONEMONTHS: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
   SHORTMONTHS: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep',
-      'oct', 'nov', 'dic'],
+    'oct', 'nov', 'dic'],
   STANDALONESHORTMONTHS: ['ene', 'feb', 'mar', 'abr', 'mayo', 'jun', 'jul',
-      'ago', 'sep', 'oct', 'nov', 'dic'],
+    'ago', 'sep', 'oct', 'nov', 'dic'],
   WEEKDAYS: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes',
-      'sábado'],
+    'sábado'],
   STANDALONEWEEKDAYS: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves',
-      'viernes', 'sábado'],
+    'viernes', 'sábado'],
   SHORTWEEKDAYS: ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'],
   STANDALONESHORTWEEKDAYS: ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'],
   NARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   SHORTQUARTERS: ['T1', 'T2', 'T3', 'T4'],
   QUARTERS: ['1er trimestre', '2º trimestre', '3er trimestre',
-      '4º trimestre'],
+    '4º trimestre'],
   AMPMS: ['a.m.', 'p.m.'],
-  DATEFORMATS: ['EEEE d \'de\' MMMM \'de\' y', 'd \'de\' MMMM \'de\' y',
-      'dd/MM/yyyy', 'dd/MM/yy'],
+  DATEFORMATS: ['EEEE, d \'de\' MMMM \'de\' y', 'd \'de\' MMMM \'de\' y',
+    'dd/MM/y', 'dd/MM/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
-  FIRSTDAYOFWEEK: 6,
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
+  FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
-  FIRSTWEEKCUTOFFDAY: 5
+  FIRSTWEEKCUTOFFDAY: 3
 };
+
+
+/**
+ * Date/time formatting symbols for locale es_ES.
+ */
+goog.i18n.DateTimeSymbols_es_ES = goog.i18n.DateTimeSymbols_es;
 
 
 /**
@@ -18026,28 +21085,29 @@ goog.i18n.DateTimeSymbols_et = {
   ERANAMES: ['enne meie aega', 'meie aja järgi'],
   NARROWMONTHS: ['J', 'V', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'V', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['jaanuar', 'veebruar', 'märts', 'aprill', 'mai', 'juuni', 'juuli',
-      'august', 'september', 'oktoober', 'november', 'detsember'],
+    'august', 'september', 'oktoober', 'november', 'detsember'],
   STANDALONEMONTHS: ['jaanuar', 'veebruar', 'märts', 'aprill', 'mai', 'juuni',
-      'juuli', 'august', 'september', 'oktoober', 'november', 'detsember'],
+    'juuli', 'august', 'september', 'oktoober', 'november', 'detsember'],
   SHORTMONTHS: ['jaan', 'veebr', 'märts', 'apr', 'mai', 'juuni', 'juuli',
-      'aug', 'sept', 'okt', 'nov', 'dets'],
+    'aug', 'sept', 'okt', 'nov', 'dets'],
   STANDALONESHORTMONTHS: ['jaan', 'veebr', 'märts', 'apr', 'mai', 'juuni',
-      'juuli', 'aug', 'sept', 'okt', 'nov', 'dets'],
+    'juuli', 'aug', 'sept', 'okt', 'nov', 'dets'],
   WEEKDAYS: ['pühapäev', 'esmaspäev', 'teisipäev', 'kolmapäev',
-      'neljapäev', 'reede', 'laupäev'],
+    'neljapäev', 'reede', 'laupäev'],
   STANDALONEWEEKDAYS: ['pühapäev', 'esmaspäev', 'teisipäev', 'kolmapäev',
-      'neljapäev', 'reede', 'laupäev'],
+    'neljapäev', 'reede', 'laupäev'],
   SHORTWEEKDAYS: ['P', 'E', 'T', 'K', 'N', 'R', 'L'],
   STANDALONESHORTWEEKDAYS: ['P', 'E', 'T', 'K', 'N', 'R', 'L'],
   NARROWWEEKDAYS: ['P', 'E', 'T', 'K', 'N', 'R', 'L'],
   STANDALONENARROWWEEKDAYS: ['P', 'E', 'T', 'K', 'N', 'R', 'L'],
   SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
   QUARTERS: ['1. kvartal', '2. kvartal', '3. kvartal', '4. kvartal'],
-  AMPMS: ['enne keskpäeva', 'pärast keskpäeva'],
-  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'dd.MM.yyyy', 'dd.MM.yy'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'dd.MM.y', 'dd.MM.yy'],
   TIMEFORMATS: ['H:mm.ss zzzz', 'H:mm.ss z', 'H:mm.ss', 'H:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -18062,30 +21122,30 @@ goog.i18n.DateTimeSymbols_eu = {
   ERANAMES: ['K.a.', 'K.o.'],
   NARROWMONTHS: ['U', 'O', 'M', 'A', 'M', 'E', 'U', 'A', 'I', 'U', 'A', 'A'],
   STANDALONENARROWMONTHS: ['U', 'O', 'M', 'A', 'M', 'E', 'U', 'A', 'I', 'U',
-      'A', 'A'],
+    'A', 'A'],
   MONTHS: ['urtarrila', 'otsaila', 'martxoa', 'apirila', 'maiatza', 'ekaina',
-      'uztaila', 'abuztua', 'iraila', 'urria', 'azaroa', 'abendua'],
+    'uztaila', 'abuztua', 'iraila', 'urria', 'azaroa', 'abendua'],
   STANDALONEMONTHS: ['urtarrila', 'otsaila', 'martxoa', 'apirila', 'maiatza',
-      'ekaina', 'uztaila', 'abuztua', 'iraila', 'urria', 'azaroa', 'abendua'],
+    'ekaina', 'uztaila', 'abuztua', 'iraila', 'urria', 'azaroa', 'abendua'],
   SHORTMONTHS: ['urt', 'ots', 'mar', 'api', 'mai', 'eka', 'uzt', 'abu', 'ira',
-      'urr', 'aza', 'abe'],
+    'urr', 'aza', 'abe'],
   STANDALONESHORTMONTHS: ['urt', 'ots', 'mar', 'api', 'mai', 'eka', 'uzt',
-      'abu', 'ira', 'urr', 'aza', 'abe'],
+    'abu', 'ira', 'urr', 'aza', 'abe'],
   WEEKDAYS: ['igandea', 'astelehena', 'asteartea', 'asteazkena', 'osteguna',
-      'ostirala', 'larunbata'],
+    'ostirala', 'larunbata'],
   STANDALONEWEEKDAYS: ['igandea', 'astelehena', 'asteartea', 'asteazkena',
-      'osteguna', 'ostirala', 'larunbata'],
+    'osteguna', 'ostirala', 'larunbata'],
   SHORTWEEKDAYS: ['ig', 'al', 'as', 'az', 'og', 'or', 'lr'],
   STANDALONESHORTWEEKDAYS: ['ig', 'al', 'as', 'az', 'og', 'or', 'lr'],
   NARROWWEEKDAYS: ['I', 'M', 'A', 'A', 'A', 'O', 'I'],
   STANDALONENARROWWEEKDAYS: ['I', 'M', 'A', 'L', 'A', 'O', 'I'],
   SHORTQUARTERS: ['1Hh', '2Hh', '3Hh', '4Hh'],
   QUARTERS: ['1. hiruhilekoa', '2. hiruhilekoa', '3. hiruhilekoa',
-      '4. hiruhilekoa'],
+    '4. hiruhilekoa'],
   AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE, y\'eko\' MMMM\'ren\' dd\'a\'',
-      'y\'eko\' MMM\'ren\' dd\'a\'', 'y MMM d', 'yyyy-MM-dd'],
+  DATEFORMATS: ['EEEE, y MMMM dd', 'y MMMM d', 'y MMM d', 'y-MM-dd'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -18096,40 +21156,43 @@ goog.i18n.DateTimeSymbols_eu = {
  * Date/time formatting symbols for locale fa.
  */
 goog.i18n.DateTimeSymbols_fa = {
+  ZERODIGIT: 0x06F0,
   ERAS: ['ق.م.', 'م.'],
   ERANAMES: ['قبل از میلاد', 'میلادی'],
   NARROWMONTHS: ['ژ', 'ف', 'م', 'آ', 'م', 'ژ', 'ژ', 'ا', 'س', 'ا',
-      'ن', 'د'],
+    'ن', 'د'],
   STANDALONENARROWMONTHS: ['ژ', 'ف', 'م', 'آ', 'م', 'ژ', 'ژ', 'ا', 'س',
-      'ا', 'ن', 'د'],
+    'ا', 'ن', 'د'],
   MONTHS: ['ژانویهٔ', 'فوریهٔ', 'مارس', 'آوریل', 'مهٔ',
-      'ژوئن', 'ژوئیهٔ', 'اوت', 'سپتامبر', 'اکتبر',
-      'نوامبر', 'دسامبر'],
+    'ژوئن', 'ژوئیهٔ', 'اوت', 'سپتامبر', 'اکتبر',
+    'نوامبر', 'دسامبر'],
   STANDALONEMONTHS: ['ژانویه', 'فوریه', 'مارس', 'آوریل',
-      'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر',
-      'اکتبر', 'نوامبر', 'دسامبر'],
+    'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر',
+    'نوامبر', 'دسامبر'],
   SHORTMONTHS: ['ژانویهٔ', 'فوریهٔ', 'مارس', 'آوریل',
-      'مهٔ', 'ژوئن', 'ژوئیهٔ', 'اوت', 'سپتامبر',
-      'اکتبر', 'نوامبر', 'دسامبر'],
+    'مهٔ', 'ژوئن', 'ژوئیهٔ', 'اوت', 'سپتامبر',
+    'اکتبر', 'نوامبر', 'دسامبر'],
   STANDALONESHORTMONTHS: ['ژانویه', 'فوریه', 'مارس',
-      'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت',
-      'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر'],
+    'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر',
+    'اکتبر', 'نوامبر', 'دسامبر'],
   WEEKDAYS: ['یکشنبه', 'دوشنبه', 'سه‌شنبه',
-      'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
+    'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
   STANDALONEWEEKDAYS: ['یکشنبه', 'دوشنبه', 'سه‌شنبه',
-      'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
+    'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
   SHORTWEEKDAYS: ['یکشنبه', 'دوشنبه', 'سه‌شنبه',
-      'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
+    'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
   STANDALONESHORTWEEKDAYS: ['یکشنبه', 'دوشنبه', 'سه‌شنبه',
-      'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
+    'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
   NARROWWEEKDAYS: ['ی', 'د', 'س', 'چ', 'پ', 'ج', 'ش'],
   STANDALONENARROWWEEKDAYS: ['ی', 'د', 'س', 'چ', 'پ', 'ج', 'ش'],
   SHORTQUARTERS: ['س‌م۱', 'س‌م۲', 'س‌م۳', 'س‌م۴'],
   QUARTERS: ['سه‌ماههٔ اول', 'سه‌ماههٔ دوم',
-      'سه‌ماههٔ سوم', 'سه‌ماههٔ چهارم'],
+    'سه‌ماههٔ سوم', 'سه‌ماههٔ چهارم'],
   AMPMS: ['قبل‌ازظهر', 'بعدازظهر'],
-  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'yyyy/M/d'],
+  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'y/M/d'],
   TIMEFORMATS: ['H:mm:ss (zzzz)', 'H:mm:ss (z)', 'H:mm:ss', 'H:mm'],
+  DATETIMEFORMATS: ['{1}، ساعت {0}', '{1}، ساعت {0}', '{1}،‏ {0}',
+    '{1}،‏ {0}'],
   FIRSTDAYOFWEEK: 5,
   WEEKENDRANGE: [3, 4],
   FIRSTWEEKCUTOFFDAY: 4
@@ -18144,32 +21207,33 @@ goog.i18n.DateTimeSymbols_fi = {
   ERANAMES: ['ennen Kristuksen syntymää', 'jälkeen Kristuksen syntymän'],
   NARROWMONTHS: ['T', 'H', 'M', 'H', 'T', 'K', 'H', 'E', 'S', 'L', 'M', 'J'],
   STANDALONENARROWMONTHS: ['T', 'H', 'M', 'H', 'T', 'K', 'H', 'E', 'S', 'L',
-      'M', 'J'],
+    'M', 'J'],
   MONTHS: ['tammikuuta', 'helmikuuta', 'maaliskuuta', 'huhtikuuta',
-      'toukokuuta', 'kesäkuuta', 'heinäkuuta', 'elokuuta', 'syyskuuta',
-      'lokakuuta', 'marraskuuta', 'joulukuuta'],
+    'toukokuuta', 'kesäkuuta', 'heinäkuuta', 'elokuuta', 'syyskuuta',
+    'lokakuuta', 'marraskuuta', 'joulukuuta'],
   STANDALONEMONTHS: ['tammikuu', 'helmikuu', 'maaliskuu', 'huhtikuu',
-      'toukokuu', 'kesäkuu', 'heinäkuu', 'elokuu', 'syyskuu', 'lokakuu',
-      'marraskuu', 'joulukuu'],
+    'toukokuu', 'kesäkuu', 'heinäkuu', 'elokuu', 'syyskuu', 'lokakuu',
+    'marraskuu', 'joulukuu'],
   SHORTMONTHS: ['tammikuuta', 'helmikuuta', 'maaliskuuta', 'huhtikuuta',
-      'toukokuuta', 'kesäkuuta', 'heinäkuuta', 'elokuuta', 'syyskuuta',
-      'lokakuuta', 'marraskuuta', 'joulukuuta'],
+    'toukokuuta', 'kesäkuuta', 'heinäkuuta', 'elokuuta', 'syyskuuta',
+    'lokakuuta', 'marraskuuta', 'joulukuuta'],
   STANDALONESHORTMONTHS: ['tammi', 'helmi', 'maalis', 'huhti', 'touko', 'kesä',
-      'heinä', 'elo', 'syys', 'loka', 'marras', 'joulu'],
+    'heinä', 'elo', 'syys', 'loka', 'marras', 'joulu'],
   WEEKDAYS: ['sunnuntaina', 'maanantaina', 'tiistaina', 'keskiviikkona',
-      'torstaina', 'perjantaina', 'lauantaina'],
+    'torstaina', 'perjantaina', 'lauantaina'],
   STANDALONEWEEKDAYS: ['sunnuntai', 'maanantai', 'tiistai', 'keskiviikko',
-      'torstai', 'perjantai', 'lauantai'],
+    'torstai', 'perjantai', 'lauantai'],
   SHORTWEEKDAYS: ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'],
   STANDALONESHORTWEEKDAYS: ['su', 'ma', 'ti', 'ke', 'to', 'pe', 'la'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'K', 'T', 'P', 'L'],
   STANDALONENARROWWEEKDAYS: ['S', 'M', 'T', 'K', 'T', 'P', 'L'],
   SHORTQUARTERS: ['1. nelj.', '2. nelj.', '3. nelj.', '4. nelj.'],
   QUARTERS: ['1. neljännes', '2. neljännes', '3. neljännes',
-      '4. neljännes'],
+    '4. neljännes'],
   AMPMS: ['ap.', 'ip.'],
-  DATEFORMATS: ['cccc, d. MMMM y', 'd. MMMM y', 'd.M.yyyy', 'd.M.yyyy'],
+  DATEFORMATS: ['cccc d. MMMM y', 'd. MMMM y', 'd.M.y', 'd.M.y'],
   TIMEFORMATS: ['H.mm.ss zzzz', 'H.mm.ss z', 'H.mm.ss', 'H.mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -18184,29 +21248,30 @@ goog.i18n.DateTimeSymbols_fil = {
   ERANAMES: ['BC', 'AD'],
   NARROWMONTHS: ['E', 'P', 'M', 'A', 'M', 'H', 'H', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['E', 'P', 'M', 'A', 'M', 'H', 'H', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo', 'Hulyo',
-      'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
+    'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
   STANDALONEMONTHS: ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo',
-      'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
+    'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
   SHORTMONTHS: ['Ene', 'Peb', 'Mar', 'Abr', 'May', 'Hun', 'Hul', 'Ago', 'Set',
-      'Okt', 'Nob', 'Dis'],
+    'Okt', 'Nob', 'Dis'],
   STANDALONESHORTMONTHS: ['Ene', 'Peb', 'Mar', 'Abr', 'May', 'Hun', 'Hul',
-      'Ago', 'Set', 'Okt', 'Nob', 'Dis'],
+    'Ago', 'Set', 'Okt', 'Nob', 'Dis'],
   WEEKDAYS: ['Linggo', 'Lunes', 'Martes', 'Miyerkules', 'Huwebes', 'Biyernes',
-      'Sabado'],
+    'Sabado'],
   STANDALONEWEEKDAYS: ['Linggo', 'Lunes', 'Martes', 'Miyerkules', 'Huwebes',
-      'Biyernes', 'Sabado'],
+    'Biyernes', 'Sabado'],
   SHORTWEEKDAYS: ['Lin', 'Lun', 'Mar', 'Mye', 'Huw', 'Bye', 'Sab'],
   STANDALONESHORTWEEKDAYS: ['Lin', 'Lun', 'Mar', 'Miy', 'Huw', 'Biy', 'Sab'],
   NARROWWEEKDAYS: ['L', 'L', 'M', 'M', 'H', 'B', 'S'],
   STANDALONENARROWWEEKDAYS: ['L', 'L', 'M', 'M', 'H', 'B', 'S'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['ika-1 sangkapat', 'ika-2 sangkapat', 'ika-3 quarter',
-      'ika-4 na quarter'],
+    'ika-4 na quarter'],
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, MMMM dd y', 'MMMM d, y', 'MMM d, y', 'M/d/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18221,29 +21286,30 @@ goog.i18n.DateTimeSymbols_fr = {
   ERANAMES: ['avant Jésus-Christ', 'après Jésus-Christ'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
-      'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+    'août', 'septembre', 'octobre', 'novembre', 'décembre'],
   STANDALONEMONTHS: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
   SHORTMONTHS: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.',
-      'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+    'août', 'sept.', 'oct.', 'nov.', 'déc.'],
   STANDALONESHORTMONTHS: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
-      'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+    'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
   WEEKDAYS: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi',
-      'samedi'],
+    'samedi'],
   STANDALONEWEEKDAYS: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi',
-      'vendredi', 'samedi'],
+    'vendredi', 'samedi'],
   SHORTWEEKDAYS: ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'],
   STANDALONESHORTWEEKDAYS: ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.',
-      'sam.'],
+    'sam.'],
   NARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   SHORTQUARTERS: ['T1', 'T2', 'T3', 'T4'],
   QUARTERS: ['1er trimestre', '2e trimestre', '3e trimestre', '4e trimestre'],
   AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yy'],
+  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -18258,30 +21324,31 @@ goog.i18n.DateTimeSymbols_fr_CA = {
   ERANAMES: ['avant Jésus-Christ', 'après Jésus-Christ'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
-      'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+    'août', 'septembre', 'octobre', 'novembre', 'décembre'],
   STANDALONEMONTHS: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
   SHORTMONTHS: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.',
-      'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+    'août', 'sept.', 'oct.', 'nov.', 'déc.'],
   STANDALONESHORTMONTHS: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
-      'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+    'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
   WEEKDAYS: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi',
-      'samedi'],
+    'samedi'],
   STANDALONEWEEKDAYS: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi',
-      'vendredi', 'samedi'],
+    'vendredi', 'samedi'],
   SHORTWEEKDAYS: ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'],
   STANDALONESHORTWEEKDAYS: ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.',
-      'sam.'],
+    'sam.'],
   NARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   SHORTQUARTERS: ['T1', 'T2', 'T3', 'T4'],
   QUARTERS: ['1er trimestre', '2e trimestre', '3e trimestre', '4e trimestre'],
   AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'yyyy-MM-dd', 'yy-MM-dd'],
+  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'y-MM-dd', 'yy-MM-dd'],
   TIMEFORMATS: ['HH \'h\' mm \'min\' ss \'s\' zzzz', 'HH:mm:ss z', 'HH:mm:ss',
-      'HH:mm'],
+    'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18296,19 +21363,19 @@ goog.i18n.DateTimeSymbols_gl = {
   ERANAMES: ['antes de Cristo', 'despois de Cristo'],
   NARROWMONTHS: ['X', 'F', 'M', 'A', 'M', 'X', 'X', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['X', 'F', 'M', 'A', 'M', 'X', 'X', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Xaneiro', 'Febreiro', 'Marzo', 'Abril', 'Maio', 'Xuño', 'Xullo',
-      'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Decembro'],
+    'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Decembro'],
   STANDALONEMONTHS: ['Xaneiro', 'Febreiro', 'Marzo', 'Abril', 'Maio', 'Xuño',
-      'Xullo', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Decembro'],
+    'Xullo', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Decembro'],
   SHORTMONTHS: ['Xan', 'Feb', 'Mar', 'Abr', 'Mai', 'Xuñ', 'Xul', 'Ago', 'Set',
-      'Out', 'Nov', 'Dec'],
+    'Out', 'Nov', 'Dec'],
   STANDALONESHORTMONTHS: ['Xan', 'Feb', 'Mar', 'Abr', 'Mai', 'Xuñ', 'Xul',
-      'Ago', 'Set', 'Out', 'Nov', 'Dec'],
+    'Ago', 'Set', 'Out', 'Nov', 'Dec'],
   WEEKDAYS: ['Domingo', 'Luns', 'Martes', 'Mércores', 'Xoves', 'Venres',
-      'Sábado'],
+    'Sábado'],
   STANDALONEWEEKDAYS: ['Domingo', 'Luns', 'Martes', 'Mércores', 'Xoves',
-      'Venres', 'Sábado'],
+    'Venres', 'Sábado'],
   SHORTWEEKDAYS: ['Dom', 'Lun', 'Mar', 'Mér', 'Xov', 'Ven', 'Sáb'],
   STANDALONESHORTWEEKDAYS: ['Dom', 'Lun', 'Mar', 'Mér', 'Xov', 'Ven', 'Sáb'],
   NARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'X', 'V', 'S'],
@@ -18318,6 +21385,7 @@ goog.i18n.DateTimeSymbols_gl = {
   AMPMS: ['a.m.', 'p.m.'],
   DATEFORMATS: ['EEEE dd MMMM y', 'dd MMMM y', 'd MMM, y', 'dd/MM/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -18332,19 +21400,19 @@ goog.i18n.DateTimeSymbols_gsw = {
   ERANAMES: ['v. Chr.', 'n. Chr.'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
-      'Auguscht', 'Septämber', 'Oktoober', 'Novämber', 'Dezämber'],
+    'Auguscht', 'Septämber', 'Oktoober', 'Novämber', 'Dezämber'],
   STANDALONEMONTHS: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
-      'Juli', 'Auguscht', 'Septämber', 'Oktoober', 'Novämber', 'Dezämber'],
+    'Juli', 'Auguscht', 'Septämber', 'Oktoober', 'Novämber', 'Dezämber'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep',
-      'Okt', 'Nov', 'Dez'],
+    'Okt', 'Nov', 'Dez'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul',
-      'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
+    'Aug', 'Sep', 'Okt', 'Nov', 'Dez'],
   WEEKDAYS: ['Sunntig', 'Määntig', 'Ziischtig', 'Mittwuch', 'Dunschtig',
-      'Friitig', 'Samschtig'],
+    'Friitig', 'Samschtig'],
   STANDALONEWEEKDAYS: ['Sunntig', 'Määntig', 'Ziischtig', 'Mittwuch',
-      'Dunschtig', 'Friitig', 'Samschtig'],
+    'Dunschtig', 'Friitig', 'Samschtig'],
   SHORTWEEKDAYS: ['Su.', 'Mä.', 'Zi.', 'Mi.', 'Du.', 'Fr.', 'Sa.'],
   STANDALONESHORTWEEKDAYS: ['Su.', 'Mä.', 'Zi.', 'Mi.', 'Du.', 'Fr.', 'Sa.'],
   NARROWWEEKDAYS: ['S', 'M', 'D', 'M', 'D', 'F', 'S'],
@@ -18352,11 +21420,12 @@ goog.i18n.DateTimeSymbols_gsw = {
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1. Quartal', '2. Quartal', '3. Quartal', '4. Quartal'],
   AMPMS: ['vorm.', 'nam.'],
-  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'dd.MM.yyyy', 'dd.MM.yy'],
+  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'dd.MM.y', 'dd.MM.yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
-  FIRSTWEEKCUTOFFDAY: 6
+  FIRSTWEEKCUTOFFDAY: 3
 };
 
 
@@ -18365,53 +21434,91 @@ goog.i18n.DateTimeSymbols_gsw = {
  */
 goog.i18n.DateTimeSymbols_gu = {
   ERAS: ['ઈલુના જન્મ પહેસાં',
-      'ઇસવીસન'],
+    'ઇસવીસન'],
   ERANAMES: ['ઈસવીસન પૂર્વે', 'ઇસવીસન'],
   NARROWMONTHS: ['જા', 'ફે', 'મા', 'એ', 'મે', 'જૂ',
-      'જુ', 'ઑ', 'સ', 'ઑ', 'ન', 'ડિ'],
+    'જુ', 'ઑ', 'સ', 'ઑ', 'ન', 'ડિ'],
   STANDALONENARROWMONTHS: ['જા', 'ફે', 'મા', 'એ', 'મે',
-      'જૂ', 'જુ', 'ઑ', 'સ', 'ઑ', 'ન', 'ડિ'],
+    'જૂ', 'જુ', 'ઑ', 'સ', 'ઑ', 'ન', 'ડિ'],
   MONTHS: ['જાન્યુઆરી', 'ફેબ્રુઆરી',
-      'માર્ચ', 'એપ્રિલ', 'મે', 'જૂન',
-      'જુલાઈ', 'ઑગસ્ટ', 'સપ્ટેમ્બર',
-      'ઑક્ટોબર', 'નવેમ્બર',
-      'ડિસેમ્બર'],
+    'માર્ચ', 'એપ્રિલ', 'મે', 'જૂન',
+    'જુલાઈ', 'ઑગસ્ટ', 'સપ્ટેમ્બર',
+    'ઑક્ટોબર', 'નવેમ્બર',
+    'ડિસેમ્બર'],
   STANDALONEMONTHS: ['જાન્યુઆરી',
-      'ફેબ્રુઆરી', 'માર્ચ', 'એપ્રિલ',
-      'મે', 'જૂન', 'જુલાઈ', 'ઑગસ્ટ',
-      'સપ્ટેમ્બર', 'ઑક્ટોબર',
-      'નવેમ્બર', 'ડિસેમ્બર'],
+    'ફેબ્રુઆરી', 'માર્ચ', 'એપ્રિલ',
+    'મે', 'જૂન', 'જુલાઈ', 'ઑગસ્ટ',
+    'સપ્ટેમ્બર', 'ઑક્ટોબર',
+    'નવેમ્બર', 'ડિસેમ્બર'],
   SHORTMONTHS: ['જાન્યુ', 'ફેબ્રુ', 'માર્ચ',
-      'એપ્રિલ', 'મે', 'જૂન', 'જુલાઈ',
-      'ઑગસ્ટ', 'સપ્ટે', 'ઑક્ટો', 'નવે',
-      'ડિસે'],
+    'એપ્રિલ', 'મે', 'જૂન', 'જુલાઈ',
+    'ઑગસ્ટ', 'સપ્ટે', 'ઑક્ટો', 'નવે',
+    'ડિસે'],
   STANDALONESHORTMONTHS: ['જાન્યુ', 'ફેબ્રુ',
-      'માર્ચ', 'એપ્રિલ', 'મે', 'જૂન',
-      'જુલાઈ', 'ઑગસ્ટ', 'સપ્ટે',
-      'ઑક્ટો', 'નવે', 'ડિસે'],
+    'માર્ચ', 'એપ્રિલ', 'મે', 'જૂન',
+    'જુલાઈ', 'ઑગ', 'સપ્ટે', 'ઑક્ટો',
+    'નવે', 'ડિસે'],
   WEEKDAYS: ['રવિવાર', 'સોમવાર',
-      'મંગળવાર', 'બુધવાર', 'ગુરુવાર',
-      'શુક્રવાર', 'શનિવાર'],
+    'મંગળવાર', 'બુધવાર', 'ગુરુવાર',
+    'શુક્રવાર', 'શનિવાર'],
   STANDALONEWEEKDAYS: ['રવિવાર', 'સોમવાર',
-      'મંગળવાર', 'બુધવાર', 'ગુરુવાર',
-      'શુક્રવાર', 'શનિવાર'],
+    'મંગળવાર', 'બુધવાર', 'ગુરુવાર',
+    'શુક્રવાર', 'શનિવાર'],
   SHORTWEEKDAYS: ['રવિ', 'સોમ', 'મંગળ', 'બુધ',
-      'ગુરુ', 'શુક્ર', 'શનિ'],
+    'ગુરુ', 'શુક્ર', 'શનિ'],
   STANDALONESHORTWEEKDAYS: ['રવિ', 'સોમ', 'મંગળ',
-      'બુધ', 'ગુરુ', 'શુક્ર', 'શનિ'],
+    'બુધ', 'ગુરુ', 'શુક્ર', 'શનિ'],
   NARROWWEEKDAYS: ['ર', 'સો', 'મં', 'બુ', 'ગુ', 'શુ',
-      'શ'],
+    'શ'],
   STANDALONENARROWWEEKDAYS: ['ર', 'સો', 'મં', 'બુ', 'ગુ',
-      'શુ', 'શ'],
-  SHORTQUARTERS: ['પેહલા હંત 1', 'Q2', 'Q3',
-      'ચૌતા હંત 4'],
-  QUARTERS: ['પેહલા હંત 1', 'ડૂસઋા હંત 2',
-      'તીસઋા હંત 3', 'ચૌતા હંત 4'],
-  AMPMS: ['am', 'pm'],
+    'શુ', 'શ'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  QUARTERS: ['પહેલો હંત', 'બીજો હંત',
+    'ત્રીજો હંત', 'ચોથો હંત'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, d MMMM, y', 'd MMMM, y', 'd MMM, y', 'd-MM-yy'],
   TIMEFORMATS: ['hh:mm:ss a zzzz', 'hh:mm:ss a z', 'hh:mm:ss a', 'hh:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
+  FIRSTWEEKCUTOFFDAY: 5
+};
+
+
+/**
+ * Date/time formatting symbols for locale haw.
+ */
+goog.i18n.DateTimeSymbols_haw = {
+  ERAS: ['BCE', 'CE'],
+  ERANAMES: ['BCE', 'CE'],
+  NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+  STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+    '11', '12'],
+  MONTHS: ['Ianuali', 'Pepeluali', 'Malaki', 'ʻApelila', 'Mei', 'Iune',
+    'Iulai', 'ʻAukake', 'Kepakemapa', 'ʻOkakopa', 'Nowemapa', 'Kekemapa'],
+  STANDALONEMONTHS: ['Ianuali', 'Pepeluali', 'Malaki', 'ʻApelila', 'Mei',
+    'Iune', 'Iulai', 'ʻAukake', 'Kepakemapa', 'ʻOkakopa', 'Nowemapa',
+    'Kekemapa'],
+  SHORTMONTHS: ['Ian.', 'Pep.', 'Mal.', 'ʻAp.', 'Mei', 'Iun.', 'Iul.', 'ʻAu.',
+    'Kep.', 'ʻOk.', 'Now.', 'Kek.'],
+  STANDALONESHORTMONTHS: ['Ian.', 'Pep.', 'Mal.', 'ʻAp.', 'Mei', 'Iun.',
+    'Iul.', 'ʻAu.', 'Kep.', 'ʻOk.', 'Now.', 'Kek.'],
+  WEEKDAYS: ['Lāpule', 'Poʻakahi', 'Poʻalua', 'Poʻakolu', 'Poʻahā',
+    'Poʻalima', 'Poʻaono'],
+  STANDALONEWEEKDAYS: ['Lāpule', 'Poʻakahi', 'Poʻalua', 'Poʻakolu',
+    'Poʻahā', 'Poʻalima', 'Poʻaono'],
+  SHORTWEEKDAYS: ['LP', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'],
+  STANDALONESHORTWEEKDAYS: ['LP', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'],
+  NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+  STANDALONENARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'd/M/yy'],
+  TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
+  FIRSTDAYOFWEEK: 6,
+  WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
 };
 
@@ -18424,36 +21531,38 @@ goog.i18n.DateTimeSymbols_he = {
   ERANAMES: ['לפני הספירה', 'לספירה'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-      '11', '12'],
+    '11', '12'],
   MONTHS: ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי',
-      'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר',
-      'נובמבר', 'דצמבר'],
+    'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר',
+    'נובמבר', 'דצמבר'],
   STANDALONEMONTHS: ['ינואר', 'פברואר', 'מרץ', 'אפריל',
-      'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר',
-      'אוקטובר', 'נובמבר', 'דצמבר'],
+    'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר',
+    'אוקטובר', 'נובמבר', 'דצמבר'],
   SHORTMONTHS: ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ',
-      'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'],
+    'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'],
   STANDALONESHORTMONTHS: ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳',
-      'מאי', 'יונ׳', 'יול׳', 'אוג׳', 'ספט׳', 'אוק׳',
-      'נוב׳', 'דצמ׳'],
+    'מאי', 'יונ׳', 'יול׳', 'אוג׳', 'ספט׳', 'אוק׳',
+    'נוב׳', 'דצמ׳'],
   WEEKDAYS: ['יום ראשון', 'יום שני', 'יום שלישי',
-      'יום רביעי', 'יום חמישי', 'יום שישי',
-      'יום שבת'],
+    'יום רביעי', 'יום חמישי', 'יום שישי',
+    'יום שבת'],
   STANDALONEWEEKDAYS: ['יום ראשון', 'יום שני',
-      'יום שלישי', 'יום רביעי', 'יום חמישי',
-      'יום שישי', 'יום שבת'],
+    'יום שלישי', 'יום רביעי', 'יום חמישי',
+    'יום שישי', 'יום שבת'],
   SHORTWEEKDAYS: ['יום א׳', 'יום ב׳', 'יום ג׳', 'יום ד׳',
-      'יום ה׳', 'יום ו׳', 'שבת'],
+    'יום ה׳', 'יום ו׳', 'שבת'],
   STANDALONESHORTWEEKDAYS: ['יום א׳', 'יום ב׳', 'יום ג׳',
-      'יום ד׳', 'יום ה׳', 'יום ו׳', 'שבת'],
-  NARROWWEEKDAYS: ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'],
-  STANDALONENARROWWEEKDAYS: ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'],
+    'יום ד׳', 'יום ה׳', 'יום ו׳', 'שבת'],
+  NARROWWEEKDAYS: ['א\'', 'ב\'', 'ג\'', 'ד\'', 'ה\'', 'ו׳', 'ש׳'],
+  STANDALONENARROWWEEKDAYS: ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו',
+    'ש'],
   SHORTQUARTERS: ['רבעון 1', 'רבעון 2', 'רבעון 3',
-      'רבעון 4'],
+    'רבעון 4'],
   QUARTERS: ['רבעון 1', 'רבעון 2', 'רבעון 3', 'רבעון 4'],
   AMPMS: ['לפנה״צ', 'אחה״צ'],
-  DATEFORMATS: ['EEEE, d בMMMM y', 'd בMMMM y', 'd בMMM yyyy', 'dd/MM/yy'],
+  DATEFORMATS: ['EEEE, d בMMMM y', 'd בMMMM y', 'd בMMM y', 'dd/MM/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [4, 5],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18467,48 +21576,49 @@ goog.i18n.DateTimeSymbols_hi = {
   ERAS: ['ईसापूर्व', 'सन'],
   ERANAMES: ['ईसापूर्व', 'सन'],
   NARROWMONTHS: ['ज', 'फ़', 'मा', 'अ', 'म', 'जू', 'जु',
-      'अ', 'सि', 'अ', 'न', 'दि'],
+    'अ', 'सि', 'अ', 'न', 'दि'],
   STANDALONENARROWMONTHS: ['ज', 'फ़', 'मा', 'अ', 'म', 'जू',
-      'जु', 'अ', 'सि', 'अ', 'न', 'दि'],
+    'जु', 'अ', 'सि', 'अ', 'न', 'दि'],
   MONTHS: ['जनवरी', 'फरवरी', 'मार्च',
-      'अप्रैल', 'मई', 'जून', 'जुलाई',
-      'अगस्त', 'सितम्बर', 'अक्तूबर',
-      'नवम्बर', 'दिसम्बर'],
+    'अप्रैल', 'मई', 'जून', 'जुलाई',
+    'अगस्त', 'सितम्बर', 'अक्तूबर',
+    'नवम्बर', 'दिसम्बर'],
   STANDALONEMONTHS: ['जनवरी', 'फरवरी', 'मार्च',
-      'अप्रैल', 'मई', 'जून', 'जुलाई',
-      'अगस्त', 'सितम्बर', 'अक्तूबर',
-      'नवम्बर', 'दिसम्बर'],
+    'अप्रैल', 'मई', 'जून', 'जुलाई',
+    'अगस्त', 'सितम्बर', 'अक्तूबर',
+    'नवम्बर', 'दिसम्बर'],
   SHORTMONTHS: ['जनवरी', 'फरवरी', 'मार्च',
-      'अप्रैल', 'मई', 'जून', 'जुलाई',
-      'अगस्त', 'सितम्बर', 'अक्तूबर',
-      'नवम्बर', 'दिसम्बर'],
+    'अप्रैल', 'मई', 'जून', 'जुलाई',
+    'अगस्त', 'सितम्बर', 'अक्तूबर',
+    'नवम्बर', 'दिसम्बर'],
   STANDALONESHORTMONTHS: ['जनवरी', 'फरवरी',
-      'मार्च', 'अप्रैल', 'मई', 'जून',
-      'जुलाई', 'अगस्त', 'सितम्बर',
-      'अक्तूबर', 'नवम्बर', 'दिसम्बर'],
+    'मार्च', 'अप्रैल', 'मई', 'जून',
+    'जुलाई', 'अगस्त', 'सितम्बर',
+    'अक्तूबर', 'नवम्बर', 'दिसम्बर'],
   WEEKDAYS: ['रविवार', 'सोमवार',
-      'मंगलवार', 'बुधवार',
-      'बृहस्पतिवार', 'शुक्रवार',
-      'शनिवार'],
+    'मंगलवार', 'बुधवार',
+    'बृहस्पतिवार', 'शुक्रवार',
+    'शनिवार'],
   STANDALONEWEEKDAYS: ['रविवार', 'सोमवार',
-      'मंगलवार', 'बुधवार',
-      'बृहस्पतिवार', 'शुक्रवार',
-      'शनिवार'],
+    'मंगलवार', 'बुधवार',
+    'बृहस्पतिवार', 'शुक्रवार',
+    'शनिवार'],
   SHORTWEEKDAYS: ['रवि.', 'सोम.', 'मंगल.', 'बुध.',
-      'बृह.', 'शुक्र.', 'शनि.'],
+    'बृह.', 'शुक्र.', 'शनि.'],
   STANDALONESHORTWEEKDAYS: ['रवि.', 'सोम.', 'मंगल.',
-      'बुध.', 'बृह.', 'शुक्र.', 'शनि.'],
+    'बुध.', 'बृह.', 'शुक्र.', 'शनि.'],
   NARROWWEEKDAYS: ['र', 'सो', 'मं', 'बु', 'गु', 'शु',
-      'श'],
+    'श'],
   STANDALONENARROWWEEKDAYS: ['र', 'सो', 'मं', 'बु', 'गु',
-      'शु', 'श'],
+    'शु', 'श'],
   SHORTQUARTERS: ['तिमाही', 'दूसरी तिमाही',
-      'तीसरी तिमाही', 'चौथी तिमाही'],
+    'तीसरी तिमाही', 'चौथी तिमाही'],
   QUARTERS: ['तिमाही', 'दूसरी तिमाही',
-      'तीसरी तिमाही', 'चौथी तिमाही'],
+    'तीसरी तिमाही', 'चौथी तिमाही'],
   AMPMS: ['am', 'pm'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd-MM-yyyy', 'd-M-yy'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd-MM-y', 'd-M-yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18522,31 +21632,31 @@ goog.i18n.DateTimeSymbols_hr = {
   ERAS: ['p. n. e.', 'A. D.'],
   ERANAMES: ['Prije Krista', 'Poslije Krista'],
   NARROWMONTHS: ['1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.',
-      '11.', '12.'],
+    '11.', '12.'],
   STANDALONENARROWMONTHS: ['1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.',
-      '10.', '11.', '12.'],
+    '10.', '11.', '12.'],
   MONTHS: ['siječnja', 'veljače', 'ožujka', 'travnja', 'svibnja', 'lipnja',
-      'srpnja', 'kolovoza', 'rujna', 'listopada', 'studenoga', 'prosinca'],
+    'srpnja', 'kolovoza', 'rujna', 'listopada', 'studenoga', 'prosinca'],
   STANDALONEMONTHS: ['siječanj', 'veljača', 'ožujak', 'travanj', 'svibanj',
-      'lipanj', 'srpanj', 'kolovoz', 'rujan', 'listopad', 'studeni',
-      'prosinac'],
+    'lipanj', 'srpanj', 'kolovoz', 'rujan', 'listopad', 'studeni', 'prosinac'],
   SHORTMONTHS: ['sij', 'velj', 'ožu', 'tra', 'svi', 'lip', 'srp', 'kol', 'ruj',
-      'lis', 'stu', 'pro'],
+    'lis', 'stu', 'pro'],
   STANDALONESHORTMONTHS: ['sij', 'velj', 'ožu', 'tra', 'svi', 'lip', 'srp',
-      'kol', 'ruj', 'lis', 'stu', 'pro'],
+    'kol', 'ruj', 'lis', 'stu', 'pro'],
   WEEKDAYS: ['nedjelja', 'ponedjeljak', 'utorak', 'srijeda', 'četvrtak',
-      'petak', 'subota'],
+    'petak', 'subota'],
   STANDALONEWEEKDAYS: ['nedjelja', 'ponedjeljak', 'utorak', 'srijeda',
-      'četvrtak', 'petak', 'subota'],
+    'četvrtak', 'petak', 'subota'],
   SHORTWEEKDAYS: ['ned', 'pon', 'uto', 'sri', 'čet', 'pet', 'sub'],
   STANDALONESHORTWEEKDAYS: ['ned', 'pon', 'uto', 'sri', 'čet', 'pet', 'sub'],
   NARROWWEEKDAYS: ['N', 'P', 'U', 'S', 'Č', 'P', 'S'],
   STANDALONENARROWWEEKDAYS: ['n', 'p', 'u', 's', 'č', 'p', 's'],
   SHORTQUARTERS: ['1kv', '2kv', '3kv', '4kv'],
   QUARTERS: ['1. kvartal', '2. kvartal', '3. kvartal', '4. kvartal'],
-  AMPMS: ['prije podne', 'PM'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, d. MMMM y.', 'd. MMMM y.', 'd. M. y.', 'd.M.y.'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -18561,30 +21671,31 @@ goog.i18n.DateTimeSymbols_hu = {
   ERANAMES: ['időszámításunk előtt', 'időszámításunk szerint'],
   NARROWMONTHS: ['J', 'F', 'M', 'Á', 'M', 'J', 'J', 'Á', 'Sz', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'Á', 'M', 'J', 'J', 'A', 'Sz', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['január', 'február', 'március', 'április', 'május', 'június',
-      'július', 'augusztus', 'szeptember', 'október', 'november', 'december'],
+    'július', 'augusztus', 'szeptember', 'október', 'november', 'december'],
   STANDALONEMONTHS: ['január', 'február', 'március', 'április', 'május',
-      'június', 'július', 'augusztus', 'szeptember', 'október', 'november',
-      'december'],
+    'június', 'július', 'augusztus', 'szeptember', 'október', 'november',
+    'december'],
   SHORTMONTHS: ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.', 'júl.',
-      'aug.', 'szept.', 'okt.', 'nov.', 'dec.'],
+    'aug.', 'szept.', 'okt.', 'nov.', 'dec.'],
   STANDALONESHORTMONTHS: ['jan.', 'febr.', 'márc.', 'ápr.', 'máj.', 'jún.',
-      'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'],
+    'júl.', 'aug.', 'szept.', 'okt.', 'nov.', 'dec.'],
   WEEKDAYS: ['vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök',
-      'péntek', 'szombat'],
+    'péntek', 'szombat'],
   STANDALONEWEEKDAYS: ['vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök',
-      'péntek', 'szombat'],
+    'péntek', 'szombat'],
   SHORTWEEKDAYS: ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'],
   STANDALONESHORTWEEKDAYS: ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'],
   NARROWWEEKDAYS: ['V', 'H', 'K', 'Sz', 'Cs', 'P', 'Sz'],
   STANDALONENARROWWEEKDAYS: ['V', 'H', 'K', 'Sz', 'Cs', 'P', 'Sz'],
   SHORTQUARTERS: ['N1', 'N2', 'N3', 'N4'],
   QUARTERS: ['I. negyedév', 'II. negyedév', 'III. negyedév',
-      'IV. negyedév'],
+    'IV. negyedév'],
   AMPMS: ['de.', 'du.'],
-  DATEFORMATS: ['y. MMMM d., EEEE', 'y. MMMM d.', 'yyyy.MM.dd.', 'yyyy.MM.dd.'],
+  DATEFORMATS: ['y. MMMM d., EEEE', 'y. MMMM d.', 'y.MM.dd.', 'y.MM.dd.'],
   TIMEFORMATS: ['H:mm:ss zzzz', 'H:mm:ss z', 'H:mm:ss', 'H:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -18599,28 +21710,28 @@ goog.i18n.DateTimeSymbols_id = {
   ERANAMES: ['SM', 'M'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli',
-      'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+    'Agustus', 'September', 'Oktober', 'November', 'Desember'],
   STANDALONEMONTHS: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep',
-      'Okt', 'Nov', 'Des'],
+    'Okt', 'Nov', 'Des'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul',
-      'Agt', 'Sep', 'Okt', 'Nov', 'Des'],
+    'Agt', 'Sep', 'Okt', 'Nov', 'Des'],
   WEEKDAYS: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'],
   STANDALONEWEEKDAYS: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat',
-      'Sabtu'],
+    'Sabtu'],
   SHORTWEEKDAYS: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
   STANDALONESHORTWEEKDAYS: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
   NARROWWEEKDAYS: ['M', 'S', 'S', 'R', 'K', 'J', 'S'],
   STANDALONENARROWWEEKDAYS: ['M', 'S', 'S', 'R', 'K', 'J', 'S'],
   SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
-  QUARTERS: ['kuartal pertama', 'kuartal kedua', 'kuartal ketiga',
-      'kuartal keempat'],
-  AMPMS: ['pagi', 'malam'],
-  DATEFORMATS: ['EEEE, dd MMMM yyyy', 'd MMMM yyyy', 'd MMM yyyy', 'dd/MM/yy'],
-  TIMEFORMATS: ['H:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  QUARTERS: ['Kuartal ke-1', 'Kuartal ke-2', 'Kuartal ke-3', 'Kuartal ke-4'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE, dd MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yy'],
+  TIMEFORMATS: ['HH.mm.ss zzzz', 'HH.mm.ss z', 'HH.mm.ss', 'HH.mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18635,28 +21746,28 @@ goog.i18n.DateTimeSymbols_in = {
   ERANAMES: ['SM', 'M'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli',
-      'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+    'Agustus', 'September', 'Oktober', 'November', 'Desember'],
   STANDALONEMONTHS: ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep',
-      'Okt', 'Nov', 'Des'],
+    'Okt', 'Nov', 'Des'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul',
-      'Agt', 'Sep', 'Okt', 'Nov', 'Des'],
+    'Agt', 'Sep', 'Okt', 'Nov', 'Des'],
   WEEKDAYS: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'],
   STANDALONEWEEKDAYS: ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat',
-      'Sabtu'],
+    'Sabtu'],
   SHORTWEEKDAYS: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
   STANDALONESHORTWEEKDAYS: ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'],
   NARROWWEEKDAYS: ['M', 'S', 'S', 'R', 'K', 'J', 'S'],
   STANDALONENARROWWEEKDAYS: ['M', 'S', 'S', 'R', 'K', 'J', 'S'],
   SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
-  QUARTERS: ['kuartal pertama', 'kuartal kedua', 'kuartal ketiga',
-      'kuartal keempat'],
-  AMPMS: ['pagi', 'malam'],
-  DATEFORMATS: ['EEEE, dd MMMM yyyy', 'd MMMM yyyy', 'd MMM yyyy', 'dd/MM/yy'],
-  TIMEFORMATS: ['H:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  QUARTERS: ['Kuartal ke-1', 'Kuartal ke-2', 'Kuartal ke-3', 'Kuartal ke-4'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE, dd MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yy'],
+  TIMEFORMATS: ['HH.mm.ss zzzz', 'HH.mm.ss z', 'HH.mm.ss', 'HH.mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18667,34 +21778,35 @@ goog.i18n.DateTimeSymbols_in = {
  * Date/time formatting symbols for locale is.
  */
 goog.i18n.DateTimeSymbols_is = {
-  ERAS: ['fyrir Krist', 'eftir Krist'],
+  ERAS: ['f.Kr.', 'e.Kr.'],
   ERANAMES: ['fyrir Krist', 'eftir Krist'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'Á', 'L', 'O', 'N', 'D'],
-  STANDALONENARROWMONTHS: ['j', 'f', 'm', 'a', 'm', 'j', 'j', 'á', 's', 'o',
-      'n', 'd'],
+  STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'Á', 'S', 'O',
+    'N', 'D'],
   MONTHS: ['janúar', 'febrúar', 'mars', 'apríl', 'maí', 'júní', 'júlí',
-      'ágúst', 'september', 'október', 'nóvember', 'desember'],
+    'ágúst', 'september', 'október', 'nóvember', 'desember'],
   STANDALONEMONTHS: ['janúar', 'febrúar', 'mars', 'apríl', 'maí', 'júní',
-      'júlí', 'ágúst', 'september', 'október', 'nóvember', 'desember'],
+    'júlí', 'ágúst', 'september', 'október', 'nóvember', 'desember'],
   SHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'maí', 'jún', 'júl', 'ágú',
-      'sep', 'okt', 'nóv', 'des'],
+    'sep', 'okt', 'nóv', 'des'],
   STANDALONESHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'maí', 'jún', 'júl',
-      'ágú', 'sep', 'okt', 'nóv', 'des'],
+    'ágú', 'sep', 'okt', 'nóv', 'des'],
   WEEKDAYS: ['sunnudagur', 'mánudagur', 'þriðjudagur', 'miðvikudagur',
-      'fimmtudagur', 'föstudagur', 'laugardagur'],
+    'fimmtudagur', 'föstudagur', 'laugardagur'],
   STANDALONEWEEKDAYS: ['sunnudagur', 'mánudagur', 'þriðjudagur',
-      'miðvikudagur', 'fimmtudagur', 'föstudagur', 'laugardagur'],
+    'miðvikudagur', 'fimmtudagur', 'föstudagur', 'laugardagur'],
   SHORTWEEKDAYS: ['sun', 'mán', 'þri', 'mið', 'fim', 'fös', 'lau'],
   STANDALONESHORTWEEKDAYS: ['sun', 'mán', 'þri', 'mið', 'fim', 'fös',
-      'lau'],
+    'lau'],
   NARROWWEEKDAYS: ['S', 'M', 'Þ', 'M', 'F', 'F', 'L'],
-  STANDALONENARROWWEEKDAYS: ['s', 'm', 'þ', 'm', 'f', 'f', 'l'],
+  STANDALONENARROWWEEKDAYS: ['S', 'M', 'þ', 'M', 'F', 'F', 'L'],
   SHORTQUARTERS: ['F1', 'F2', 'F3', 'F4'],
-  QUARTERS: ['1st fjórðungur', '2nd fjórðungur', '3rd fjórðungur',
-      '4th fjórðungur'],
+  QUARTERS: ['1. fjórðungur', '2. fjórðungur', '3. fjórðungur',
+    '4. fjórðungur'],
   AMPMS: ['f.h.', 'e.h.'],
-  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'd.M.yyyy', 'd.M.yyyy'],
+  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'd.M.y', 'd.M.y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -18706,32 +21818,33 @@ goog.i18n.DateTimeSymbols_is = {
  */
 goog.i18n.DateTimeSymbols_it = {
   ERAS: ['aC', 'dC'],
-  ERANAMES: ['a.C.', 'd.C'],
+  ERANAMES: ['a.C.', 'd.C.'],  /* manual fix */
   NARROWMONTHS: ['G', 'F', 'M', 'A', 'M', 'G', 'L', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['G', 'F', 'M', 'A', 'M', 'G', 'L', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
-      'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'],
+    'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'],
   STANDALONEMONTHS: ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio',
-      'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre',
-      'Dicembre'],
+    'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre',
+    'Dicembre'],
   SHORTMONTHS: ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set',
-      'ott', 'nov', 'dic'],
+    'ott', 'nov', 'dic'],
   STANDALONESHORTMONTHS: ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug',
-      'ago', 'set', 'ott', 'nov', 'dic'],
+    'ago', 'set', 'ott', 'nov', 'dic'],
   WEEKDAYS: ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì',
-      'venerdì', 'sabato'],
+    'venerdì', 'sabato'],
   STANDALONEWEEKDAYS: ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì',
-      'Giovedì', 'Venerdì', 'Sabato'],
+    'Giovedì', 'Venerdì', 'Sabato'],
   SHORTWEEKDAYS: ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'],
   STANDALONESHORTWEEKDAYS: ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'],
   NARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'G', 'V', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'G', 'V', 'S'],
   SHORTQUARTERS: ['T1', 'T2', 'T3', 'T4'],
   QUARTERS: ['1o trimestre', '2o trimestre', '3o trimestre', '4o trimestre'],
-  AMPMS: ['m.', 'p.'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE d MMMM y', 'dd MMMM y', 'dd/MMM/y', 'dd/MM/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -18746,36 +21859,38 @@ goog.i18n.DateTimeSymbols_iw = {
   ERANAMES: ['לפני הספירה', 'לספירה'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-      '11', '12'],
+    '11', '12'],
   MONTHS: ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי',
-      'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר',
-      'נובמבר', 'דצמבר'],
+    'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר',
+    'נובמבר', 'דצמבר'],
   STANDALONEMONTHS: ['ינואר', 'פברואר', 'מרץ', 'אפריל',
-      'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר',
-      'אוקטובר', 'נובמבר', 'דצמבר'],
+    'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר',
+    'אוקטובר', 'נובמבר', 'דצמבר'],
   SHORTMONTHS: ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ',
-      'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'],
+    'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ'],
   STANDALONESHORTMONTHS: ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳',
-      'מאי', 'יונ׳', 'יול׳', 'אוג׳', 'ספט׳', 'אוק׳',
-      'נוב׳', 'דצמ׳'],
+    'מאי', 'יונ׳', 'יול׳', 'אוג׳', 'ספט׳', 'אוק׳',
+    'נוב׳', 'דצמ׳'],
   WEEKDAYS: ['יום ראשון', 'יום שני', 'יום שלישי',
-      'יום רביעי', 'יום חמישי', 'יום שישי',
-      'יום שבת'],
+    'יום רביעי', 'יום חמישי', 'יום שישי',
+    'יום שבת'],
   STANDALONEWEEKDAYS: ['יום ראשון', 'יום שני',
-      'יום שלישי', 'יום רביעי', 'יום חמישי',
-      'יום שישי', 'יום שבת'],
+    'יום שלישי', 'יום רביעי', 'יום חמישי',
+    'יום שישי', 'יום שבת'],
   SHORTWEEKDAYS: ['יום א׳', 'יום ב׳', 'יום ג׳', 'יום ד׳',
-      'יום ה׳', 'יום ו׳', 'שבת'],
+    'יום ה׳', 'יום ו׳', 'שבת'],
   STANDALONESHORTWEEKDAYS: ['יום א׳', 'יום ב׳', 'יום ג׳',
-      'יום ד׳', 'יום ה׳', 'יום ו׳', 'שבת'],
-  NARROWWEEKDAYS: ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'],
-  STANDALONENARROWWEEKDAYS: ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'],
+    'יום ד׳', 'יום ה׳', 'יום ו׳', 'שבת'],
+  NARROWWEEKDAYS: ['א\'', 'ב\'', 'ג\'', 'ד\'', 'ה\'', 'ו׳', 'ש׳'],
+  STANDALONENARROWWEEKDAYS: ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו',
+    'ש'],
   SHORTQUARTERS: ['רבעון 1', 'רבעון 2', 'רבעון 3',
-      'רבעון 4'],
+    'רבעון 4'],
   QUARTERS: ['רבעון 1', 'רבעון 2', 'רבעון 3', 'רבעון 4'],
   AMPMS: ['לפנה״צ', 'אחה״צ'],
-  DATEFORMATS: ['EEEE, d בMMMM y', 'd בMMMM y', 'd בMMM yyyy', 'dd/MM/yy'],
+  DATEFORMATS: ['EEEE, d בMMMM y', 'd בMMMM y', 'd בMMM y', 'dd/MM/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [4, 5],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18790,29 +21905,30 @@ goog.i18n.DateTimeSymbols_ja = {
   ERANAMES: ['紀元前', '西暦'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-      '11', '12'],
+    '11', '12'],
   MONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
+    '9月', '10月', '11月', '12月'],
   STANDALONEMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月',
-      '8月', '9月', '10月', '11月', '12月'],
+    '8月', '9月', '10月', '11月', '12月'],
   SHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
+    '9月', '10月', '11月', '12月'],
   STANDALONESHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月',
-      '7月', '8月', '9月', '10月', '11月', '12月'],
+    '7月', '8月', '9月', '10月', '11月', '12月'],
   WEEKDAYS: ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日',
-      '金曜日', '土曜日'],
+    '金曜日', '土曜日'],
   STANDALONEWEEKDAYS: ['日曜日', '月曜日', '火曜日', '水曜日',
-      '木曜日', '金曜日', '土曜日'],
+    '木曜日', '金曜日', '土曜日'],
   SHORTWEEKDAYS: ['日', '月', '火', '水', '木', '金', '土'],
   STANDALONESHORTWEEKDAYS: ['日', '月', '火', '水', '木', '金', '土'],
   NARROWWEEKDAYS: ['日', '月', '火', '水', '木', '金', '土'],
   STANDALONENARROWWEEKDAYS: ['日', '月', '火', '水', '木', '金', '土'],
-  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  SHORTQUARTERS: ['1Q', '2Q', '3Q', '4Q'],
   QUARTERS: ['第1四半期', '第2四半期', '第3四半期',
-      '第4四半期'],
+    '第4四半期'],
   AMPMS: ['午前', '午後'],
-  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'yyyy/MM/dd', 'yy/MM/dd'],
+  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'y/MM/dd', 'y/MM/dd'],
   TIMEFORMATS: ['H時mm分ss秒 zzzz', 'H:mm:ss z', 'H:mm:ss', 'H:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18825,51 +21941,50 @@ goog.i18n.DateTimeSymbols_ja = {
 goog.i18n.DateTimeSymbols_kn = {
   ERAS: ['ಕ್ರಿ.ಪೂ', 'ಜಾಹೀ'],
   ERANAMES: ['ಈಸಪೂವ೯.', 'ಕ್ರಿಸ್ತ ಶಕ'],
-  NARROWMONTHS: ['ಜ', 'ಫೆ', 'ಮಾ', 'ಎ', 'ಮೇ', 'ಜೂ', 'ಜು',
-      'ಆ', 'ಸೆ', 'ಅ', 'ನ', 'ಡಿ'],
+  NARROWMONTHS: ['ಜ', 'ಫೆ', 'ಮಾ', 'ಏ', 'ಮೇ', 'ಜೂ', 'ಜು',
+    'ಆ', 'ಸೆ', 'ಅ', 'ನ', 'ಡಿ'],
   STANDALONENARROWMONTHS: ['ಜ', 'ಫೆ', 'ಮಾ', 'ಎ', 'ಮೇ', 'ಜೂ',
-      'ಜು', 'ಆ', 'ಸೆ', 'ಅ', 'ನ', 'ಡಿ'],
+    'ಜು', 'ಆ', 'ಸೆ', 'ಅ', 'ನ', 'ಡಿ'],
   MONTHS: ['ಜನವರೀ', 'ಫೆಬ್ರವರೀ', 'ಮಾರ್ಚ್',
-      'ಎಪ್ರಿಲ್', 'ಮೆ', 'ಜೂನ್', 'ಜುಲೈ',
-      'ಆಗಸ್ಟ್', 'ಸಪ್ಟೆಂಬರ್',
-      'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್',
-      'ಡಿಸೆಂಬರ್'],
+    'ಎಪ್ರಿಲ್', 'ಮೆ', 'ಜೂನ್', 'ಜುಲೈ',
+    'ಆಗಸ್ಟ್', 'ಸಪ್ಟೆಂಬರ್',
+    'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್',
+    'ಡಿಸೆಂಬರ್'],
   STANDALONEMONTHS: ['ಜನವರೀ', 'ಫೆಬ್ರವರೀ',
-      'ಮಾರ್ಚ್', 'ಎಪ್ರಿಲ್', 'ಮೆ', 'ಜೂನ್',
-      'ಜುಲೈ', 'ಆಗಸ್ಟ್', 'ಸಪ್ಟೆಂಬರ್',
-      'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್',
-      'ಡಿಸೆಂಬರ್'],
-  SHORTMONTHS: ['ಜನವರೀ', 'ಫೆಬ್ರವರೀ',
-      'ಮಾರ್ಚ್', 'ಎಪ್ರಿಲ್', 'ಮೆ', 'ಜೂನ್',
-      'ಜುಲೈ', 'ಆಗಸ್ಟ್', 'ಸಪ್ಟೆಂಬರ್',
-      'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್',
-      'ಡಿಸೆಂಬರ್'],
-  STANDALONESHORTMONTHS: ['ಜನವರೀ', 'ಫೆಬ್ರವರೀ',
-      'ಮಾರ್ಚ್', 'ಎಪ್ರಿಲ್', 'ಮೆ', 'ಜೂನ್',
-      'ಜುಲೈ', 'ಆಗಸ್ಟ್', 'ಸಪ್ಟೆಂಬರ್',
-      'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್',
-      'ಡಿಸೆಂಬರ್'],
+    'ಮಾರ್ಚ್', 'ಎಪ್ರಿಲ್', 'ಮೆ', 'ಜೂನ್',
+    'ಜುಲೈ', 'ಆಗಸ್ಟ್', 'ಸಪ್ಟೆಂಬರ್',
+    'ಅಕ್ಟೋಬರ್', 'ನವೆಂಬರ್',
+    'ಡಿಸೆಂಬರ್'],
+  SHORTMONTHS: ['ಜನವರಿ', 'ಫೆಬ್ರುವರಿ',
+    'ಮಾರ್ಚ್', 'ಏಪ್ರಿಲ್‌‌', 'ಮೇ',
+    'ಜೂನ್', 'ಜುಲೈ', 'ಆಗಸ್ಟ್',
+    'ಸೆಪ್ಟೆಂಬರ್‌', 'ಅಕ್ಟೋಬರ್',
+    'ನವೆಂಬರ್', 'ಡಿಸೆಂಬರ್'],
+  STANDALONESHORTMONTHS: ['ಜನವರಿ', 'ಫೆಬ್ರುವರಿ',
+    'ಮಾರ್ಚ್', 'ಏಪ್ರಿಲ್‌‌', 'ಮೇ',
+    'ಜೂನ್', 'ಜುಲೈ', 'ಆಗಸ್ಟ್',
+    'ಸೆಪ್ಟೆಂಬರ್‌', 'ಅಕ್ಟೋಬರ್',
+    'ನವೆಂಬರ್', 'ಡಿಸೆಂಬರ್'],
   WEEKDAYS: ['ರವಿವಾರ', 'ಸೋಮವಾರ',
-      'ಮಂಗಳವಾರ', 'ಬುಧವಾರ', 'ಗುರುವಾರ',
-      'ಶುಕ್ರವಾರ', 'ಶನಿವಾರ'],
+    'ಮಂಗಳವಾರ', 'ಬುಧವಾರ', 'ಗುರುವಾರ',
+    'ಶುಕ್ರವಾರ', 'ಶನಿವಾರ'],
   STANDALONEWEEKDAYS: ['ರವಿವಾರ', 'ಸೋಮವಾರ',
-      'ಮಂಗಳವಾರ', 'ಬುಧವಾರ', 'ಗುರುವಾರ',
-      'ಶುಕ್ರವಾರ', 'ಶನಿವಾರ'],
+    'ಮಂಗಳವಾರ', 'ಬುಧವಾರ', 'ಗುರುವಾರ',
+    'ಶುಕ್ರವಾರ', 'ಶನಿವಾರ'],
   SHORTWEEKDAYS: ['ರ.', 'ಸೋ.', 'ಮಂ.', 'ಬು.', 'ಗು.', 'ಶು.',
-      'ಶನಿ.'],
+    'ಶನಿ.'],
   STANDALONESHORTWEEKDAYS: ['ರ.', 'ಸೋ.', 'ಮಂ.', 'ಬು.', 'ಗು.',
-      'ಶು.', 'ಶನಿ.'],
+    'ಶು.', 'ಶನಿ.'],
   NARROWWEEKDAYS: ['ರ', 'ಸೋ', 'ಮಂ', 'ಬು', 'ಗು', 'ಶು',
-      'ಶ'],
+    'ಶ'],
   STANDALONENARROWWEEKDAYS: ['ರ', 'ಸೋ', 'ಮಂ', 'ಬು', 'ಗು',
-      'ಶು', 'ಶ'],
-  SHORTQUARTERS: ['ಒಂದು 1', 'ಎರಡು 2', 'ಮೂರು 3',
-      'ನಾಲೃಕ 4'],
-  QUARTERS: ['ಒಂದು 1', 'ಎರಡು 2', 'ಮೂರು 3',
-      'ನಾಲೃಕ 4'],
-  AMPMS: ['am', 'pm'],
+    'ಶು', 'ಶ'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'd-M-yy'],
   TIMEFORMATS: ['hh:mm:ss a zzzz', 'hh:mm:ss a z', 'hh:mm:ss a', 'hh:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18883,33 +21998,34 @@ goog.i18n.DateTimeSymbols_ko = {
   ERAS: ['기원전', '서기'],
   ERANAMES: ['서력기원전', '서력기원'],
   NARROWMONTHS: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월',
-      '9월', '10월', '11월', '12월'],
+    '9월', '10월', '11월', '12월'],
   STANDALONENARROWMONTHS: ['1월', '2월', '3월', '4월', '5월', '6월',
-      '7월', '8월', '9월', '10월', '11월', '12월'],
+    '7월', '8월', '9월', '10월', '11월', '12월'],
   MONTHS: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월',
-      '9월', '10월', '11월', '12월'],
+    '9월', '10월', '11월', '12월'],
   STANDALONEMONTHS: ['1월', '2월', '3월', '4월', '5월', '6월', '7월',
-      '8월', '9월', '10월', '11월', '12월'],
+    '8월', '9월', '10월', '11월', '12월'],
   SHORTMONTHS: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월',
-      '9월', '10월', '11월', '12월'],
+    '9월', '10월', '11월', '12월'],
   STANDALONESHORTMONTHS: ['1월', '2월', '3월', '4월', '5월', '6월',
-      '7월', '8월', '9월', '10월', '11월', '12월'],
+    '7월', '8월', '9월', '10월', '11월', '12월'],
   WEEKDAYS: ['일요일', '월요일', '화요일', '수요일', '목요일',
-      '금요일', '토요일'],
+    '금요일', '토요일'],
   STANDALONEWEEKDAYS: ['일요일', '월요일', '화요일', '수요일',
-      '목요일', '금요일', '토요일'],
+    '목요일', '금요일', '토요일'],
   SHORTWEEKDAYS: ['일', '월', '화', '수', '목', '금', '토'],
   STANDALONESHORTWEEKDAYS: ['일', '월', '화', '수', '목', '금', '토'],
   NARROWWEEKDAYS: ['일', '월', '화', '수', '목', '금', '토'],
   STANDALONENARROWWEEKDAYS: ['일', '월', '화', '수', '목', '금', '토'],
   SHORTQUARTERS: ['1분기', '2분기', '3분기', '4분기'],
   QUARTERS: ['제 1/4분기', '제 2/4분기', '제 3/4분기',
-      '제 4/4분기'],
+    '제 4/4분기'],
   AMPMS: ['오전', '오후'],
-  DATEFORMATS: ['y년 M월 d일 EEEE', 'y년 M월 d일', 'yyyy. M. d.',
-      'yy. M. d.'],
+  DATEFORMATS: ['y년 M월 d일 EEEE', 'y년 M월 d일', 'y. M. d.',
+    'yy. M. d.'],
   TIMEFORMATS: ['a h시 m분 s초 zzzz', 'a h시 m분 s초 z', 'a h:mm:ss',
-      'a h:mm'],
+    'a h:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -18924,37 +22040,38 @@ goog.i18n.DateTimeSymbols_ln = {
   ERANAMES: ['Yambo ya Yézu Krís', 'Nsima ya Yézu Krís'],
   NARROWMONTHS: ['y', 'f', 'm', 'a', 'm', 'y', 'y', 'a', 's', 'ɔ', 'n', 'd'],
   STANDALONENARROWMONTHS: ['y', 'f', 'm', 'a', 'm', 'y', 'y', 'a', 's', 'ɔ',
-      'n', 'd'],
+    'n', 'd'],
   MONTHS: ['sánzá ya yambo', 'sánzá ya míbalé', 'sánzá ya mísáto',
-      'sánzá ya mínei', 'sánzá ya mítáno', 'sánzá ya motóbá',
-      'sánzá ya nsambo', 'sánzá ya mwambe', 'sánzá ya libwa',
-      'sánzá ya zómi', 'sánzá ya zómi na mɔ̌kɔ́',
-      'sánzá ya zómi na míbalé'],
+    'sánzá ya mínei', 'sánzá ya mítáno', 'sánzá ya motóbá',
+    'sánzá ya nsambo', 'sánzá ya mwambe', 'sánzá ya libwa',
+    'sánzá ya zómi', 'sánzá ya zómi na mɔ̌kɔ́',
+    'sánzá ya zómi na míbalé'],
   STANDALONEMONTHS: ['sánzá ya yambo', 'sánzá ya míbalé',
-      'sánzá ya mísáto', 'sánzá ya mínei', 'sánzá ya mítáno',
-      'sánzá ya motóbá', 'sánzá ya nsambo', 'sánzá ya mwambe',
-      'sánzá ya libwa', 'sánzá ya zómi', 'sánzá ya zómi na mɔ̌kɔ́',
-      'sánzá ya zómi na míbalé'],
+    'sánzá ya mísáto', 'sánzá ya mínei', 'sánzá ya mítáno',
+    'sánzá ya motóbá', 'sánzá ya nsambo', 'sánzá ya mwambe',
+    'sánzá ya libwa', 'sánzá ya zómi', 'sánzá ya zómi na mɔ̌kɔ́',
+    'sánzá ya zómi na míbalé'],
   SHORTMONTHS: ['yan', 'fbl', 'msi', 'apl', 'mai', 'yun', 'yul', 'agt', 'stb',
-      'ɔtb', 'nvb', 'dsb'],
+    'ɔtb', 'nvb', 'dsb'],
   STANDALONESHORTMONTHS: ['yan', 'fbl', 'msi', 'apl', 'mai', 'yun', 'yul',
-      'agt', 'stb', 'ɔtb', 'nvb', 'dsb'],
+    'agt', 'stb', 'ɔtb', 'nvb', 'dsb'],
   WEEKDAYS: ['eyenga', 'mokɔlɔ mwa yambo', 'mokɔlɔ mwa míbalé',
-      'mokɔlɔ mwa mísáto', 'mokɔlɔ ya mínéi', 'mokɔlɔ ya mítáno',
-      'mpɔ́sɔ'],
+    'mokɔlɔ mwa mísáto', 'mokɔlɔ ya mínéi', 'mokɔlɔ ya mítáno',
+    'mpɔ́sɔ'],
   STANDALONEWEEKDAYS: ['eyenga', 'mokɔlɔ mwa yambo', 'mokɔlɔ mwa míbalé',
-      'mokɔlɔ mwa mísáto', 'mokɔlɔ ya mínéi', 'mokɔlɔ ya mítáno',
-      'mpɔ́sɔ'],
+    'mokɔlɔ mwa mísáto', 'mokɔlɔ ya mínéi', 'mokɔlɔ ya mítáno',
+    'mpɔ́sɔ'],
   SHORTWEEKDAYS: ['eye', 'ybo', 'mbl', 'mst', 'min', 'mtn', 'mps'],
   STANDALONESHORTWEEKDAYS: ['eye', 'ybo', 'mbl', 'mst', 'min', 'mtn', 'mps'],
   NARROWWEEKDAYS: ['e', 'y', 'm', 'm', 'm', 'm', 'p'],
   STANDALONENARROWWEEKDAYS: ['e', 'y', 'm', 'm', 'm', 'm', 'p'],
   SHORTQUARTERS: ['SM1', 'SM2', 'SM3', 'SM4'],
   QUARTERS: ['sánzá mísáto ya yambo', 'sánzá mísáto ya míbalé',
-      'sánzá mísáto ya mísáto', 'sánzá mísáto ya mínei'],
+    'sánzá mísáto ya mísáto', 'sánzá mísáto ya mínei'],
   AMPMS: ['ntɔ́ngɔ́', 'mpókwa'],
-  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'd/M/yyyy'],
+  DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'd/M/y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -18969,30 +22086,31 @@ goog.i18n.DateTimeSymbols_lt = {
   ERANAMES: ['prieš Kristų', 'po Kristaus'],
   NARROWMONTHS: ['S', 'V', 'K', 'B', 'G', 'B', 'L', 'R', 'R', 'S', 'L', 'G'],
   STANDALONENARROWMONTHS: ['S', 'V', 'K', 'B', 'G', 'B', 'L', 'R', 'R', 'S',
-      'L', 'G'],
-  MONTHS: ['sausio', 'vasaris', 'kovas', 'balandis', 'gegužė', 'birželis',
-      'liepa', 'rugpjūtis', 'rugsėjis', 'spalis', 'lapkritis', 'gruodis'],
-  STANDALONEMONTHS: ['Sausis', 'Vasaris', 'Kovas', 'Balandis', 'Gegužė',
-      'Birželis', 'Liepa', 'Rugpjūtis', 'Rugsėjis', 'Spalis', 'Lapkritis',
-      'Gruodis'],
-  SHORTMONTHS: ['Saus.', 'Vas', 'Kov.', 'Bal.', 'Geg.', 'Bir.', 'Liep.',
-      'Rugp.', 'Rugs.', 'Spal.', 'Lapkr.', 'Gruod.'],
-  STANDALONESHORTMONTHS: ['Saus.', 'Vas.', 'Kov.', 'Bal.', 'Geg.', 'Bir.',
-      'Liep.', 'Rugp.', 'Rugs.', 'Spal.', 'Lapkr.', 'Gruod.'],
+    'L', 'G'],
+  MONTHS: ['sausis', 'vasaris', 'kovas', 'balandis', 'gegužė', 'birželis',
+    'liepa', 'rugpjūtis', 'rugsėjis', 'spalis', 'lapkritis', 'gruodis'],
+  STANDALONEMONTHS: ['sausis', 'vasaris', 'kovas', 'balandis', 'gegužė',
+    'birželis', 'liepa', 'rugpjūtis', 'rugsėjis', 'spalis', 'lapkritis',
+    'gruodis'],
+  SHORTMONTHS: ['saus.', 'vas.', 'kov.', 'bal.', 'geg.', 'birž.', 'liep.',
+    'rugp.', 'rugs.', 'spal.', 'lapkr.', 'gruod.'],
+  STANDALONESHORTMONTHS: ['saus.', 'vas.', 'kov.', 'bal.', 'geg.', 'birž.',
+    'liep.', 'rugp.', 'rugs.', 'spal.', 'lapkr.', 'gruod.'],
   WEEKDAYS: ['sekmadienis', 'pirmadienis', 'antradienis', 'trečiadienis',
-      'ketvirtadienis', 'penktadienis', 'šeštadienis'],
+    'ketvirtadienis', 'penktadienis', 'šeštadienis'],
   STANDALONEWEEKDAYS: ['sekmadienis', 'pirmadienis', 'antradienis',
-      'trečiadienis', 'ketvirtadienis', 'penktadienis', 'šeštadienis'],
-  SHORTWEEKDAYS: ['Sk', 'Pr', 'An', 'Tr', 'Kt', 'Pn', 'Št'],
-  STANDALONESHORTWEEKDAYS: ['Sk', 'Pr', 'An', 'Tr', 'Kt', 'Pn', 'Št'],
+    'trečiadienis', 'ketvirtadienis', 'penktadienis', 'šeštadienis'],
+  SHORTWEEKDAYS: ['sk', 'pr', 'an', 'tr', 'kt', 'pn', 'št'],
+  STANDALONESHORTWEEKDAYS: ['sk', 'pr', 'an', 'tr', 'kt', 'pn', 'št'],
   NARROWWEEKDAYS: ['S', 'P', 'A', 'T', 'K', 'P', 'Š'],
   STANDALONENARROWWEEKDAYS: ['S', 'P', 'A', 'T', 'K', 'P', 'Š'],
-  SHORTQUARTERS: ['I k.', 'II k.', 'III k.', 'IV ketv.'],
+  SHORTQUARTERS: ['I k.', 'II k.', 'III k.', 'IV k.'],
   QUARTERS: ['I ketvirtis', 'II ketvirtis', 'III ketvirtis', 'IV ketvirtis'],
   AMPMS: ['priešpiet', 'popiet'],
   DATEFORMATS: ['y \'m\'. MMMM d \'d\'., EEEE', 'y \'m\'. MMMM d \'d\'.',
-      'y MMM d', 'yyyy-MM-dd'],
+    'y MMM d', 'y-MM-dd'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -19007,31 +22125,32 @@ goog.i18n.DateTimeSymbols_lv = {
   ERANAMES: ['pirms mūsu ēras', 'mūsu ērā'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['janvāris', 'februāris', 'marts', 'aprīlis', 'maijs', 'jūnijs',
-      'jūlijs', 'augusts', 'septembris', 'oktobris', 'novembris', 'decembris'],
-  STANDALONEMONTHS: ['janvāris', 'februāris', 'marts', 'aprīlis', 'maijs',
-      'jūnijs', 'jūlijs', 'augusts', 'septembris', 'oktobris', 'novembris',
-      'decembris'],
+    'jūlijs', 'augusts', 'septembris', 'oktobris', 'novembris', 'decembris'],
+  STANDALONEMONTHS: ['Janvāris', 'Februāris', 'Marts', 'Aprīlis', 'Maijs',
+    'Jūnijs', 'Jūlijs', 'Augusts', 'Septembris', 'Oktobris', 'Novembris',
+    'Decembris'],
   SHORTMONTHS: ['janv.', 'febr.', 'marts', 'apr.', 'maijs', 'jūn.', 'jūl.',
-      'aug.', 'sept.', 'okt.', 'nov.', 'dec.'],
-  STANDALONESHORTMONTHS: ['janv.', 'febr.', 'marts', 'apr.', 'maijs', 'jūn.',
-      'jūl.', 'aug.', 'sept.', 'okt.', 'nov.', 'dec.'],
+    'aug.', 'sept.', 'okt.', 'nov.', 'dec.'],
+  STANDALONESHORTMONTHS: ['Janv.', 'Febr.', 'Marts', 'Apr.', 'Maijs', 'Jūn.',
+    'Jūl.', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dec.'],
   WEEKDAYS: ['svētdiena', 'pirmdiena', 'otrdiena', 'trešdiena', 'ceturtdiena',
-      'piektdiena', 'sestdiena'],
-  STANDALONEWEEKDAYS: ['svētdiena', 'pirmdiena', 'otrdiena', 'trešdiena',
-      'ceturtdiena', 'piektdiena', 'sestdiena'],
+    'piektdiena', 'sestdiena'],
+  STANDALONEWEEKDAYS: ['Svētdiena', 'Pirmdiena', 'Otrdiena', 'Trešdiena',
+    'Ceturtdiena', 'Piektdiena', 'Sestdiena'],
   SHORTWEEKDAYS: ['Sv', 'Pr', 'Ot', 'Tr', 'Ce', 'Pk', 'Se'],
   STANDALONESHORTWEEKDAYS: ['Sv', 'Pr', 'Ot', 'Tr', 'Ce', 'Pk', 'Se'],
   NARROWWEEKDAYS: ['S', 'P', 'O', 'T', 'C', 'P', 'S'],
   STANDALONENARROWWEEKDAYS: ['S', 'P', 'O', 'T', 'C', 'P', 'S'],
   SHORTQUARTERS: ['C1', 'C2', 'C3', 'C4'],
   QUARTERS: ['1. ceturksnis', '2. ceturksnis', '3. ceturksnis',
-      '4. ceturksnis'],
+    '4. ceturksnis'],
   AMPMS: ['priekšpusdienā', 'pēcpusdienā'],
   DATEFORMATS: ['EEEE, y. \'gada\' d. MMMM', 'y. \'gada\' d. MMMM',
-      'y. \'gada\' d. MMM', 'dd.MM.yy'],
+    'y. \'gada\' d. MMM', 'dd.MM.yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19044,54 +22163,52 @@ goog.i18n.DateTimeSymbols_lv = {
 goog.i18n.DateTimeSymbols_ml = {
   ERAS: ['ക്രി.മൂ', 'ക്രി.പി.'],
   ERANAMES: ['ക്രിസ്തുവിനു് മുമ്പ്‌',
-      'ക്രിസ്തുവിന് പിന്‍പ്'],
+    'ക്രിസ്തുവിന് പിൻപ്'],
   NARROWMONTHS: ['ജ', 'ഫെ', 'മാ', 'ഏ', 'മേ', 'ജൂ', 'ജൂ',
-      'ഓ', 'സെ', 'ഒ', 'ന', 'ഡി'],
+    'ഓ', 'സെ', 'ഒ', 'ന', 'ഡി'],
   STANDALONENARROWMONTHS: ['ജ', 'ഫെ', 'മാ', 'ഏ', 'മേ', 'ജൂ',
-      'ജൂ', 'ഓ', 'സെ', 'ഒ', 'ന', 'ഡി'],
+    'ജൂ', 'ഓ', 'സെ', 'ഒ', 'ന', 'ഡി'],
   MONTHS: ['ജനുവരി', 'ഫെബ്രുവരി',
-      'മാര്‍ച്ച്', 'ഏപ്രില്‍', 'മേയ്',
-      'ജൂണ്‍', 'ജൂലൈ', 'ആഗസ്റ്റ്',
-      'സെപ്റ്റംബര്‍', 'ഒക്ടോബര്‍',
-      'നവംബര്‍', 'ഡിസംബര്‍'],
+    'മാർച്ച്', 'ഏപ്രിൽ', 'മേയ്', 'ജൂൺ',
+    'ജൂലൈ', 'ആഗസ്റ്റ്',
+    'സെപ്റ്റംബർ', 'ഒക്ടോബർ',
+    'നവംബർ', 'ഡിസംബർ'],
   STANDALONEMONTHS: ['ജനുവരി', 'ഫെബ്രുവരി',
-      'മാര്‍ച്ച്', 'ഏപ്രില്‍', 'മേയ്',
-      'ജൂണ്‍', 'ജൂലൈ', 'ആഗസ്റ്റ്',
-      'സെപ്റ്റംബര്‍', 'ഒക്ടോബര്‍',
-      'നവംബര്‍', 'ഡിസംബര്‍'],
-  SHORTMONTHS: ['ജനു', 'ഫെബ്രു', 'മാര്‍',
-      'ഏപ്രി', 'മേയ്', 'ജൂണ്‍', 'ജൂലൈ',
-      'ഓഗ', 'സെപ്റ്റം', 'ഒക്ടോ', 'നവം',
-      'ഡിസം'],
-  STANDALONESHORTMONTHS: ['ജനു', 'ഫെബ്രു', 'മാര്‍',
-      'ഏപ്രി', 'മേയ്', 'ജൂണ്‍', 'ജൂലൈ',
-      'ഓഗ', 'സെപ്റ്റം', 'ഒക്ടോ', 'നവം',
-      'ഡിസം'],
+    'മാർച്ച്', 'ഏപ്രിൽ', 'മേയ്', 'ജൂൺ',
+    'ജൂലൈ', 'ആഗസ്റ്റ്',
+    'സെപ്റ്റംബർ', 'ഒക്ടോബർ',
+    'നവംബർ', 'ഡിസംബർ'],
+  SHORTMONTHS: ['ജനു', 'ഫെബ്രു', 'മാർ',
+    'ഏപ്രി', 'മേയ്', 'ജൂൺ', 'ജൂലൈ', 'ഓഗ',
+    'സെപ്റ്റം', 'ഒക്ടോ', 'നവം', 'ഡിസം'],
+  STANDALONESHORTMONTHS: ['ജനു', 'ഫെബ്രു', 'മാർ',
+    'ഏപ്രി', 'മേയ്', 'ജൂൺ', 'ജൂലൈ', 'ഓഗ',
+    'സെപ്റ്റം', 'ഒക്ടോ', 'നവം', 'ഡിസം'],
   WEEKDAYS: ['ഞായറാഴ്ച', 'തിങ്കളാഴ്ച',
-      'ചൊവ്വാഴ്ച', 'ബുധനാഴ്ച',
-      'വ്യാഴാഴ്ച', 'വെള്ളിയാഴ്ച',
-      'ശനിയാഴ്ച'],
+    'ചൊവ്വാഴ്ച', 'ബുധനാഴ്ച',
+    'വ്യാഴാഴ്ച', 'വെള്ളിയാഴ്ച',
+    'ശനിയാഴ്ച'],
   STANDALONEWEEKDAYS: ['ഞായറാഴ്ച',
-      'തിങ്കളാഴ്ച', 'ചൊവ്വാഴ്ച',
-      'ബുധനാഴ്ച', 'വ്യാഴാഴ്ച',
-      'വെള്ളിയാഴ്ച', 'ശനിയാഴ്ച'],
-  SHORTWEEKDAYS: ['ഞായര്‍', 'തിങ്കള്‍',
-      'ചൊവ്വ', 'ബുധന്‍', 'വ്യാഴം',
-      'വെള്ളി', 'ശനി'],
-  STANDALONESHORTWEEKDAYS: ['ഞായര്‍', 'തിങ്കള്‍',
-      'ചൊവ്വ', 'ബുധന്‍', 'വ്യാഴം',
-      'വെള്ളി', 'ശനി'],
+    'തിങ്കളാഴ്ച', 'ചൊവ്വാഴ്ച',
+    'ബുധനാഴ്ച', 'വ്യാഴാഴ്ച',
+    'വെള്ളിയാഴ്ച', 'ശനിയാഴ്ച'],
+  SHORTWEEKDAYS: ['ഞായർ', 'തിങ്കൾ', 'ചൊവ്വ',
+    'ബുധൻ', 'വ്യാഴം', 'വെള്ളി', 'ശനി'],
+  STANDALONESHORTWEEKDAYS: ['ഞായർ', 'തിങ്കൾ',
+    'ചൊവ്വ', 'ബുധൻ', 'വ്യാഴം',
+    'വെള്ളി', 'ശനി'],
   NARROWWEEKDAYS: ['ഞാ', 'തി', 'ചൊ', 'ബു', 'വ്യാ',
-      'വെ', 'ശ'],
+    'വെ', 'ശ'],
   STANDALONENARROWWEEKDAYS: ['ഞാ', 'തി', 'ചൊ', 'ബു',
-      'വ്യാ', 'വെ', 'ശ'],
+    'വ്യാ', 'വെ', 'ശ'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['ഒന്നാം പാദം',
-      'രണ്ടാം പാദം', 'മൂന്നാം പാദം',
-      'നാലാം പാദം'],
-  AMPMS: ['am', 'pm'],
+    'രണ്ടാം പാദം', 'മൂന്നാം പാദം',
+    'നാലാം പാദം'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['y, MMMM d, EEEE', 'y, MMMM d', 'y, MMM d', 'dd/MM/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19102,53 +22219,54 @@ goog.i18n.DateTimeSymbols_ml = {
  * Date/time formatting symbols for locale mr.
  */
 goog.i18n.DateTimeSymbols_mr = {
+  ZERODIGIT: 0x0966,
   ERAS: ['ईसापूर्व', 'सन'],
   ERANAMES: ['ईसवीसनपूर्व', 'ईसवीसन'],
   NARROWMONTHS: ['जा', 'फे', 'मा', 'ए', 'मे', 'जू',
-      'जु', 'ऑ', 'स', 'ऑ', 'नो', 'डि'],
+    'जु', 'ऑ', 'स', 'ऑ', 'नो', 'डि'],
   STANDALONENARROWMONTHS: ['जा', 'फे', 'मा', 'ए', 'मे',
-      'जू', 'जु', 'ऑ', 'स', 'ऑ', 'नो', 'डि'],
+    'जू', 'जु', 'ऑ', 'स', 'ऑ', 'नो', 'डि'],
   MONTHS: ['जानेवारी', 'फेब्रुवारी',
-      'मार्च', 'एप्रिल', 'मे', 'जून',
-      'जुलै', 'ऑगस्ट', 'सप्टेंबर',
-      'ऑक्टोबर', 'नोव्हेंबर',
-      'डिसेंबर'],
+    'मार्च', 'एप्रिल', 'मे', 'जून',
+    'जुलै', 'ऑगस्ट', 'सप्टेंबर',
+    'ऑक्टोबर', 'नोव्हेंबर',
+    'डिसेंबर'],
   STANDALONEMONTHS: ['जानेवारी',
-      'फेब्रुवारी', 'मार्च', 'एप्रिल',
-      'मे', 'जून', 'जुलै', 'ऑगस्ट',
-      'सप्टेंबर', 'ऑक्टोबर',
-      'नोव्हेंबर', 'डिसेंबर'],
+    'फेब्रुवारी', 'मार्च', 'एप्रिल',
+    'मे', 'जून', 'जुलै', 'ऑगस्ट',
+    'सप्टेंबर', 'ऑक्टोबर',
+    'नोव्हेंबर', 'डिसेंबर'],
   SHORTMONTHS: ['जाने', 'फेब्रु', 'मार्च',
-      'एप्रि', 'मे', 'जून', 'जुलै', 'ऑग',
-      'सेप्टें', 'ऑक्टोबर', 'नोव्हें',
-      'डिसें'],
+    'एप्रि', 'मे', 'जून', 'जुलै', 'ऑग',
+    'सेप्टें', 'ऑक्ट', 'नोव्हें',
+    'डिसें'],
   STANDALONESHORTMONTHS: ['जाने', 'फेब्रु',
-      'मार्च', 'एप्रि', 'मे', 'जून',
-      'जुलै', 'ऑग', 'सेप्टें',
-      'ऑक्टोबर', 'नोव्हें', 'डिसें'],
+    'मार्च', 'एप्रि', 'मे', 'जून', 'जुलै',
+    'ऑग', 'सेप्टें', 'ऑक्ट', 'नोव्हें',
+    'डिसें'],
   WEEKDAYS: ['रविवार', 'सोमवार',
-      'मंगळवार', 'बुधवार', 'गुरुवार',
-      'शुक्रवार', 'शनिवार'],
+    'मंगळवार', 'बुधवार', 'गुरुवार',
+    'शुक्रवार', 'शनिवार'],
   STANDALONEWEEKDAYS: ['रविवार', 'सोमवार',
-      'मंगळवार', 'बुधवार', 'गुरुवार',
-      'शुक्रवार', 'शनिवार'],
+    'मंगळवार', 'बुधवार', 'गुरुवार',
+    'शुक्रवार', 'शनिवार'],
   SHORTWEEKDAYS: ['रवि', 'सोम', 'मंगळ', 'बुध',
-      'गुरु', 'शुक्र', 'शनि'],
+    'गुरु', 'शुक्र', 'शनि'],
   STANDALONESHORTWEEKDAYS: ['रवि', 'सोम', 'मंगळ',
-      'बुध', 'गुरु', 'शुक्र', 'शनि'],
+    'बुध', 'गुरु', 'शुक्र', 'शनि'],
   NARROWWEEKDAYS: ['र', 'सो', 'मं', 'बु', 'गु', 'शु',
-      'श'],
+    'श'],
   STANDALONENARROWWEEKDAYS: ['र', 'सो', 'मं', 'बु', 'गु',
-      'शु', 'श'],
-  SHORTQUARTERS: ['ति 1', '2 री तिमाही', 'ति 3',
-      'ति 4'],
+    'शु', 'श'],
+  SHORTQUARTERS: ['ति 1', 'ति 2', 'ति 3', 'ति 4'],
   QUARTERS: ['प्रथम तिमाही',
-      'द्वितीय तिमाही',
-      'तृतीय तिमाही',
-      'चतुर्थ तिमाही'],
-  AMPMS: ['am', 'pm'],
+    'द्वितीय तिमाही',
+    'तृतीय तिमाही',
+    'चतुर्थ तिमाही'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'd-M-yy'],
   TIMEFORMATS: ['h-mm-ss a zzzz', 'h-mm-ss a z', 'h-mm-ss a', 'h-mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19163,18 +22281,18 @@ goog.i18n.DateTimeSymbols_ms = {
   ERANAMES: ['S.M.', 'TM'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'O', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'O', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun', 'Julai', 'Ogos',
-      'September', 'Oktober', 'November', 'Disember'],
+    'September', 'Oktober', 'November', 'Disember'],
   STANDALONEMONTHS: ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun',
-      'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'],
+    'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogos', 'Sep',
-      'Okt', 'Nov', 'Dis'],
+    'Okt', 'Nov', 'Dis'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul',
-      'Ogos', 'Sep', 'Okt', 'Nov', 'Dis'],
+    'Ogos', 'Sep', 'Okt', 'Nov', 'Dis'],
   WEEKDAYS: ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'],
   STANDALONEWEEKDAYS: ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat',
-      'Sabtu'],
+    'Sabtu'],
   SHORTWEEKDAYS: ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'],
   STANDALONESHORTWEEKDAYS: ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'],
   NARROWWEEKDAYS: ['A', 'I', 'S', 'R', 'K', 'J', 'S'],
@@ -19182,8 +22300,9 @@ goog.i18n.DateTimeSymbols_ms = {
   SHORTQUARTERS: ['Suku 1', 'Suku Ke-2', 'Suku Ke-3', 'Suku Ke-4'],
   QUARTERS: ['Suku pertama', 'Suku Ke-2', 'Suku Ke-3', 'Suku Ke-4'],
   AMPMS: ['PG', 'PTG'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd/MM/yyyy', 'd/MM/yy'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd/MM/y', 'd/MM/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19198,19 +22317,19 @@ goog.i18n.DateTimeSymbols_mt = {
   ERANAMES: ['Qabel Kristu', 'Wara Kristu'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'Ġ', 'L', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'Ġ', 'L', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Jannar', 'Frar', 'Marzu', 'April', 'Mejju', 'Ġunju', 'Lulju',
-      'Awwissu', 'Settembru', 'Ottubru', 'Novembru', 'Diċembru'],
+    'Awwissu', 'Settembru', 'Ottubru', 'Novembru', 'Diċembru'],
   STANDALONEMONTHS: ['Jannar', 'Frar', 'Marzu', 'April', 'Mejju', 'Ġunju',
-      'Lulju', 'Awwissu', 'Settembru', 'Ottubru', 'Novembru', 'Diċembru'],
+    'Lulju', 'Awwissu', 'Settembru', 'Ottubru', 'Novembru', 'Diċembru'],
   SHORTMONTHS: ['Jan', 'Fra', 'Mar', 'Apr', 'Mej', 'Ġun', 'Lul', 'Aww', 'Set',
-      'Ott', 'Nov', 'Diċ'],
+    'Ott', 'Nov', 'Diċ'],
   STANDALONESHORTMONTHS: ['Jan', 'Fra', 'Mar', 'Apr', 'Mej', 'Ġun', 'Lul',
-      'Aww', 'Set', 'Ott', 'Nov', 'Diċ'],
+    'Aww', 'Set', 'Ott', 'Nov', 'Diċ'],
   WEEKDAYS: ['Il-Ħadd', 'It-Tnejn', 'It-Tlieta', 'L-Erbgħa', 'Il-Ħamis',
-      'Il-Ġimgħa', 'Is-Sibt'],
+    'Il-Ġimgħa', 'Is-Sibt'],
   STANDALONEWEEKDAYS: ['Il-Ħadd', 'It-Tnejn', 'It-Tlieta', 'L-Erbgħa',
-      'Il-Ħamis', 'Il-Ġimgħa', 'Is-Sibt'],
+    'Il-Ħamis', 'Il-Ġimgħa', 'Is-Sibt'],
   SHORTWEEKDAYS: ['Ħad', 'Tne', 'Tli', 'Erb', 'Ħam', 'Ġim', 'Sib'],
   STANDALONESHORTWEEKDAYS: ['Ħad', 'Tne', 'Tli', 'Erb', 'Ħam', 'Ġim', 'Sib'],
   NARROWWEEKDAYS: ['Ħ', 'T', 'T', 'E', 'Ħ', 'Ġ', 'S'],
@@ -19219,8 +22338,9 @@ goog.i18n.DateTimeSymbols_mt = {
   QUARTERS: ['K1', 'K2', 'K3', 'K4'],
   AMPMS: ['QN', 'WN'],
   DATEFORMATS: ['EEEE, d \'ta\'’ MMMM y', 'd \'ta\'’ MMMM y', 'dd MMM y',
-      'dd/MM/yyyy'],
+    'dd/MM/y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19228,26 +22348,63 @@ goog.i18n.DateTimeSymbols_mt = {
 
 
 /**
+ * Date/time formatting symbols for locale nb.
+ */
+goog.i18n.DateTimeSymbols_nb = {
+  ERAS: ['f.Kr.', 'e.Kr.'],
+  ERANAMES: ['f.Kr.', 'e.Kr.'],
+  NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
+  STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
+    'N', 'D'],
+  MONTHS: ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli',
+    'august', 'september', 'oktober', 'november', 'desember'],
+  STANDALONEMONTHS: ['januar', 'februar', 'mars', 'april', 'mai', 'juni',
+    'juli', 'august', 'september', 'oktober', 'november', 'desember'],
+  SHORTMONTHS: ['jan.', 'feb.', 'mars', 'apr.', 'mai', 'juni', 'juli', 'aug.',
+    'sep.', 'okt.', 'nov.', 'des.'],
+  STANDALONESHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul',
+    'aug', 'sep', 'okt', 'nov', 'des'],
+  WEEKDAYS: ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag',
+    'lørdag'],
+  STANDALONEWEEKDAYS: ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag',
+    'fredag', 'lørdag'],
+  SHORTWEEKDAYS: ['søn.', 'man.', 'tir.', 'ons.', 'tor.', 'fre.', 'lør.'],
+  STANDALONESHORTWEEKDAYS: ['sø.', 'ma.', 'ti.', 'on.', 'to.', 'fr.', 'lø.'],
+  NARROWWEEKDAYS: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
+  STANDALONENARROWWEEKDAYS: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
+  SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
+  QUARTERS: ['1. kvartal', '2. kvartal', '3. kvartal', '4. kvartal'],
+  AMPMS: ['AM', 'PM'],
+  DATEFORMATS: ['EEEE d. MMMM y', 'd. MMMM y', 'd. MMM y', 'dd.MM.yy'],
+  TIMEFORMATS: ['\'kl\'. HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{0} {1}', '{0} {1}', '{0} {1}', '{0} {1}'],
+  FIRSTDAYOFWEEK: 0,
+  WEEKENDRANGE: [5, 6],
+  FIRSTWEEKCUTOFFDAY: 3
+};
+
+
+/**
  * Date/time formatting symbols for locale nl.
  */
 goog.i18n.DateTimeSymbols_nl = {
-  ERAS: ['v. Chr.', 'n. Chr.'],
+  ERAS: ['v.Chr.', 'n.Chr.'],
   ERANAMES: ['Voor Christus', 'na Christus'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli',
-      'augustus', 'september', 'oktober', 'november', 'december'],
+    'augustus', 'september', 'oktober', 'november', 'december'],
   STANDALONEMONTHS: ['januari', 'februari', 'maart', 'april', 'mei', 'juni',
-      'juli', 'augustus', 'september', 'oktober', 'november', 'december'],
+    'juli', 'augustus', 'september', 'oktober', 'november', 'december'],
   SHORTMONTHS: ['jan.', 'feb.', 'mrt.', 'apr.', 'mei', 'jun.', 'jul.', 'aug.',
-      'sep.', 'okt.', 'nov.', 'dec.'],
+    'sep.', 'okt.', 'nov.', 'dec.'],
   STANDALONESHORTMONTHS: ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul',
-      'aug', 'sep', 'okt', 'nov', 'dec'],
+    'aug', 'sep', 'okt', 'nov', 'dec'],
   WEEKDAYS: ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag',
-      'zaterdag'],
+    'zaterdag'],
   STANDALONEWEEKDAYS: ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag',
-      'vrijdag', 'zaterdag'],
+    'vrijdag', 'zaterdag'],
   SHORTWEEKDAYS: ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'],
   STANDALONESHORTWEEKDAYS: ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'],
   NARROWWEEKDAYS: ['Z', 'M', 'D', 'W', 'D', 'V', 'Z'],
@@ -19257,6 +22414,7 @@ goog.i18n.DateTimeSymbols_nl = {
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'dd-MM-yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -19271,19 +22429,19 @@ goog.i18n.DateTimeSymbols_no = {
   ERANAMES: ['f.Kr.', 'e.Kr.'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli',
-      'august', 'september', 'oktober', 'november', 'desember'],
+    'august', 'september', 'oktober', 'november', 'desember'],
   STANDALONEMONTHS: ['januar', 'februar', 'mars', 'april', 'mai', 'juni',
-      'juli', 'august', 'september', 'oktober', 'november', 'desember'],
+    'juli', 'august', 'september', 'oktober', 'november', 'desember'],
   SHORTMONTHS: ['jan.', 'feb.', 'mars', 'apr.', 'mai', 'juni', 'juli', 'aug.',
-      'sep.', 'okt.', 'nov.', 'des.'],
+    'sep.', 'okt.', 'nov.', 'des.'],
   STANDALONESHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul',
-      'aug', 'sep', 'okt', 'nov', 'des'],
+    'aug', 'sep', 'okt', 'nov', 'des'],
   WEEKDAYS: ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag',
-      'lørdag'],
+    'lørdag'],
   STANDALONEWEEKDAYS: ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag',
-      'fredag', 'lørdag'],
+    'fredag', 'lørdag'],
   SHORTWEEKDAYS: ['søn.', 'man.', 'tir.', 'ons.', 'tor.', 'fre.', 'lør.'],
   STANDALONESHORTWEEKDAYS: ['sø.', 'ma.', 'ti.', 'on.', 'to.', 'fr.', 'lø.'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
@@ -19293,6 +22451,7 @@ goog.i18n.DateTimeSymbols_no = {
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE d. MMMM y', 'd. MMMM y', 'd. MMM y', 'dd.MM.yy'],
   TIMEFORMATS: ['\'kl\'. HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{0} {1}', '{0} {1}', '{0} {1}', '{0} {1}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -19306,48 +22465,49 @@ goog.i18n.DateTimeSymbols_or = {
   ERAS: ['BCE', 'CE'],
   ERANAMES: ['BCE', 'CE'],
   NARROWMONTHS: ['ଜା', 'ଫେ', 'ମା', 'ଅ', 'ମେ', 'ଜୁ',
-      'ଜୁ', 'ଅ', 'ସେ', 'ଅ', 'ନ', 'ଡି'],
+    'ଜୁ', 'ଅ', 'ସେ', 'ଅ', 'ନ', 'ଡି'],
   STANDALONENARROWMONTHS: ['ଜା', 'ଫେ', 'ମା', 'ଅ', 'ମେ',
-      'ଜୁ', 'ଜୁ', 'ଅ', 'ସେ', 'ଅ', 'ନ', 'ଡି'],
+    'ଜୁ', 'ଜୁ', 'ଅ', 'ସେ', 'ଅ', 'ନ', 'ଡି'],
   MONTHS: ['ଜାନୁଆରୀ', 'ଫେବ୍ରୁୟାରୀ',
-      'ମାର୍ଚ୍ଚ', 'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ',
-      'ଜୁଲାଇ', 'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
-      'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
-      'ଡିସେମ୍ବର'],
+    'ମାର୍ଚ୍ଚ', 'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ',
+    'ଜୁଲାଇ', 'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
+    'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
+    'ଡିସେମ୍ବର'],
   STANDALONEMONTHS: ['ଜାନୁଆରୀ', 'ଫେବ୍ରୁୟାରୀ',
-      'ମାର୍ଚ୍ଚ', 'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ',
-      'ଜୁଲାଇ', 'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
-      'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
-      'ଡିସେମ୍ବର'],
+    'ମାର୍ଚ୍ଚ', 'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ',
+    'ଜୁଲାଇ', 'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
+    'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
+    'ଡିସେମ୍ବର'],
   SHORTMONTHS: ['ଜାନୁଆରୀ', 'ଫେବ୍ରୁୟାରୀ',
-      'ମାର୍ଚ୍ଚ', 'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ',
-      'ଜୁଲାଇ', 'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
-      'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
-      'ଡିସେମ୍ବର'],
+    'ମାର୍ଚ୍ଚ', 'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ',
+    'ଜୁଲାଇ', 'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
+    'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
+    'ଡିସେମ୍ବର'],
   STANDALONESHORTMONTHS: ['ଜାନୁଆରୀ',
-      'ଫେବ୍ରୁୟାରୀ', 'ମାର୍ଚ୍ଚ',
-      'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ', 'ଜୁଲାଇ',
-      'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
-      'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
-      'ଡିସେମ୍ବର'],
+    'ଫେବ୍ରୁୟାରୀ', 'ମାର୍ଚ୍ଚ',
+    'ଅପ୍ରେଲ', 'ମେ', 'ଜୁନ', 'ଜୁଲାଇ',
+    'ଅଗଷ୍ଟ', 'ସେପ୍ଟେମ୍ବର',
+    'ଅକ୍ଟୋବର', 'ନଭେମ୍ବର',
+    'ଡିସେମ୍ବର'],
   WEEKDAYS: ['ରବିବାର', 'ସୋମବାର',
-      'ମଙ୍ଗଳବାର', 'ବୁଧବାର', 'ଗୁରୁବାର',
-      'ଶୁକ୍ରବାର', 'ଶନିବାର'],
+    'ମଙ୍ଗଳବାର', 'ବୁଧବାର', 'ଗୁରୁବାର',
+    'ଶୁକ୍ରବାର', 'ଶନିବାର'],
   STANDALONEWEEKDAYS: ['ରବିବାର', 'ସୋମବାର',
-      'ମଙ୍ଗଳବାର', 'ବୁଧବାର', 'ଗୁରୁବାର',
-      'ଶୁକ୍ରବାର', 'ଶନିବାର'],
+    'ମଙ୍ଗଳବାର', 'ବୁଧବାର', 'ଗୁରୁବାର',
+    'ଶୁକ୍ରବାର', 'ଶନିବାର'],
   SHORTWEEKDAYS: ['ରବି', 'ସୋମ', 'ମଙ୍ଗଳ', 'ବୁଧ',
-      'ଗୁରୁ', 'ଶୁକ୍ର', 'ଶନି'],
+    'ଗୁରୁ', 'ଶୁକ୍ର', 'ଶନି'],
   STANDALONESHORTWEEKDAYS: ['ରବି', 'ସୋମ', 'ମଙ୍ଗଳ',
-      'ବୁଧ', 'ଗୁରୁ', 'ଶୁକ୍ର', 'ଶନି'],
+    'ବୁଧ', 'ଗୁରୁ', 'ଶୁକ୍ର', 'ଶନି'],
   NARROWWEEKDAYS: ['ର', 'ସୋ', 'ମ', 'ବୁ', 'ଗୁ', 'ଶୁ', 'ଶ'],
   STANDALONENARROWWEEKDAYS: ['ର', 'ସୋ', 'ମ', 'ବୁ', 'ଗୁ',
-      'ଶୁ', 'ଶ'],
+    'ଶୁ', 'ଶ'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   AMPMS: ['am', 'pm'],
   DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'd-M-yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19362,31 +22522,31 @@ goog.i18n.DateTimeSymbols_pl = {
   ERANAMES: ['p.n.e.', 'n.e.'],
   NARROWMONTHS: ['s', 'l', 'm', 'k', 'm', 'c', 'l', 's', 'w', 'p', 'l', 'g'],
   STANDALONENARROWMONTHS: ['s', 'l', 'm', 'k', 'm', 'c', 'l', 's', 'w', 'p',
-      'l', 'g'],
+    'l', 'g'],
   MONTHS: ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
-      'lipca', 'sierpnia', 'września', 'października', 'listopada',
-      'grudnia'],
+    'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'],
   STANDALONEMONTHS: ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj',
-      'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik',
-      'listopad', 'grudzień'],
+    'czerwiec', 'lipiec', 'sierpień', 'wrzesień', 'październik', 'listopad',
+    'grudzień'],
   SHORTMONTHS: ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz',
-      'paź', 'lis', 'gru'],
+    'paź', 'lis', 'gru'],
   STANDALONESHORTMONTHS: ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip',
-      'sie', 'wrz', 'paź', 'lis', 'gru'],
+    'sie', 'wrz', 'paź', 'lis', 'gru'],
   WEEKDAYS: ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek',
-      'piątek', 'sobota'],
+    'piątek', 'sobota'],
   STANDALONEWEEKDAYS: ['niedziela', 'poniedziałek', 'wtorek', 'środa',
-      'czwartek', 'piątek', 'sobota'],
+    'czwartek', 'piątek', 'sobota'],
   SHORTWEEKDAYS: ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'],
   STANDALONESHORTWEEKDAYS: ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.',
-      'sob.'],
+    'sob.'],
   NARROWWEEKDAYS: ['N', 'P', 'W', 'Ś', 'C', 'P', 'S'],
   STANDALONENARROWWEEKDAYS: ['N', 'P', 'W', 'Ś', 'C', 'P', 'S'],
   SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
   QUARTERS: ['I kwartał', 'II kwartał', 'III kwartał', 'IV kwartał'],
   AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd.MM.yyyy'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd.MM.y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -19401,31 +22561,31 @@ goog.i18n.DateTimeSymbols_pt = {
   ERANAMES: ['Antes de Cristo', 'Ano do Senhor'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
-      'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
+    'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
   STANDALONEMONTHS: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
   SHORTMONTHS: ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set',
-      'out', 'nov', 'dez'],
+    'out', 'nov', 'dez'],
   STANDALONESHORTMONTHS: ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul',
-      'ago', 'set', 'out', 'nov', 'dez'],
+    'ago', 'set', 'out', 'nov', 'dez'],
   WEEKDAYS: ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira',
-      'quinta-feira', 'sexta-feira', 'sábado'],
+    'quinta-feira', 'sexta-feira', 'sábado'],
   STANDALONEWEEKDAYS: ['domingo', 'segunda-feira', 'terça-feira',
-      'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'],
+    'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'],
   SHORTWEEKDAYS: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'],
   STANDALONESHORTWEEKDAYS: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'],
   NARROWWEEKDAYS: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
   SHORTQUARTERS: ['T1', 'T2', 'T3', 'T4'],
   QUARTERS: ['1º trimestre', '2º trimestre', '3º trimestre',
-      '4º trimestre'],
+    '4º trimestre'],
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, d \'de\' MMMM \'de\' y', 'd \'de\' MMMM \'de\' y',
-      'dd/MM/yyyy', 'dd/MM/yy'],
-  TIMEFORMATS: ['HH\'h\'mm\'min\'ss\'s\' zzzz', 'HH\'h\'mm\'min\'ss\'s\' z',
-      'HH:mm:ss', 'HH:mm'],
+    'dd/MM/y', 'dd/MM/yy'],
+  TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19446,30 +22606,32 @@ goog.i18n.DateTimeSymbols_pt_PT = {
   ERANAMES: ['Antes de Cristo', 'Ano do Senhor'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho',
-      'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
+    'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
   STANDALONEMONTHS: ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'],
   SHORTMONTHS: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set',
-      'Out', 'Nov', 'Dez'],
+    'Out', 'Nov', 'Dez'],
   STANDALONESHORTMONTHS: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul',
-      'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+    'Ago', 'Set', 'Out', 'Nov', 'Dez'],
   WEEKDAYS: ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira',
-      'Quinta-feira', 'Sexta-feira', 'Sábado'],
+    'Quinta-feira', 'Sexta-feira', 'Sábado'],
   STANDALONEWEEKDAYS: ['Domingo', 'Segunda-feira', 'Terça-feira',
-      'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'],
+    'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'],
   SHORTWEEKDAYS: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'],
   STANDALONESHORTWEEKDAYS: ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'],
   NARROWWEEKDAYS: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'],
   SHORTQUARTERS: ['T1', 'T2', 'T3', 'T4'],
   QUARTERS: ['1.º trimestre', '2.º trimestre', '3.º trimestre',
-      '4.º trimestre'],
-  AMPMS: ['a.m.', 'p.m.'],
+    '4.º trimestre'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, d \'de\' MMMM \'de\' y', 'd \'de\' MMMM \'de\' y',
-      'dd/MM/yyyy', 'dd/MM/yy'],
-  TIMEFORMATS: ['H:mm:ss zzzz', 'H:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+    'dd/MM/y', 'dd/MM/yy'],
+  TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} \'às\' {0}', '{1} \'às\' {0}', '{1}, {0}',
+    '{1}, {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -19484,30 +22646,31 @@ goog.i18n.DateTimeSymbols_ro = {
   ERANAMES: ['înainte de Hristos', 'după Hristos'],
   NARROWMONTHS: ['I', 'F', 'M', 'A', 'M', 'I', 'I', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['I', 'F', 'M', 'A', 'M', 'I', 'I', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
-      'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'],
+    'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'],
   STANDALONEMONTHS: ['ianuarie', 'februarie', 'martie', 'aprilie', 'mai',
-      'iunie', 'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie',
-      'decembrie'],
+    'iunie', 'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie',
+    'decembrie'],
   SHORTMONTHS: ['ian.', 'feb.', 'mar.', 'apr.', 'mai', 'iun.', 'iul.', 'aug.',
-      'sept.', 'oct.', 'nov.', 'dec.'],
+    'sept.', 'oct.', 'nov.', 'dec.'],
   STANDALONESHORTMONTHS: ['ian.', 'feb.', 'mar.', 'apr.', 'mai', 'iun.', 'iul.',
-      'aug.', 'sept.', 'oct.', 'nov.', 'dec.'],
+    'aug.', 'sept.', 'oct.', 'nov.', 'dec.'],
   WEEKDAYS: ['duminică', 'luni', 'marți', 'miercuri', 'joi', 'vineri',
-      'sâmbătă'],
+    'sâmbătă'],
   STANDALONEWEEKDAYS: ['duminică', 'luni', 'marți', 'miercuri', 'joi',
-      'vineri', 'sâmbătă'],
+    'vineri', 'sâmbătă'],
   SHORTWEEKDAYS: ['Du', 'Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ'],
   STANDALONESHORTWEEKDAYS: ['Du', 'Lu', 'Ma', 'Mi', 'Jo', 'Vi', 'Sâ'],
   NARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   STANDALONENARROWWEEKDAYS: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
   SHORTQUARTERS: ['trim. I', 'trim. II', 'trim. III', 'trim. IV'],
   QUARTERS: ['trimestrul I', 'trimestrul al II-lea', 'trimestrul al III-lea',
-      'trimestrul al IV-lea'],
+    'trimestrul al IV-lea'],
   AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd.MM.yyyy', 'dd.MM.yyyy'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'dd.MM.y', 'dd.MM.y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1}, {0}', '{1}, {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19521,38 +22684,40 @@ goog.i18n.DateTimeSymbols_ru = {
   ERAS: ['до н.э.', 'н.э.'],
   ERANAMES: ['до н.э.', 'н.э.'],
   NARROWMONTHS: ['Я', 'Ф', 'М', 'А', 'М', 'И', 'И', 'А', 'С', 'О',
-      'Н', 'Д'],
+    'Н', 'Д'],
   STANDALONENARROWMONTHS: ['Я', 'Ф', 'М', 'А', 'М', 'И', 'И', 'А', 'С',
-      'О', 'Н', 'Д'],
+    'О', 'Н', 'Д'],
   MONTHS: ['января', 'февраля', 'марта', 'апреля',
-      'мая', 'июня', 'июля', 'августа', 'сентября',
-      'октября', 'ноября', 'декабря'],
+    'мая', 'июня', 'июля', 'августа', 'сентября',
+    'октября', 'ноября', 'декабря'],
   STANDALONEMONTHS: ['Январь', 'Февраль', 'Март',
-      'Апрель', 'Май', 'Июнь', 'Июль', 'Август',
-      'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
-  SHORTMONTHS: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн',
-      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+    'Апрель', 'Май', 'Июнь', 'Июль', 'Август',
+    'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+  SHORTMONTHS: ['янв.', 'февр.', 'марта', 'апр.', 'мая',
+    'июня', 'июля', 'авг.', 'сент.', 'окт.', 'нояб.',
+    'дек.'],
   STANDALONESHORTMONTHS: ['Янв.', 'Февр.', 'Март', 'Апр.',
-      'Май', 'Июнь', 'Июль', 'Авг.', 'Сент.', 'Окт.',
-      'Нояб.', 'Дек.'],
+    'Май', 'Июнь', 'Июль', 'Авг.', 'Сент.', 'Окт.',
+    'Нояб.', 'Дек.'],
   WEEKDAYS: ['воскресенье', 'понедельник',
-      'вторник', 'среда', 'четверг', 'пятница',
-      'суббота'],
+    'вторник', 'среда', 'четверг', 'пятница',
+    'суббота'],
   STANDALONEWEEKDAYS: ['Воскресенье', 'Понедельник',
-      'Вторник', 'Среда', 'Четверг', 'Пятница',
-      'Суббота'],
+    'Вторник', 'Среда', 'Четверг', 'Пятница',
+    'Суббота'],
   SHORTWEEKDAYS: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
   STANDALONESHORTWEEKDAYS: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт',
-      'Сб'],
-  NARROWWEEKDAYS: ['В', 'Пн', 'Вт', 'С', 'Ч', 'П', 'С'],
+    'Сб'],
+  NARROWWEEKDAYS: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
   STANDALONENARROWWEEKDAYS: ['В', 'П', 'В', 'С', 'Ч', 'П', 'С'],
   SHORTQUARTERS: ['1-й кв.', '2-й кв.', '3-й кв.', '4-й кв.'],
   QUARTERS: ['1-й квартал', '2-й квартал',
-      '3-й квартал', '4-й квартал'],
+    '3-й квартал', '4-й квартал'],
   AMPMS: ['до полудня', 'после полудня'],
-  DATEFORMATS: ['EEEE, d MMMM y \'г\'.', 'd MMMM y \'г\'.', 'dd.MM.yyyy',
-      'dd.MM.yy'],
+  DATEFORMATS: ['EEEE, d MMMM y \'г\'.', 'd MMMM y \'г\'.',
+    'dd MMM y \'г\'.', 'dd.MM.yy'],
   TIMEFORMATS: ['H:mm:ss zzzz', 'H:mm:ss z', 'H:mm:ss', 'H:mm'],
+  DATETIMEFORMATS: ['{1}, {0}', '{1}, {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19567,29 +22732,30 @@ goog.i18n.DateTimeSymbols_sk = {
   ERANAMES: ['pred n.l.', 'n.l.'],
   NARROWMONTHS: ['j', 'f', 'm', 'a', 'm', 'j', 'j', 'a', 's', 'o', 'n', 'd'],
   STANDALONENARROWMONTHS: ['j', 'f', 'm', 'a', 'm', 'j', 'j', 'a', 's', 'o',
-      'n', 'd'],
+    'n', 'd'],
   MONTHS: ['januára', 'februára', 'marca', 'apríla', 'mája', 'júna',
-      'júla', 'augusta', 'septembra', 'októbra', 'novembra', 'decembra'],
+    'júla', 'augusta', 'septembra', 'októbra', 'novembra', 'decembra'],
   STANDALONEMONTHS: ['január', 'február', 'marec', 'apríl', 'máj', 'jún',
-      'júl', 'august', 'september', 'október', 'november', 'december'],
+    'júl', 'august', 'september', 'október', 'november', 'december'],
   SHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'máj', 'jún', 'júl', 'aug',
-      'sep', 'okt', 'nov', 'dec'],
+    'sep', 'okt', 'nov', 'dec'],
   STANDALONESHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'máj', 'jún', 'júl',
-      'aug', 'sep', 'okt', 'nov', 'dec'],
+    'aug', 'sep', 'okt', 'nov', 'dec'],
   WEEKDAYS: ['nedeľa', 'pondelok', 'utorok', 'streda', 'štvrtok', 'piatok',
-      'sobota'],
+    'sobota'],
   STANDALONEWEEKDAYS: ['nedeľa', 'pondelok', 'utorok', 'streda', 'štvrtok',
-      'piatok', 'sobota'],
+    'piatok', 'sobota'],
   SHORTWEEKDAYS: ['ne', 'po', 'ut', 'st', 'št', 'pi', 'so'],
   STANDALONESHORTWEEKDAYS: ['ne', 'po', 'ut', 'st', 'št', 'pi', 'so'],
   NARROWWEEKDAYS: ['N', 'P', 'U', 'S', 'Š', 'P', 'S'],
   STANDALONENARROWWEEKDAYS: ['N', 'P', 'U', 'S', 'Š', 'P', 'S'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1. štvrťrok', '2. štvrťrok', '3. štvrťrok',
-      '4. štvrťrok'],
+    '4. štvrťrok'],
   AMPMS: ['dopoludnia', 'popoludní'],
-  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'd.M.yyyy', 'd.M.yyyy'],
+  DATEFORMATS: ['EEEE, d. MMMM y', 'd. MMMM y', 'd.M.y', 'd.M.y'],
   TIMEFORMATS: ['H:mm:ss zzzz', 'H:mm:ss z', 'H:mm:ss', 'H:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -19604,29 +22770,30 @@ goog.i18n.DateTimeSymbols_sl = {
   ERANAMES: ['pred našim štetjem', 'naše štetje'],
   NARROWMONTHS: ['j', 'f', 'm', 'a', 'm', 'j', 'j', 'a', 's', 'o', 'n', 'd'],
   STANDALONENARROWMONTHS: ['j', 'f', 'm', 'a', 'm', 'j', 'j', 'a', 's', 'o',
-      'n', 'd'],
+    'n', 'd'],
   MONTHS: ['januar', 'februar', 'marec', 'april', 'maj', 'junij', 'julij',
-      'avgust', 'september', 'oktober', 'november', 'december'],
+    'avgust', 'september', 'oktober', 'november', 'december'],
   STANDALONEMONTHS: ['januar', 'februar', 'marec', 'april', 'maj', 'junij',
-      'julij', 'avgust', 'september', 'oktober', 'november', 'december'],
+    'julij', 'avgust', 'september', 'oktober', 'november', 'december'],
   SHORTMONTHS: ['jan.', 'feb.', 'mar.', 'apr.', 'maj', 'jun.', 'jul.', 'avg.',
-      'sep.', 'okt.', 'nov.', 'dec.'],
+    'sep.', 'okt.', 'nov.', 'dec.'],
   STANDALONESHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul',
-      'avg', 'sep', 'okt', 'nov', 'dec'],
+    'avg', 'sep', 'okt', 'nov', 'dec'],
   WEEKDAYS: ['nedelja', 'ponedeljek', 'torek', 'sreda', 'četrtek', 'petek',
-      'sobota'],
+    'sobota'],
   STANDALONEWEEKDAYS: ['nedelja', 'ponedeljek', 'torek', 'sreda', 'četrtek',
-      'petek', 'sobota'],
+    'petek', 'sobota'],
   SHORTWEEKDAYS: ['ned.', 'pon.', 'tor.', 'sre.', 'čet.', 'pet.', 'sob.'],
   STANDALONESHORTWEEKDAYS: ['ned', 'pon', 'tor', 'sre', 'čet', 'pet', 'sob'],
   NARROWWEEKDAYS: ['n', 'p', 't', 's', 'č', 'p', 's'],
   STANDALONENARROWWEEKDAYS: ['n', 'p', 't', 's', 'č', 'p', 's'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['1. četrtletje', '2. četrtletje', '3. četrtletje',
-      '4. četrtletje'],
+    '4. četrtletje'],
   AMPMS: ['dop.', 'pop.'],
-  DATEFORMATS: ['EEEE, dd. MMMM y', 'dd. MMMM y', 'd. MMM yyyy', 'd. MM. yy'],
+  DATEFORMATS: ['EEEE, dd. MMMM y', 'dd. MMMM y', 'd. MMM y', 'd. MM. yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19641,19 +22808,19 @@ goog.i18n.DateTimeSymbols_sq = {
   ERANAMES: ['p.e.r.', 'n.e.r.'],
   NARROWMONTHS: ['J', 'S', 'M', 'P', 'M', 'Q', 'K', 'G', 'S', 'T', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'S', 'M', 'P', 'M', 'Q', 'K', 'G', 'S', 'T',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['janar', 'shkurt', 'mars', 'prill', 'maj', 'qershor', 'korrik',
-      'gusht', 'shtator', 'tetor', 'nëntor', 'dhjetor'],
+    'gusht', 'shtator', 'tetor', 'nëntor', 'dhjetor'],
   STANDALONEMONTHS: ['janar', 'shkurt', 'mars', 'prill', 'maj', 'qershor',
-      'korrik', 'gusht', 'shtator', 'tetor', 'nëntor', 'dhjetor'],
+    'korrik', 'gusht', 'shtator', 'tetor', 'nëntor', 'dhjetor'],
   SHORTMONTHS: ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gsh', 'Sht',
-      'Tet', 'Nën', 'Dhj'],
+    'Tet', 'Nën', 'Dhj'],
   STANDALONESHORTMONTHS: ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor',
-      'Gsh', 'Sht', 'Tet', 'Nën', 'Dhj'],
+    'Gsh', 'Sht', 'Tet', 'Nën', 'Dhj'],
   WEEKDAYS: ['e diel', 'e hënë', 'e martë', 'e mërkurë', 'e enjte',
-      'e premte', 'e shtunë'],
+    'e premte', 'e shtunë'],
   STANDALONEWEEKDAYS: ['e diel', 'e hënë', 'e martë', 'e mërkurë',
-      'e enjte', 'e premte', 'e shtunë'],
+    'e enjte', 'e premte', 'e shtunë'],
   SHORTWEEKDAYS: ['Die', 'Hën', 'Mar', 'Mër', 'Enj', 'Pre', 'Sht'],
   STANDALONESHORTWEEKDAYS: ['Die', 'Hën', 'Mar', 'Mër', 'Enj', 'Pre', 'Sht'],
   NARROWWEEKDAYS: ['D', 'H', 'M', 'M', 'E', 'P', 'S'],
@@ -19661,8 +22828,9 @@ goog.i18n.DateTimeSymbols_sq = {
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   AMPMS: ['PD', 'MD'],
-  DATEFORMATS: ['EEEE, dd MMMM y', 'dd MMMM y', 'yyyy-MM-dd', 'yy-MM-dd'],
+  DATEFORMATS: ['EEEE, dd MMMM y', 'dd MMMM y', 'y-MM-dd', 'yy-MM-dd'],
   TIMEFORMATS: ['h.mm.ss.a zzzz', 'h.mm.ss.a z', 'h.mm.ss.a', 'h.mm.a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19676,35 +22844,36 @@ goog.i18n.DateTimeSymbols_sr = {
   ERAS: ['п. н. е.', 'н. е.'],
   ERANAMES: ['Пре нове ере', 'Нове ере'],
   NARROWMONTHS: ['ј', 'ф', 'м', 'а', 'м', 'ј', 'ј', 'а', 'с', 'о',
-      'н', 'д'],
+    'н', 'д'],
   STANDALONENARROWMONTHS: ['ј', 'ф', 'м', 'а', 'м', 'ј', 'ј', 'а', 'с',
-      'о', 'н', 'д'],
+    'о', 'н', 'д'],
   MONTHS: ['јануар', 'фебруар', 'март', 'април', 'мај',
-      'јун', 'јул', 'август', 'септембар',
-      'октобар', 'новембар', 'децембар'],
+    'јун', 'јул', 'август', 'септембар', 'октобар',
+    'новембар', 'децембар'],
   STANDALONEMONTHS: ['јануар', 'фебруар', 'март', 'април',
-      'мај', 'јун', 'јул', 'август', 'септембар',
-      'октобар', 'новембар', 'децембар'],
+    'мај', 'јун', 'јул', 'август', 'септембар',
+    'октобар', 'новембар', 'децембар'],
   SHORTMONTHS: ['јан', 'феб', 'мар', 'апр', 'мај', 'јун',
-      'јул', 'авг', 'сеп', 'окт', 'нов', 'дец'],
+    'јул', 'авг', 'сеп', 'окт', 'нов', 'дец'],
   STANDALONESHORTMONTHS: ['јан', 'феб', 'мар', 'апр', 'мај',
-      'јун', 'јул', 'авг', 'сеп', 'окт', 'нов', 'дец'],
+    'јун', 'јул', 'авг', 'сеп', 'окт', 'нов', 'дец'],
   WEEKDAYS: ['недеља', 'понедељак', 'уторак', 'среда',
-      'четвртак', 'петак', 'субота'],
+    'четвртак', 'петак', 'субота'],
   STANDALONEWEEKDAYS: ['недеља', 'понедељак', 'уторак',
-      'среда', 'четвртак', 'петак', 'субота'],
+    'среда', 'четвртак', 'петак', 'субота'],
   SHORTWEEKDAYS: ['нед', 'пон', 'уто', 'сре', 'чет', 'пет',
-      'суб'],
+    'суб'],
   STANDALONESHORTWEEKDAYS: ['нед', 'пон', 'уто', 'сре', 'чет',
-      'пет', 'суб'],
+    'пет', 'суб'],
   NARROWWEEKDAYS: ['н', 'п', 'у', 'с', 'ч', 'п', 'с'],
   STANDALONENARROWWEEKDAYS: ['н', 'п', 'у', 'с', 'ч', 'п', 'с'],
   SHORTQUARTERS: ['К1', 'К2', 'К3', 'К4'],
   QUARTERS: ['Прво тромесечје', 'Друго тромесечје',
-      'Треће тромесечје', 'Четврто тромесечје'],
+    'Треће тромесечје', 'Четврто тромесечје'],
   AMPMS: ['пре подне', 'поподне'],
   DATEFORMATS: ['EEEE, dd. MMMM y.', 'dd. MMMM y.', 'dd.MM.y.', 'd.M.yy.'],
   TIMEFORMATS: ['HH.mm.ss zzzz', 'HH.mm.ss z', 'HH.mm.ss', 'HH.mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19719,30 +22888,31 @@ goog.i18n.DateTimeSymbols_sv = {
   ERANAMES: ['före Kristus', 'efter Kristus'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli',
-      'augusti', 'september', 'oktober', 'november', 'december'],
-  STANDALONEMONTHS: ['januari', 'februari', 'mars', 'april', 'maj', 'juni',
-      'juli', 'augusti', 'september', 'oktober', 'november', 'december'],
+    'augusti', 'september', 'oktober', 'november', 'december'],
+  STANDALONEMONTHS: ['Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
+    'Juli', 'Augusti', 'September', 'Oktober', 'November', 'December'],
   SHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep',
-      'okt', 'nov', 'dec'],
-  STANDALONESHORTMONTHS: ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul',
-      'aug', 'sep', 'okt', 'nov', 'dec'],
+    'okt', 'nov', 'dec'],
+  STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul',
+    'Aug', 'Sep', 'Okt', 'Nov', 'Dec'],
   WEEKDAYS: ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag',
-      'lördag'],
-  STANDALONEWEEKDAYS: ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag',
-      'fredag', 'lördag'],
+    'lördag'],
+  STANDALONEWEEKDAYS: ['Söndag', 'Måndag', 'Tisdag', 'Onsdag', 'Torsdag',
+    'Fredag', 'Lördag'],
   SHORTWEEKDAYS: ['sön', 'mån', 'tis', 'ons', 'tors', 'fre', 'lör'],
-  STANDALONESHORTWEEKDAYS: ['sön', 'mån', 'tis', 'ons', 'tor', 'fre', 'lör'],
+  STANDALONESHORTWEEKDAYS: ['Sön', 'Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör'],
   NARROWWEEKDAYS: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
   STANDALONENARROWWEEKDAYS: ['S', 'M', 'T', 'O', 'T', 'F', 'L'],
   SHORTQUARTERS: ['K1', 'K2', 'K3', 'K4'],
   QUARTERS: ['1:a kvartalet', '2:a kvartalet', '3:e kvartalet',
-      '4:e kvartalet'],
+    '4:e kvartalet'],
   AMPMS: ['fm', 'em'],
   DATEFORMATS: ['EEEE\'en\' \'den\' d:\'e\' MMMM y', 'd MMMM y', 'd MMM y',
-      'yyyy-MM-dd'],
+    'y-MM-dd'],
   TIMEFORMATS: ['\'kl\'. HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 3
@@ -19757,28 +22927,29 @@ goog.i18n.DateTimeSymbols_sw = {
   ERANAMES: ['Kabla ya Kristo', 'Baada ya Kristo'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni', 'Julai',
-      'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'],
+    'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'],
   STANDALONEMONTHS: ['Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni',
-      'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'],
+    'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ago', 'Sep',
-      'Okt', 'Nov', 'Des'],
+    'Okt', 'Nov', 'Des'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul',
-      'Ago', 'Sep', 'Okt', 'Nov', 'Des'],
+    'Ago', 'Sep', 'Okt', 'Nov', 'Des'],
   WEEKDAYS: ['Jumapili', 'Jumatatu', 'Jumanne', 'Jumatano', 'Alhamisi',
-      'Ijumaa', 'Jumamosi'],
+    'Ijumaa', 'Jumamosi'],
   STANDALONEWEEKDAYS: ['Jumapili', 'Jumatatu', 'Jumanne', 'Jumatano',
-      'Alhamisi', 'Ijumaa', 'Jumamosi'],
+    'Alhamisi', 'Ijumaa', 'Jumamosi'],
   SHORTWEEKDAYS: ['J2', 'J3', 'J4', 'J5', 'Alh', 'Ij', 'J1'],
   STANDALONESHORTWEEKDAYS: ['J2', 'J3', 'J4', 'J5', 'Alh', 'Ij', 'J1'],
   NARROWWEEKDAYS: ['2', '3', '4', '5', 'A', 'I', '1'],
   STANDALONENARROWWEEKDAYS: ['2', '3', '4', '5', 'A', 'I', '1'],
-  SHORTQUARTERS: ['R1', 'R2', 'R3', 'R4'],
+  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['Robo 1', 'Robo 2', 'Robo 3', 'Robo 4'],
   AMPMS: ['asubuhi', 'alasiri'],
-  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/yyyy'],
+  DATEFORMATS: ['EEEE, d MMMM y', 'd MMMM y', 'd MMM y', 'dd/MM/y'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -19791,50 +22962,51 @@ goog.i18n.DateTimeSymbols_sw = {
 goog.i18n.DateTimeSymbols_ta = {
   ERAS: ['கி.மு.', 'கி.பி.'],
   ERANAMES: ['கிறிஸ்துவுக்கு முன்',
-      'அனோ டோமினி'],
+    'அனோ டோமினி'],
   NARROWMONTHS: ['ஜ', 'பி', 'மா', 'ஏ', 'மே', 'ஜூ', 'ஜூ',
-      'ஆ', 'செ', 'அ', 'ந', 'டி'],
+    'ஆ', 'செ', 'அ', 'ந', 'டி'],
   STANDALONENARROWMONTHS: ['ஜ', 'பி', 'மா', 'ஏ', 'மே', 'ஜூ',
-      'ஜூ', 'ஆ', 'செ', 'அ', 'ந', 'டி'],
+    'ஜூ', 'ஆ', 'செ', 'அ', 'ந', 'டி'],
   MONTHS: ['ஜனவரி', 'பிப்ரவரி', 'மார்ச்',
-      'ஏப்ரல்', 'மே', 'ஜூன்', 'ஜூலை',
-      'ஆகஸ்ட்', 'செப்டம்பர்',
-      'அக்டோபர்', 'நவம்பர்',
-      'டிசம்பர்'],
+    'ஏப்ரல்', 'மே', 'ஜூன்', 'ஜூலை',
+    'ஆகஸ்ட்', 'செப்டம்பர்',
+    'அக்டோபர்', 'நவம்பர்',
+    'டிசம்பர்'],
   STANDALONEMONTHS: ['ஜனவரி', 'பிப்ரவரி',
-      'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்',
-      'ஜூலை', 'ஆகஸ்டு', 'செப்டம்பர்',
-      'அக்டோபர்', 'நவம்பர்',
-      'டிசம்பர்'],
+    'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்',
+    'ஜூலை', 'ஆகஸ்டு', 'செப்டம்பர்',
+    'அக்டோபர்', 'நவம்பர்',
+    'டிசம்பர்'],
   SHORTMONTHS: ['ஜன.', 'பிப்.', 'மார்.', 'ஏப்.',
-      'மே', 'ஜூன்', 'ஜூலை', 'ஆக.', 'செப்.',
-      'அக்.', 'நவ.', 'டிச.'],
+    'மே', 'ஜூன்', 'ஜூலை', 'ஆக.', 'செப்.',
+    'அக்.', 'நவ.', 'டிச.'],
   STANDALONESHORTMONTHS: ['ஜன.', 'பிப்.', 'மார்.',
-      'ஏப்.', 'மே', 'ஜூன்', 'ஜூலை', 'ஆக.',
-      'செப்.', 'அக்.', 'நவ.', 'டிச.'],
+    'ஏப்.', 'மே', 'ஜூன்', 'ஜூலை', 'ஆக.',
+    'செப்.', 'அக்.', 'நவ.', 'டிச.'],
   WEEKDAYS: ['ஞாயிறு', 'திங்கள்',
-      'செவ்வாய்', 'புதன்', 'வியாழன்',
-      'வெள்ளி', 'சனி'],
+    'செவ்வாய்', 'புதன்', 'வியாழன்',
+    'வெள்ளி', 'சனி'],
   STANDALONEWEEKDAYS: ['ஞாயிறு', 'திங்கள்',
-      'செவ்வாய்', 'புதன்', 'வியாழன்',
-      'வெள்ளி', 'சனி'],
+    'செவ்வாய்', 'புதன்', 'வியாழன்',
+    'வெள்ளி', 'சனி'],
   SHORTWEEKDAYS: ['ஞா', 'தி', 'செ', 'பு', 'வி', 'வெ',
-      'ச'],
+    'ச'],
   STANDALONESHORTWEEKDAYS: ['ஞா', 'தி', 'செ', 'பு', 'வி',
-      'வெ', 'ச'],
+    'வெ', 'ச'],
   NARROWWEEKDAYS: ['ஞா', 'தி', 'செ', 'பு', 'வி', 'வெ',
-      'ச'],
+    'ச'],
   STANDALONENARROWWEEKDAYS: ['ஞா', 'தி', 'செ', 'பு', 'வி',
-      'வெ', 'ச'],
+    'வெ', 'ச'],
   SHORTQUARTERS: ['காலாண்டு1', 'காலாண்டு2',
-      'காலாண்டு3', 'காலாண்டு4'],
+    'காலாண்டு3', 'காலாண்டு4'],
   QUARTERS: ['முதல் காலாண்டு',
-      'இரண்டாம் காலாண்டு',
-      'மூன்றாம் காலாண்டு',
-      'நான்காம் காலாண்டு'],
-  AMPMS: ['am', 'pm'],
+    'இரண்டாம் காலாண்டு',
+    'மூன்றாம் காலாண்டு',
+    'நான்காம் காலாண்டு'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, d MMMM, y', 'd MMMM, y', 'd MMM, y', 'd-M-yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19845,54 +23017,54 @@ goog.i18n.DateTimeSymbols_ta = {
  * Date/time formatting symbols for locale te.
  */
 goog.i18n.DateTimeSymbols_te = {
-  ERAS: ['ఈసాపూర్వ.', 'సన్.'],
+  ERAS: ['క్రీపూ', 'క్రీశ'],
   ERANAMES: ['ఈసాపూర్వ.', 'సన్.'],
-  NARROWMONTHS: ['జ', 'ఫి', 'మా', 'ఏ', 'మె', 'జు', 'జు',
-      'ఆ', 'సె', 'అ', 'న', 'డి'],
-  STANDALONENARROWMONTHS: ['జ', 'ఫి', 'మ', 'ఎ', 'మె', 'జు',
-      'జు', 'ఆ', 'సె', 'అ', 'న', 'డి'],
+  NARROWMONTHS: ['జ', 'ఫి', 'మా', 'ఏ', 'మే', 'జూ', 'జు',
+    'ఆ', 'సె', 'అ', 'న', 'డి'],
+  STANDALONENARROWMONTHS: ['జ', 'ఫి', 'మా', 'ఏ', 'మే', 'జు',
+    'జు', 'ఆ', 'సె', 'అ', 'న', 'డి'],
   MONTHS: ['జనవరి', 'ఫిబ్రవరి', 'మార్చి',
-      'ఎప్రిల్', 'మే', 'జూన్', 'జూలై',
-      'ఆగస్టు', 'సెప్టెంబర్',
-      'అక్టోబర్', 'నవంబర్',
-      'డిసెంబర్'],
+    'ఎప్రిల్', 'మే', 'జూన్', 'జూలై',
+    'ఆగస్టు', 'సెప్టెంబర్',
+    'అక్టోబర్', 'నవంబర్',
+    'డిసెంబర్'],
   STANDALONEMONTHS: ['జనవరి', 'ఫిబ్రవరి',
-      'మార్చి', 'ఎప్రిల్', 'మే', 'జూన్',
-      'జూలై', 'ఆగస్టు', 'సెప్టెంబర్',
-      'అక్టోబర్', 'నవంబర్',
-      'డిసెంబర్'],
+    'మార్చి', 'ఎప్రిల్', 'మే', 'జూన్',
+    'జూలై', 'ఆగస్టు', 'సెప్టెంబర్',
+    'అక్టోబర్', 'నవంబర్',
+    'డిసెంబర్'],
   SHORTMONTHS: ['జన', 'ఫిబ్ర', 'మార్చి',
-      'ఏప్రి', 'మే', 'జూన్', 'జూలై',
-      'ఆగస్టు', 'సెప్టెంబర్',
-      'అక్టోబర్', 'నవంబర్',
-      'డిసెంబర్'],
+    'ఏప్రి', 'మే', 'జూన్', 'జూలై',
+    'ఆగస్టు', 'సెప్టెంబర్',
+    'అక్టోబర్', 'నవంబర్',
+    'డిసెంబర్'],
   STANDALONESHORTMONTHS: ['జన', 'ఫిబ్ర', 'మార్చి',
-      'ఏప్రి', 'మే', 'జూన్', 'జూలై',
-      'ఆగస్టు', 'సెప్టెంబర్',
-      'అక్టోబర్', 'నవంబర్',
-      'డిసెంబర్'],
+    'ఏప్రి', 'మే', 'జూన్', 'జూలై',
+    'ఆగస్టు', 'సెప్టెం', 'అక్టో',
+    'నవం', 'డిసెం'],
   WEEKDAYS: ['ఆదివారం', 'సోమవారం',
-      'మంగళవారం', 'బుధవారం',
-      'గురువారం', 'శుక్రవారం',
-      'శనివారం'],
+    'మంగళవారం', 'బుధవారం',
+    'గురువారం', 'శుక్రవారం',
+    'శనివారం'],
   STANDALONEWEEKDAYS: ['ఆదివారం', 'సోమవారం',
-      'మంగళవారం', 'బుధవారం',
-      'గురువారం', 'శుక్రవారం',
-      'శనివారం'],
+    'మంగళవారం', 'బుధవారం',
+    'గురువారం', 'శుక్రవారం',
+    'శనివారం'],
   SHORTWEEKDAYS: ['ఆది', 'సోమ', 'మంగళ', 'బుధ',
-      'గురు', 'శుక్ర', 'శని'],
+    'గురు', 'శుక్ర', 'శని'],
   STANDALONESHORTWEEKDAYS: ['ఆది', 'సోమ', 'మంగళ',
-      'బుధ', 'గురు', 'శుక్ర', 'శని'],
+    'బుధ', 'గురు', 'శుక్ర', 'శని'],
   NARROWWEEKDAYS: ['ఆ', 'సో', 'మ', 'బు', 'గు', 'శు', 'శ'],
   STANDALONENARROWWEEKDAYS: ['ఆ', 'సో', 'మ', 'బు', 'గు',
-      'శు', 'శ'],
-  SHORTQUARTERS: ['ఒకటి 1', 'రెండు 2', 'మూడు 3',
-      'నాలుగు 4'],
-  QUARTERS: ['ఒకటి 1', 'రెండు 2', 'మూడు 3',
-      'నాలుగు 4'],
-  AMPMS: ['am', 'pm'],
+    'శు', 'శ'],
+  SHORTQUARTERS: ['త్రై1', 'త్రై2', 'త్రై3',
+    'త్రై4'],
+  QUARTERS: ['1వ త్రైమాసం', '2వ త్రైమాసం',
+    '3వ త్రైమాసం', '4వ త్రైమాసం'],
+  AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE d MMMM y', 'd MMMM y', 'd MMM y', 'dd-MM-yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [6, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19905,51 +23077,55 @@ goog.i18n.DateTimeSymbols_te = {
 goog.i18n.DateTimeSymbols_th = {
   ERAS: ['ปีก่อน ค.ศ.', 'ค.ศ.'],
   ERANAMES: ['ปีก่อนคริสต์ศักราช',
-      'คริสต์ศักราช'],
+    'คริสต์ศักราช'],
   NARROWMONTHS: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.',
-      'พ.ค.', 'มิ.ย', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
-      'พ.ย.', 'ธ.ค.'],
+    'พ.ค.', 'มิ.ย', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
+    'พ.ย.', 'ธ.ค.'],
   STANDALONENARROWMONTHS: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.',
-      'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
-      'พ.ย.', 'ธ.ค.'],
+    'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
+    'พ.ย.', 'ธ.ค.'],
   MONTHS: ['มกราคม', 'กุมภาพันธ์',
-      'มีนาคม', 'เมษายน', 'พฤษภาคม',
-      'มิถุนายน', 'กรกฎาคม',
-      'สิงหาคม', 'กันยายน', 'ตุลาคม',
-      'พฤศจิกายน', 'ธันวาคม'],
+    'มีนาคม', 'เมษายน', 'พฤษภาคม',
+    'มิถุนายน', 'กรกฎาคม',
+    'สิงหาคม', 'กันยายน', 'ตุลาคม',
+    'พฤศจิกายน', 'ธันวาคม'],
   STANDALONEMONTHS: ['มกราคม', 'กุมภาพันธ์',
-      'มีนาคม', 'เมษายน', 'พฤษภาคม',
-      'มิถุนายน', 'กรกฎาคม',
-      'สิงหาคม', 'กันยายน', 'ตุลาคม',
-      'พฤศจิกายน', 'ธันวาคม'],
+    'มีนาคม', 'เมษายน', 'พฤษภาคม',
+    'มิถุนายน', 'กรกฎาคม',
+    'สิงหาคม', 'กันยายน', 'ตุลาคม',
+    'พฤศจิกายน', 'ธันวาคม'],
   SHORTMONTHS: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.',
-      'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
-      'พ.ย.', 'ธ.ค.'],
+    'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
+    'พ.ย.', 'ธ.ค.'],
   STANDALONESHORTMONTHS: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.',
-      'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
-      'พ.ย.', 'ธ.ค.'],
+    'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.',
+    'พ.ย.', 'ธ.ค.'],
   WEEKDAYS: ['วันอาทิตย์', 'วันจันทร์',
-      'วันอังคาร', 'วันพุธ',
-      'วันพฤหัสบดี', 'วันศุกร์',
-      'วันเสาร์'],
+    'วันอังคาร', 'วันพุธ',
+    'วันพฤหัสบดี', 'วันศุกร์',
+    'วันเสาร์'],
   STANDALONEWEEKDAYS: ['วันอาทิตย์',
-      'วันจันทร์', 'วันอังคาร',
-      'วันพุธ', 'วันพฤหัสบดี',
-      'วันศุกร์', 'วันเสาร์'],
+    'วันจันทร์', 'วันอังคาร',
+    'วันพุธ', 'วันพฤหัสบดี',
+    'วันศุกร์', 'วันเสาร์'],
   SHORTWEEKDAYS: ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'],
   STANDALONESHORTWEEKDAYS: ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.',
-      'ศ.', 'ส.'],
-  NARROWWEEKDAYS: ['อ', 'จ', 'อ', 'พ', 'พ', 'ศ', 'ส'],
-  STANDALONENARROWWEEKDAYS: ['อ', 'จ', 'อ', 'พ', 'พ', 'ศ', 'ส'],
-  SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
+    'ศ.', 'ส.'],
+  NARROWWEEKDAYS: ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.',
+    'ส.'],
+  STANDALONENARROWWEEKDAYS: ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.',
+    'ศ.', 'ส.'],
+  SHORTQUARTERS: ['ไตรมาส 1', 'ไตรมาส 2',
+    'ไตรมาส 3', 'ไตรมาส 4'],
   QUARTERS: ['ไตรมาส 1', 'ไตรมาส 2',
-      'ไตรมาส 3', 'ไตรมาส 4'],
+    'ไตรมาส 3', 'ไตรมาส 4'],
   AMPMS: ['ก่อนเที่ยง', 'หลังเที่ยง'],
-  DATEFORMATS: ['EEEEที่ d MMMM G y', 'd MMMM y', 'd MMM y', 'd/M/yyyy'],
+  DATEFORMATS: ['EEEEที่ d MMMM G y', 'd MMMM y', 'd MMM y', 'd/M/yy'],
   TIMEFORMATS: [
-      'H นาฬิกา m นาที ss วินาที zzzz',
-      'H นาฬิกา m นาที ss วินาที z', 'H:mm:ss',
-      'H:mm'],
+    'H นาฬิกา mm นาที ss วินาที zzzz',
+    'H นาฬิกา mm นาที ss วินาที z', 'HH:mm:ss',
+    'HH:mm'],
+  DATETIMEFORMATS: ['{1}, {0}', '{1}, {0}', '{1}, {0}', '{1}, {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -19964,29 +23140,30 @@ goog.i18n.DateTimeSymbols_tl = {
   ERANAMES: ['BC', 'AD'],
   NARROWMONTHS: ['E', 'P', 'M', 'A', 'M', 'H', 'H', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['E', 'P', 'M', 'A', 'M', 'H', 'H', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo', 'Hulyo',
-      'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
+    'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
   STANDALONEMONTHS: ['Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo',
-      'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
+    'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'],
   SHORTMONTHS: ['Ene', 'Peb', 'Mar', 'Abr', 'May', 'Hun', 'Hul', 'Ago', 'Set',
-      'Okt', 'Nob', 'Dis'],
+    'Okt', 'Nob', 'Dis'],
   STANDALONESHORTMONTHS: ['Ene', 'Peb', 'Mar', 'Abr', 'May', 'Hun', 'Hul',
-      'Ago', 'Set', 'Okt', 'Nob', 'Dis'],
+    'Ago', 'Set', 'Okt', 'Nob', 'Dis'],
   WEEKDAYS: ['Linggo', 'Lunes', 'Martes', 'Miyerkules', 'Huwebes', 'Biyernes',
-      'Sabado'],
+    'Sabado'],
   STANDALONEWEEKDAYS: ['Linggo', 'Lunes', 'Martes', 'Miyerkules', 'Huwebes',
-      'Biyernes', 'Sabado'],
+    'Biyernes', 'Sabado'],
   SHORTWEEKDAYS: ['Lin', 'Lun', 'Mar', 'Mye', 'Huw', 'Bye', 'Sab'],
   STANDALONESHORTWEEKDAYS: ['Lin', 'Lun', 'Mar', 'Miy', 'Huw', 'Biy', 'Sab'],
   NARROWWEEKDAYS: ['L', 'L', 'M', 'M', 'H', 'B', 'S'],
   STANDALONENARROWWEEKDAYS: ['L', 'L', 'M', 'M', 'H', 'B', 'S'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['ika-1 sangkapat', 'ika-2 sangkapat', 'ika-3 quarter',
-      'ika-4 na quarter'],
+    'ika-4 na quarter'],
   AMPMS: ['AM', 'PM'],
   DATEFORMATS: ['EEEE, MMMM dd y', 'MMMM d, y', 'MMM d, y', 'M/d/yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -20001,28 +23178,29 @@ goog.i18n.DateTimeSymbols_tr = {
   ERANAMES: ['Milattan Önce', 'Milattan Sonra'],
   NARROWMONTHS: ['O', 'Ş', 'M', 'N', 'M', 'H', 'T', 'A', 'E', 'E', 'K', 'A'],
   STANDALONENARROWMONTHS: ['O', 'Ş', 'M', 'N', 'M', 'H', 'T', 'A', 'E', 'E',
-      'K', 'A'],
+    'K', 'A'],
   MONTHS: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz',
-      'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
+    'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
   STANDALONEMONTHS: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
+    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
   SHORTMONTHS: ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl',
-      'Eki', 'Kas', 'Ara'],
+    'Eki', 'Kas', 'Ara'],
   STANDALONESHORTMONTHS: ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem',
-      'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'],
+    'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'],
   WEEKDAYS: ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma',
-      'Cumartesi'],
+    'Cumartesi'],
   STANDALONEWEEKDAYS: ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe',
-      'Cuma', 'Cumartesi'],
+    'Cuma', 'Cumartesi'],
   SHORTWEEKDAYS: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
   STANDALONESHORTWEEKDAYS: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
   NARROWWEEKDAYS: ['P', 'P', 'S', 'Ç', 'P', 'C', 'C'],
   STANDALONENARROWWEEKDAYS: ['P', 'P', 'S', 'Ç', 'P', 'C', 'C'],
   SHORTQUARTERS: ['Ç1', 'Ç2', 'Ç3', 'Ç4'],
   QUARTERS: ['1. çeyrek', '2. çeyrek', '3. çeyrek', '4. çeyrek'],
-  AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['d MMMM y EEEE', 'd MMMM y', 'd MMM y', 'dd MM yyyy'],
+  AMPMS: ['ÖÖ', 'ÖS'],
+  DATEFORMATS: ['d MMMM y EEEE', 'd MMMM y', 'd MMM y', 'd MM y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -20036,37 +23214,38 @@ goog.i18n.DateTimeSymbols_uk = {
   ERAS: ['до н.е.', 'н.е.'],
   ERANAMES: ['до нашої ери', 'нашої ери'],
   NARROWMONTHS: ['С', 'Л', 'Б', 'К', 'Т', 'Ч', 'Л', 'С', 'В', 'Ж',
-      'Л', 'Г'],
+    'Л', 'Г'],
   STANDALONENARROWMONTHS: ['С', 'Л', 'Б', 'К', 'Т', 'Ч', 'Л', 'С', 'В',
-      'Ж', 'Л', 'Г'],
+    'Ж', 'Л', 'Г'],
   MONTHS: ['січня', 'лютого', 'березня', 'квітня',
-      'травня', 'червня', 'липня', 'серпня',
-      'вересня', 'жовтня', 'листопада', 'грудня'],
+    'травня', 'червня', 'липня', 'серпня',
+    'вересня', 'жовтня', 'листопада', 'грудня'],
   STANDALONEMONTHS: ['Січень', 'Лютий', 'Березень',
-      'Квітень', 'Травень', 'Червень', 'Липень',
-      'Серпень', 'Вересень', 'Жовтень',
-      'Листопад', 'Грудень'],
+    'Квітень', 'Травень', 'Червень', 'Липень',
+    'Серпень', 'Вересень', 'Жовтень', 'Листопад',
+    'Грудень'],
   SHORTMONTHS: ['січ.', 'лют.', 'бер.', 'квіт.', 'трав.',
-      'черв.', 'лип.', 'серп.', 'вер.', 'жовт.', 'лист.',
-      'груд.'],
+    'черв.', 'лип.', 'серп.', 'вер.', 'жовт.', 'лист.',
+    'груд.'],
   STANDALONESHORTMONTHS: ['Січ', 'Лют', 'Бер', 'Кві', 'Тра',
-      'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'],
+    'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'],
   WEEKDAYS: ['Неділя', 'Понеділок', 'Вівторок',
-      'Середа', 'Четвер', 'Пʼятниця', 'Субота'],
+    'Середа', 'Четвер', 'Пʼятниця', 'Субота'],
   STANDALONEWEEKDAYS: ['Неділя', 'Понеділок', 'Вівторок',
-      'Середа', 'Четвер', 'Пʼятниця', 'Субота'],
+    'Середа', 'Четвер', 'Пʼятниця', 'Субота'],
   SHORTWEEKDAYS: ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
   STANDALONESHORTWEEKDAYS: ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт',
-      'Сб'],
+    'Сб'],
   NARROWWEEKDAYS: ['Н', 'П', 'В', 'С', 'Ч', 'П', 'С'],
   STANDALONENARROWWEEKDAYS: ['Н', 'П', 'В', 'С', 'Ч', 'П', 'С'],
   SHORTQUARTERS: ['I кв.', 'II кв.', 'III кв.', 'IV кв.'],
   QUARTERS: ['I квартал', 'II квартал', 'III квартал',
-      'IV квартал'],
+    'IV квартал'],
   AMPMS: ['дп', 'пп'],
   DATEFORMATS: ['EEEE, d MMMM y \'р\'.', 'd MMMM y \'р\'.', 'd MMM y',
-      'dd.MM.yy'],
+    'dd.MM.yy'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -20077,40 +23256,41 @@ goog.i18n.DateTimeSymbols_uk = {
  * Date/time formatting symbols for locale ur.
  */
 goog.i18n.DateTimeSymbols_ur = {
-  ERAS: ['ق م', 'عيسوی سن'],
-  ERANAMES: ['قبل مسيح', 'عيسوی سن'],
-  NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
-  STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-      '11', '12'],
-  MONTHS: ['جنوری', 'فروری', 'مارچ', 'اپريل', 'مئ',
-      'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
-      'نومبر', 'دسمبر'],
-  STANDALONEMONTHS: ['جنوری', 'فروری', 'مارچ', 'اپريل',
-      'مئ', 'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
-      'نومبر', 'دسمبر'],
-  SHORTMONTHS: ['جنوری', 'فروری', 'مارچ', 'اپريل', 'مئ',
-      'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
-      'نومبر', 'دسمبر'],
-  STANDALONESHORTMONTHS: ['جنوری', 'فروری', 'مارچ', 'اپريل',
-      'مئ', 'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
-      'نومبر', 'دسمبر'],
-  WEEKDAYS: ['اتوار', 'پير', 'منگل', 'بده', 'جمعرات',
-      'جمعہ', 'ہفتہ'],
-  STANDALONEWEEKDAYS: ['اتوار', 'پير', 'منگل', 'بده',
-      'جمعرات', 'جمعہ', 'ہفتہ'],
-  SHORTWEEKDAYS: ['اتوار', 'پير', 'منگل', 'بده', 'جمعرات',
-      'جمعہ', 'ہفتہ'],
-  STANDALONESHORTWEEKDAYS: ['اتوار', 'پير', 'منگل', 'بده',
-      'جمعرات', 'جمعہ', 'ہفتہ'],
-  NARROWWEEKDAYS: ['1', '2', '3', '4', '5', '6', '7'],
-  STANDALONENARROWWEEKDAYS: ['1', '2', '3', '4', '5', '6', '7'],
+  ERAS: ['ق م', 'عیسوی سن'],
+  ERANAMES: ['قبل مسیح', 'عیسوی سن'],
+  NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
+  STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
+    'N', 'D'],
+  MONTHS: ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئ',
+    'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
+    'نومبر', 'دسمبر'],
+  STANDALONEMONTHS: ['جنوری', 'فروری', 'مارچ', 'اپریل',
+    'مئ', 'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
+    'نومبر', 'دسمبر'],
+  SHORTMONTHS: ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئ',
+    'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
+    'نومبر', 'دسمبر'],
+  STANDALONESHORTMONTHS: ['جنوری', 'فروری', 'مارچ', 'اپریل',
+    'مئ', 'جون', 'جولائ', 'اگست', 'ستمبر', 'اکتوبر',
+    'نومبر', 'دسمبر'],
+  WEEKDAYS: ['اتوار', 'پیر', 'منگل', 'بده', 'جمعرات',
+    'جمعہ', 'ہفتہ'],
+  STANDALONEWEEKDAYS: ['اتوار', 'پیر', 'منگل', 'بده',
+    'جمعرات', 'جمعہ', 'ہفتہ'],
+  SHORTWEEKDAYS: ['اتوار', 'پیر', 'منگل', 'بده', 'جمعرات',
+    'جمعہ', 'ہفتہ'],
+  STANDALONESHORTWEEKDAYS: ['اتوار', 'پیر', 'منگل', 'بده',
+    'جمعرات', 'جمعہ', 'ہفتہ'],
+  NARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
+  STANDALONENARROWWEEKDAYS: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
   SHORTQUARTERS: ['پہلی سہ ماہی', 'دوسری سہ ماہی',
-      'تيسری سہ ماہی', 'چوتهی سہ ماہی'],
+    'تیسری سہ ماہی', 'چوتهی سہ ماہی'],
   QUARTERS: ['پہلی سہ ماہی', 'دوسری سہ ماہی',
-      'تيسری سہ ماہی', 'چوتهی سہ ماہی'],
-  AMPMS: ['دن', 'رات'],
-  DATEFORMATS: ['EEEE؍ d؍ MMMM y', 'd؍ MMMM y', 'd؍ MMM y', 'd/M/yy'],
+    'تیسری سہ ماہی', 'چوتهی سہ ماہی'],
+  AMPMS: ['قبل دوپہر', 'بعد دوپہر'],
+  DATEFORMATS: ['EEEE، d MMMM، y', 'd MMMM، y', 'd MMM، y', 'd/M/yy'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -20125,34 +23305,33 @@ goog.i18n.DateTimeSymbols_vi = {
   ERANAMES: ['tr. CN', 'sau CN'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-      '11', '12'],
+    '11', '12'],
   MONTHS: ['tháng một', 'tháng hai', 'tháng ba', 'tháng tư',
-      'tháng năm', 'tháng sáu', 'tháng bảy', 'tháng tám',
-      'tháng chín', 'tháng mười', 'tháng mười một',
-      'tháng mười hai'],
+    'tháng năm', 'tháng sáu', 'tháng bảy', 'tháng tám', 'tháng chín',
+    'tháng mười', 'tháng mười một', 'tháng mười hai'],
   STANDALONEMONTHS: ['tháng một', 'tháng hai', 'tháng ba', 'tháng tư',
-      'tháng năm', 'tháng sáu', 'tháng bảy', 'tháng tám',
-      'tháng chín', 'tháng mười', 'tháng mười một',
-      'tháng mười hai'],
+    'tháng năm', 'tháng sáu', 'tháng bảy', 'tháng tám', 'tháng chín',
+    'tháng mười', 'tháng mười một', 'tháng mười hai'],
   SHORTMONTHS: ['thg 1', 'thg 2', 'thg 3', 'thg 4', 'thg 5', 'thg 6', 'thg 7',
-      'thg 8', 'thg 9', 'thg 10', 'thg 11', 'thg 12'],
+    'thg 8', 'thg 9', 'thg 10', 'thg 11', 'thg 12'],
   STANDALONESHORTMONTHS: ['thg 1', 'thg 2', 'thg 3', 'thg 4', 'thg 5', 'thg 6',
-      'thg 7', 'thg 8', 'thg 9', 'thg 10', 'thg 11', 'thg 12'],
+    'thg 7', 'thg 8', 'thg 9', 'thg 10', 'thg 11', 'thg 12'],
   WEEKDAYS: ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm',
-      'Thứ sáu', 'Thứ bảy'],
+    'Thứ sáu', 'Thứ bảy'],
   STANDALONEWEEKDAYS: ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư',
-      'Thứ năm', 'Thứ sáu', 'Thứ bảy'],
+    'Thứ năm', 'Thứ sáu', 'Thứ bảy'],
   SHORTWEEKDAYS: ['CN', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7'],
   STANDALONESHORTWEEKDAYS: ['CN', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6',
-      'Th 7'],
+    'Th 7'],
   NARROWWEEKDAYS: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
   STANDALONENARROWWEEKDAYS: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['Quý 1', 'Quý 2', 'Quý 3', 'Quý 4'],
   AMPMS: ['SA', 'CH'],
   DATEFORMATS: ['EEEE, \'ngày\' dd MMMM \'năm\' y',
-      '\'Ngày\' dd \'tháng\' M \'năm\' y', 'dd-MM-yyyy', 'dd/MM/yyyy'],
+    '\'Ngày\' dd \'tháng\' M \'năm\' y', 'dd-MM-y', 'dd/MM/y'],
   TIMEFORMATS: ['HH:mm:ss zzzz', 'HH:mm:ss z', 'HH:mm:ss', 'HH:mm'],
+  DATETIMEFORMATS: ['{0} {1}', '{0} {1}', '{0} {1}', '{0} {1}'],
   FIRSTDAYOFWEEK: 0,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 6
@@ -20166,32 +23345,32 @@ goog.i18n.DateTimeSymbols_zh = {
   ERAS: ['公元前', '公元'],
   ERANAMES: ['公元前', '公元'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
-  STANDALONENARROWMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月',
-      '7月', '8月', '9月', '10月', '11月', '12月'],
-  MONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
+  STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+    '11', '12'],
+  MONTHS: ['一月', '二月', '三月', '四月', '五月', '六月', '七月',
+    '八月', '九月', '十月', '十一月', '十二月'],
   STANDALONEMONTHS: ['一月', '二月', '三月', '四月', '五月', '六月',
-      '七月', '八月', '九月', '十月', '十一月', '十二月'],
+    '七月', '八月', '九月', '十月', '十一月', '十二月'],
   SHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
-  STANDALONESHORTMONTHS: ['一月', '二月', '三月', '四月', '五月',
-      '六月', '七月', '八月', '九月', '十月', '十一月',
-      '十二月'],
+    '9月', '10月', '11月', '12月'],
+  STANDALONESHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月',
+    '7月', '8月', '9月', '10月', '11月', '12月'],
   WEEKDAYS: ['星期日', '星期一', '星期二', '星期三', '星期四',
-      '星期五', '星期六'],
+    '星期五', '星期六'],
   STANDALONEWEEKDAYS: ['星期日', '星期一', '星期二', '星期三',
-      '星期四', '星期五', '星期六'],
+    '星期四', '星期五', '星期六'],
   SHORTWEEKDAYS: ['周日', '周一', '周二', '周三', '周四', '周五',
-      '周六'],
+    '周六'],
   STANDALONESHORTWEEKDAYS: ['周日', '周一', '周二', '周三', '周四',
-      '周五', '周六'],
+    '周五', '周六'],
   NARROWWEEKDAYS: ['日', '一', '二', '三', '四', '五', '六'],
   STANDALONENARROWWEEKDAYS: ['日', '一', '二', '三', '四', '五', '六'],
-  SHORTQUARTERS: ['1季', '2季', '3季', '4季'],
-  QUARTERS: ['第1季度', '第2季度', '第3季度', '第4季度'],
+  SHORTQUARTERS: ['1季度', '2季度', '3季度', '4季度'],
+  QUARTERS: ['第一季度', '第二季度', '第三季度', '第四季度'],
   AMPMS: ['上午', '下午'],
-  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'yyyy-M-d', 'yy-M-d'],
-  TIMEFORMATS: ['zzzzah时mm分ss秒', 'zah时mm分ss秒', 'ah:mm:ss', 'ah:mm'],
+  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'y年M月d日', 'yy-M-d'],
+  TIMEFORMATS: ['zzzzah:mm:ss', 'zah:mm:ss', 'ah:mm:ss', 'ah:mm'],
+  DATETIMEFORMATS: ['{1}{0}', '{1}{0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -20209,34 +23388,34 @@ goog.i18n.DateTimeSymbols_zh_CN = goog.i18n.DateTimeSymbols_zh;
  */
 goog.i18n.DateTimeSymbols_zh_HK = {
   ERAS: ['西元前', '西元'],
-  ERANAMES: ['西元前', '西元'],
+  ERANAMES: ['公元前', '公元'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-      '11', '12'],
+    '11', '12'],
   MONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
+    '9月', '10月', '11月', '12月'],
   STANDALONEMONTHS: ['一月', '二月', '三月', '四月', '五月', '六月',
-      '七月', '八月', '九月', '十月', '十一月', '十二月'],
+    '七月', '八月', '九月', '十月', '十一月', '十二月'],
   SHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
+    '9月', '10月', '11月', '12月'],
   STANDALONESHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月',
-      '7月', '8月', '9月', '10月', '11月', '12月'],
+    '7月', '8月', '9月', '10月', '11月', '12月'],
   WEEKDAYS: ['星期日', '星期一', '星期二', '星期三', '星期四',
-      '星期五', '星期六'],
+    '星期五', '星期六'],
   STANDALONEWEEKDAYS: ['星期日', '星期一', '星期二', '星期三',
-      '星期四', '星期五', '星期六'],
+    '星期四', '星期五', '星期六'],
   SHORTWEEKDAYS: ['週日', '週一', '週二', '週三', '週四', '週五',
-      '週六'],
+    '週六'],
   STANDALONESHORTWEEKDAYS: ['周日', '周一', '周二', '周三', '周四',
-      '周五', '周六'],
+    '周五', '周六'],
   NARROWWEEKDAYS: ['日', '一', '二', '三', '四', '五', '六'],
   STANDALONENARROWWEEKDAYS: ['日', '一', '二', '三', '四', '五', '六'],
   SHORTQUARTERS: ['1季', '2季', '3季', '4季'],
   QUARTERS: ['第1季', '第2季', '第3季', '第4季'],
   AMPMS: ['上午', '下午'],
-  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'y年M月d日',
-      'yy年M月d日'],
+  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'y年M月d日', 'd/M/yy'],
   TIMEFORMATS: ['ah:mm:ss [zzzz]', 'ah:mm:ss [z]', 'ahh:mm:ss', 'ah:mm'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1}{0}', '{1}{0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -20248,33 +23427,34 @@ goog.i18n.DateTimeSymbols_zh_HK = {
  */
 goog.i18n.DateTimeSymbols_zh_TW = {
   ERAS: ['西元前', '西元'],
-  ERANAMES: ['西元前', '西元'],
+  ERANAMES: ['公元前', '公元'],
   NARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   STANDALONENARROWMONTHS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-      '11', '12'],
+    '11', '12'],
   MONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
+    '9月', '10月', '11月', '12月'],
   STANDALONEMONTHS: ['一月', '二月', '三月', '四月', '五月', '六月',
-      '七月', '八月', '九月', '十月', '十一月', '十二月'],
+    '七月', '八月', '九月', '十月', '十一月', '十二月'],
   SHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月',
-      '9月', '10月', '11月', '12月'],
+    '9月', '10月', '11月', '12月'],
   STANDALONESHORTMONTHS: ['1月', '2月', '3月', '4月', '5月', '6月',
-      '7月', '8月', '9月', '10月', '11月', '12月'],
+    '7月', '8月', '9月', '10月', '11月', '12月'],
   WEEKDAYS: ['星期日', '星期一', '星期二', '星期三', '星期四',
-      '星期五', '星期六'],
+    '星期五', '星期六'],
   STANDALONEWEEKDAYS: ['星期日', '星期一', '星期二', '星期三',
-      '星期四', '星期五', '星期六'],
+    '星期四', '星期五', '星期六'],
   SHORTWEEKDAYS: ['週日', '週一', '週二', '週三', '週四', '週五',
-      '週六'],
+    '週六'],
   STANDALONESHORTWEEKDAYS: ['周日', '周一', '周二', '周三', '周四',
-      '周五', '周六'],
+    '周五', '周六'],
   NARROWWEEKDAYS: ['日', '一', '二', '三', '四', '五', '六'],
   STANDALONENARROWWEEKDAYS: ['日', '一', '二', '三', '四', '五', '六'],
   SHORTQUARTERS: ['1季', '2季', '3季', '4季'],
   QUARTERS: ['第1季', '第2季', '第3季', '第4季'],
   AMPMS: ['上午', '下午'],
-  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'yyyy/M/d', 'yy/M/d'],
+  DATEFORMATS: ['y年M月d日EEEE', 'y年M月d日', 'y/M/d', 'y/M/d'],
   TIMEFORMATS: ['zzzzah時mm分ss秒', 'zah時mm分ss秒', 'ah:mm:ss', 'ah:mm'],
+  DATETIMEFORMATS: ['{1}{0}', '{1}{0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -20289,29 +23469,30 @@ goog.i18n.DateTimeSymbols_zu = {
   ERANAMES: ['BC', 'AD'],
   NARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'],
   STANDALONENARROWMONTHS: ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O',
-      'N', 'D'],
+    'N', 'D'],
   MONTHS: ['Januwari', 'Februwari', 'Mashi', 'Apreli', 'Meyi', 'Juni', 'Julayi',
-      'Agasti', 'Septhemba', 'Okthoba', 'Novemba', 'Disemba'],
+    'Agasti', 'Septhemba', 'Okthoba', 'Novemba', 'Disemba'],
   STANDALONEMONTHS: ['uJanuwari', 'uFebruwari', 'uMashi', 'u-Apreli', 'uMeyi',
-      'uJuni', 'uJulayi', 'uAgasti', 'uSepthemba', 'u-Okthoba', 'uNovemba',
-      'uDisemba'],
+    'uJuni', 'uJulayi', 'uAgasti', 'uSepthemba', 'u-Okthoba', 'uNovemba',
+    'uDisemba'],
   SHORTMONTHS: ['Jan', 'Feb', 'Mas', 'Apr', 'Mey', 'Jun', 'Jul', 'Aga', 'Sep',
-      'Okt', 'Nov', 'Dis'],
+    'Okt', 'Nov', 'Dis'],
   STANDALONESHORTMONTHS: ['Jan', 'Feb', 'Mas', 'Apr', 'Mey', 'Jun', 'Jul',
-      'Aga', 'Sep', 'Okt', 'Nov', 'Dis'],
+    'Aga', 'Sep', 'Okt', 'Nov', 'Dis'],
   WEEKDAYS: ['Sonto', 'Msombuluko', 'Lwesibili', 'Lwesithathu', 'uLwesine',
-      'Lwesihlanu', 'Mgqibelo'],
+    'Lwesihlanu', 'Mgqibelo'],
   STANDALONEWEEKDAYS: ['Sonto', 'Msombuluko', 'Lwesibili', 'Lwesithathu',
-      'uLwesine', 'Lwesihlanu', 'Mgqibelo'],
+    'uLwesine', 'Lwesihlanu', 'Mgqibelo'],
   SHORTWEEKDAYS: ['Son', 'Mso', 'Bil', 'Tha', 'Sin', 'Hla', 'Mgq'],
   STANDALONESHORTWEEKDAYS: ['Son', 'Mso', 'Bil', 'Tha', 'Sin', 'Hla', 'Mgq'],
   NARROWWEEKDAYS: ['S', 'M', 'B', 'T', 'S', 'H', 'M'],
   STANDALONENARROWWEEKDAYS: ['S', 'M', 'B', 'T', 'S', 'H', 'M'],
   SHORTQUARTERS: ['Q1', 'Q2', 'Q3', 'Q4'],
   QUARTERS: ['ikota yoku-1', 'ikota yesi-2', 'ikota yesi-3', 'ikota yesi-4'],
-  AMPMS: ['AM', 'PM'],
-  DATEFORMATS: ['EEEE dd MMMM y', 'd MMMM y', 'd MMM y', 'yyyy-MM-dd'],
+  AMPMS: ['Ekuseni', 'Ntambama'],
+  DATEFORMATS: ['EEEE dd MMMM y', 'd MMMM y', 'd MMM y', 'y-MM-dd'],
   TIMEFORMATS: ['h:mm:ss a zzzz', 'h:mm:ss a z', 'h:mm:ss a', 'h:mm a'],
+  DATETIMEFORMATS: ['{1} {0}', '{1} {0}', '{1} {0}', '{1} {0}'],
   FIRSTDAYOFWEEK: 6,
   WEEKENDRANGE: [5, 6],
   FIRSTWEEKCUTOFFDAY: 5
@@ -20332,10 +23513,16 @@ if (goog.LOCALE == 'af') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_bg;
 } else if (goog.LOCALE == 'bn') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_bn;
+} else if (goog.LOCALE == 'br') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_br;
 } else if (goog.LOCALE == 'ca') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_ca;
+} else if (goog.LOCALE == 'chr') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_chr;
 } else if (goog.LOCALE == 'cs') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_cs;
+} else if (goog.LOCALE == 'cy') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_cy;
 } else if (goog.LOCALE == 'da') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_da;
 } else if (goog.LOCALE == 'de') {
@@ -20366,6 +23553,8 @@ if (goog.LOCALE == 'af') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_es;
 } else if (goog.LOCALE == 'es_419' || goog.LOCALE == 'es-419') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_es_419;
+} else if (goog.LOCALE == 'es_ES' || goog.LOCALE == 'es-ES') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_es;
 } else if (goog.LOCALE == 'et') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_et;
 } else if (goog.LOCALE == 'eu') {
@@ -20386,6 +23575,8 @@ if (goog.LOCALE == 'af') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_gsw;
 } else if (goog.LOCALE == 'gu') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_gu;
+} else if (goog.LOCALE == 'haw') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_haw;
 } else if (goog.LOCALE == 'he') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_he;
 } else if (goog.LOCALE == 'hi') {
@@ -20424,6 +23615,8 @@ if (goog.LOCALE == 'af') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_ms;
 } else if (goog.LOCALE == 'mt') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_mt;
+} else if (goog.LOCALE == 'nb') {
+  goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_nb;
 } else if (goog.LOCALE == 'nl') {
   goog.i18n.DateTimeSymbols = goog.i18n.DateTimeSymbols_nl;
 } else if (goog.LOCALE == 'no') {
@@ -20540,6 +23733,7 @@ goog.provide('goog.date.month');
 goog.provide('goog.date.weekDay');
 
 goog.require('goog.asserts');
+/** @suppress {extraRequire} */
 goog.require('goog.date.DateLike');
 goog.require('goog.i18n.DateTimeSymbols');
 goog.require('goog.string');
@@ -20776,6 +23970,28 @@ goog.date.getWeekNumber = function(year, month, date, opt_weekDay,
 
   // Number of week. The round() eliminates the effect of daylight saving.
   return Math.floor(Math.round((cutoffSameWeek - jan1) / ONE_DAY) / 7) + 1;
+};
+
+
+/**
+ * @param {!T} date1 A datelike object.
+ * @param {!S} date2 Another datelike object.
+ * @return {!(T|S)} The earlier of them in time.
+ * @template T,S
+ */
+goog.date.min = function(date1, date2) {
+  return date1 < date2 ? date1 : date2;
+};
+
+
+/**
+ * @param {!T} date1 A datelike object.
+ * @param {!S} date2 Another datelike object.
+ * @return {!(T|S)} The later of them in time.
+ * @template T,S
+ */
+goog.date.max = function(date1, date2) {
+  return date1 > date2 ? date1 : date2;
 };
 
 
@@ -21147,6 +24363,19 @@ goog.date.Interval.MINUTES = 'n';
  * @type {string}
  */
 goog.date.Interval.SECONDS = 's';
+
+
+/**
+ * @return {boolean} Whether all fields of the interval are zero.
+ */
+goog.date.Interval.prototype.isZero = function() {
+  return this.years == 0 &&
+         this.months == 0 &&
+         this.days == 0 &&
+         this.hours == 0 &&
+         this.minutes == 0 &&
+         this.seconds == 0;
+};
 
 
 /**
@@ -21705,15 +24934,17 @@ goog.date.Date.prototype.toUTCIsoString = function(opt_verbose, opt_tz) {
  * @return {boolean} Whether the given date is equal to this one.
  */
 goog.date.Date.prototype.equals = function(other) {
-  return this.getYear() == other.getYear() &&
-         this.getMonth() == other.getMonth() &&
-         this.getDate() == other.getDate();
+  return !!(other &&
+            this.getYear() == other.getYear() &&
+            this.getMonth() == other.getMonth() &&
+            this.getDate() == other.getDate());
 };
 
 
 /**
  * Overloaded toString method for object.
  * @return {string} ISO 8601 string representation of date.
+ * @override
  */
 goog.date.Date.prototype.toString = function() {
   return this.toIsoString();
@@ -21736,6 +24967,7 @@ goog.date.Date.prototype.maybeFixDst_ = function(expected) {
 
 /**
  * @return {number} Value of wrapped date.
+ * @override
  */
 goog.date.Date.prototype.valueOf = function() {
   return this.date_.valueOf();
@@ -21844,6 +25076,7 @@ goog.date.DateTime.prototype.getMilliseconds = function() {
  * Returns the day of week according to universal time, US style.
  *
  * @return {goog.date.weekDay} Day of week, 0 = Sun, 1 = Mon, 6 = Sat.
+ * @override
  */
 goog.date.DateTime.prototype.getUTCDay = function() {
   return /** @type {goog.date.weekDay} */ (this.date_.getUTCDay());
@@ -21854,6 +25087,7 @@ goog.date.DateTime.prototype.getUTCDay = function() {
  * Returns the hours part of the datetime according to universal time.
  *
  * @return {number} An integer between 0 and 23, representing the hour.
+ * @override
  */
 goog.date.DateTime.prototype.getUTCHours = function() {
   return this.date_.getUTCHours();
@@ -21864,6 +25098,7 @@ goog.date.DateTime.prototype.getUTCHours = function() {
  * Returns the minutes part of the datetime according to universal time.
  *
  * @return {number} An integer between 0 and 59, representing the minutes.
+ * @override
  */
 goog.date.DateTime.prototype.getUTCMinutes = function() {
   return this.date_.getUTCMinutes();
@@ -21971,9 +25206,19 @@ goog.date.DateTime.prototype.setUTCMilliseconds = function(ms) {
 
 
 /**
+ * @return {boolean} Whether the datetime is aligned to midnight.
+ */
+goog.date.DateTime.prototype.isMidnight = function() {
+  return this.getHours() == 0 && this.getMinutes() == 0 &&
+      this.getSeconds() == 0 && this.getMilliseconds() == 0;
+};
+
+
+/**
  * Performs date calculation by adding the supplied interval to the date.
  *
  * @param {goog.date.Interval} interval Date interval to add.
+ * @override
  */
 goog.date.DateTime.prototype.add = function(interval) {
   goog.date.Date.prototype.add.call(this, interval);
@@ -21998,6 +25243,7 @@ goog.date.DateTime.prototype.add = function(interval) {
  * @param {boolean=} opt_tz Whether the timezone offset should be included
  *     in the string.
  * @return {string} ISO 8601 string representation of date/time.
+ * @override
  */
 goog.date.DateTime.prototype.toIsoString = function(opt_verbose, opt_tz) {
   var dateString = goog.date.Date.prototype.toIsoString.call(this, opt_verbose);
@@ -22045,6 +25291,7 @@ goog.date.DateTime.prototype.toXmlDateTime = function(opt_timezone) {
  *     in the string.
  * @return {string} ISO 8601 string representation of date/time according to
  *     universal time.
+ * @override
  */
 goog.date.DateTime.prototype.toUTCIsoString = function(opt_verbose, opt_tz) {
   var dateStr = goog.date.Date.prototype.toUTCIsoString.call(this, opt_verbose);
@@ -22068,8 +25315,9 @@ goog.date.DateTime.prototype.toUTCIsoString = function(opt_verbose, opt_tz) {
 /**
  * Tests whether given datetime is exactly equal to this DateTime.
  *
- * @param {goog.date.DateTime} other The datetime to compare.
+ * @param {goog.date.Date} other The datetime to compare.
  * @return {boolean} Whether the given datetime is exactly equal to this one.
+ * @override
  */
 goog.date.DateTime.prototype.equals = function(other) {
   return this.getTime() == other.getTime();
@@ -22079,6 +25327,7 @@ goog.date.DateTime.prototype.equals = function(other) {
 /**
  * Overloaded toString method for object.
  * @return {string} ISO 8601 string representation of date/time.
+ * @override
  */
 goog.date.DateTime.prototype.toString = function() {
   return this.toIsoString();
@@ -22165,6 +25414,7 @@ goog.date.DateTime.prototype.toIsoTimeString = function(opt_showSeconds) {
 
 /**
  * @return {!goog.date.DateTime} A clone of the datetime object.
+ * @override
  */
 goog.date.DateTime.prototype.clone = function() {
   var date = new goog.date.DateTime(this.date_);
@@ -22499,9 +25749,8 @@ calendarmailer.Config.prototype.getMinDate = function() {
 goog.provide('goog.events.EventHandler');
 
 goog.require('goog.Disposable');
-goog.require('goog.array');
 goog.require('goog.events');
-goog.require('goog.events.EventWrapper');
+goog.require('goog.object');
 
 
 
@@ -22519,10 +25768,10 @@ goog.events.EventHandler = function(opt_handler) {
 
   /**
    * Keys for events that are being listened to.
-   * @type {Array.<number>}
+   * @type {!Object.<!goog.events.Key>}
    * @private
    */
-  this.keys_ = [];
+  this.keys_ = {};
 };
 goog.inherits(goog.events.EventHandler, goog.Disposable);
 
@@ -22538,9 +25787,9 @@ goog.events.EventHandler.typeArray_ = [];
 
 
 /**
- * Listen to an event on a DOM node or EventTarget.  If the function is omitted
- * then the EventHandler's handleEvent method will be used.
- * @param {goog.events.EventTarget|EventTarget} src Event source.
+ * Listen to an event on a Listenable.  If the function is omitted then the
+ * EventHandler's handleEvent method will be used.
+ * @param {goog.events.ListenableType} src Event source.
  * @param {string|Array.<string>} type Event type to listen for or array of
  *     event types.
  * @param {Function|Object=} opt_fn Optional callback function to be used as the
@@ -22558,13 +25807,20 @@ goog.events.EventHandler.prototype.listen = function(src, type, opt_fn,
     type = goog.events.EventHandler.typeArray_;
   }
   for (var i = 0; i < type.length; i++) {
-    // goog.events.listen generates unique keys so we don't have to check their
-    // presence in the this.keys_ array.
-    var key = (/** @type {number} */
-        goog.events.listen(src, type[i], opt_fn || this,
-                           opt_capture || false,
-                           opt_handler || this.handler_ || this));
-    this.keys_.push(key);
+    var listenerObj = goog.events.listen(
+        src, type[i], opt_fn || this,
+        opt_capture || false,
+        opt_handler || this.handler_ || this);
+
+    if (goog.DEBUG && !listenerObj) {
+      // Some tests mock goog.events.listen, thus ensuring that
+      // they are never testing the real thing anyway, hence this is safe
+      // (except that #getListenerCount() will return the wrong value).
+      return this;
+    }
+
+    var key = listenerObj.key;
+    this.keys_[key] = listenerObj;
   }
 
   return this;
@@ -22572,11 +25828,11 @@ goog.events.EventHandler.prototype.listen = function(src, type, opt_fn,
 
 
 /**
- * Listen to an event on a DOM node or EventTarget.  If the function is omitted
- * then the EventHandler's handleEvent method will be used. After the event has
- * fired the event listener is removed from the target. If an array of event
- * types is provided, each event type will be listened to once.
- * @param {goog.events.EventTarget|EventTarget} src Event source.
+ * Listen to an event on a Listenable.  If the function is omitted, then the
+ * EventHandler's handleEvent method will be used. After the event has fired the
+ * event listener is removed from the target. If an array of event types is
+ * provided, each event type will be listened to once.
+ * @param {goog.events.ListenableType} src Event source.
  * @param {string|Array.<string>} type Event type to listen for or array of
  *     event types.
  * @param {Function|Object=} opt_fn Optional callback function to be used as the
@@ -22594,10 +25850,11 @@ goog.events.EventHandler.prototype.listenOnce = function(src, type, opt_fn,
       this.listenOnce(src, type[i], opt_fn, opt_capture, opt_handler);
     }
   } else {
-    var key = (/** @type {number} */
-        goog.events.listenOnce(src, type, opt_fn || this, opt_capture,
-                               opt_handler || this.handler_ || this));
-    this.keys_.push(key);
+    var listenerObj = goog.events.listenOnce(
+        src, type, opt_fn || this, opt_capture,
+        opt_handler || this.handler_ || this);
+    var key = listenerObj.key;
+    this.keys_[key] = listenerObj;
   }
 
   return this;
@@ -22622,7 +25879,8 @@ goog.events.EventHandler.prototype.listenOnce = function(src, type, opt_fn,
  */
 goog.events.EventHandler.prototype.listenWithWrapper = function(src, wrapper,
     listener, opt_capt, opt_handler) {
-  wrapper.listen(src, listener, opt_capt, opt_handler || this.handler_, this);
+  wrapper.listen(src, listener, opt_capt, opt_handler || this.handler_ || this,
+                 this);
   return this;
 };
 
@@ -22631,13 +25889,19 @@ goog.events.EventHandler.prototype.listenWithWrapper = function(src, wrapper,
  * @return {number} Number of listeners registered by this handler.
  */
 goog.events.EventHandler.prototype.getListenerCount = function() {
-  return this.keys_.length;
+  var count = 0;
+  for (var key in this.keys_) {
+    if (Object.prototype.hasOwnProperty.call(this.keys_, key)) {
+      count++;
+    }
+  }
+  return count;
 };
 
 
 /**
  * Unlistens on an event.
- * @param {goog.events.EventTarget|EventTarget} src Event source.
+ * @param {goog.events.ListenableType} src Event source.
  * @param {string|Array.<string>} type Event type to listen for.
  * @param {Function|Object=} opt_fn Optional callback function to be used as the
  *    listener or an object with handleEvent function.
@@ -22658,9 +25922,8 @@ goog.events.EventHandler.prototype.unlisten = function(src, type, opt_fn,
         opt_capture, opt_handler || this.handler_ || this);
 
     if (listener) {
-      var key = listener.key;
-      goog.events.unlistenByKey(key);
-      goog.array.remove(this.keys_, key);
+      goog.events.unlistenByKey(listener);
+      delete this.keys_[listener.key];
     }
   }
 
@@ -22684,7 +25947,8 @@ goog.events.EventHandler.prototype.unlisten = function(src, type, opt_fn,
  */
 goog.events.EventHandler.prototype.unlistenWithWrapper = function(src, wrapper,
     listener, opt_capt, opt_handler) {
-  wrapper.unlisten(src, listener, opt_capt, opt_handler || this.handler_, this);
+  wrapper.unlisten(src, listener, opt_capt,
+                   opt_handler || this.handler_ || this, this);
   return this;
 };
 
@@ -22693,8 +25957,8 @@ goog.events.EventHandler.prototype.unlistenWithWrapper = function(src, wrapper,
  * Unlistens to all events.
  */
 goog.events.EventHandler.prototype.removeAll = function() {
-  goog.array.forEach(this.keys_, goog.events.unlistenByKey);
-  this.keys_.length = 0;
+  goog.object.forEach(this.keys_, goog.events.unlistenByKey);
+  this.keys_ = {};
 };
 
 
@@ -22811,6 +26075,7 @@ if (goog.DEBUG) {
   /**
    * Returns a nice string representing the box.
    * @return {string} In the form (50t, 73r, 24b, 13l).
+   * @override
    */
   goog.math.Box.prototype.toString = function() {
     return '(' + this.top + 't, ' + this.right + 'r, ' + this.bottom + 'b, ' +
@@ -22914,6 +26179,44 @@ goog.math.Box.contains = function(box, other) {
 
 
 /**
+ * Returns the relative x position of a coordinate compared to a box.  Returns
+ * zero if the coordinate is inside the box.
+ *
+ * @param {goog.math.Box} box A Box.
+ * @param {goog.math.Coordinate} coord A Coordinate.
+ * @return {number} The x position of {@code coord} relative to the nearest
+ *     side of {@code box}, or zero if {@code coord} is inside {@code box}.
+ */
+goog.math.Box.relativePositionX = function(box, coord) {
+  if (coord.x < box.left) {
+    return coord.x - box.left;
+  } else if (coord.x > box.right) {
+    return coord.x - box.right;
+  }
+  return 0;
+};
+
+
+/**
+ * Returns the relative y position of a coordinate compared to a box.  Returns
+ * zero if the coordinate is inside the box.
+ *
+ * @param {goog.math.Box} box A Box.
+ * @param {goog.math.Coordinate} coord A Coordinate.
+ * @return {number} The y position of {@code coord} relative to the nearest
+ *     side of {@code box}, or zero if {@code coord} is inside {@code box}.
+ */
+goog.math.Box.relativePositionY = function(box, coord) {
+  if (coord.y < box.top) {
+    return coord.y - box.top;
+  } else if (coord.y > box.bottom) {
+    return coord.y - box.bottom;
+  }
+  return 0;
+};
+
+
+/**
  * Returns the distance between a coordinate and the nearest corner/side of a
  * box. Returns zero if the coordinate is inside the box.
  *
@@ -22924,20 +26227,9 @@ goog.math.Box.contains = function(box, other) {
  *     {@code box}.
  */
 goog.math.Box.distance = function(box, coord) {
-  if (coord.x >= box.left && coord.x <= box.right) {
-    if (coord.y >= box.top && coord.y <= box.bottom) {
-      return 0;
-    }
-    return coord.y < box.top ? box.top - coord.y : coord.y - box.bottom;
-  }
-
-  if (coord.y >= box.top && coord.y <= box.bottom) {
-    return coord.x < box.left ? box.left - coord.x : coord.x - box.right;
-  }
-
-  return goog.math.Coordinate.distance(coord,
-      new goog.math.Coordinate(coord.x < box.left ? box.left : box.right,
-                               coord.y < box.top ? box.top : box.bottom));
+  var x = goog.math.Box.relativePositionX(box, coord);
+  var y = goog.math.Box.relativePositionY(box, coord);
+  return Math.sqrt(x * x + y * y);
 };
 
 
@@ -22966,6 +26258,97 @@ goog.math.Box.intersectsWithPadding = function(a, b, padding) {
   return (a.left <= b.right + padding && b.left <= a.right + padding &&
           a.top <= b.bottom + padding && b.top <= a.bottom + padding);
 };
+
+
+/**
+ * Rounds the fields to the next larger integer values.
+ *
+ * @return {!goog.math.Box} This box with ceil'd fields.
+ */
+goog.math.Box.prototype.ceil = function() {
+  this.top = Math.ceil(this.top);
+  this.right = Math.ceil(this.right);
+  this.bottom = Math.ceil(this.bottom);
+  this.left = Math.ceil(this.left);
+  return this;
+};
+
+
+/**
+ * Rounds the fields to the next smaller integer values.
+ *
+ * @return {!goog.math.Box} This box with floored fields.
+ */
+goog.math.Box.prototype.floor = function() {
+  this.top = Math.floor(this.top);
+  this.right = Math.floor(this.right);
+  this.bottom = Math.floor(this.bottom);
+  this.left = Math.floor(this.left);
+  return this;
+};
+
+
+/**
+ * Rounds the fields to nearest integer values.
+ *
+ * @return {!goog.math.Box} This box with rounded fields.
+ */
+goog.math.Box.prototype.round = function() {
+  this.top = Math.round(this.top);
+  this.right = Math.round(this.right);
+  this.bottom = Math.round(this.bottom);
+  this.left = Math.round(this.left);
+  return this;
+};
+
+
+/**
+ * Translates this box by the given offsets. If a {@code goog.math.Coordinate}
+ * is given, then the left and right values are translated by the coordinate's
+ * x value and the top and bottom values are translated by the coordinate's y
+ * value.  Otherwise, {@code tx} and {@code opt_ty} are used to translate the x
+ * and y dimension values.
+ *
+ * @param {number|goog.math.Coordinate} tx The value to translate the x
+ *     dimension values by or the the coordinate to translate this box by.
+ * @param {number=} opt_ty The value to translate y dimension values by.
+ * @return {!goog.math.Box} This box after translating.
+ */
+goog.math.Box.prototype.translate = function(tx, opt_ty) {
+  if (tx instanceof goog.math.Coordinate) {
+    this.left += tx.x;
+    this.right += tx.x;
+    this.top += tx.y;
+    this.bottom += tx.y;
+  } else {
+    this.left += tx;
+    this.right += tx;
+    if (goog.isNumber(opt_ty)) {
+      this.top += opt_ty;
+      this.bottom += opt_ty;
+    }
+  }
+  return this;
+};
+
+
+/**
+ * Scales this coordinate by the given scale factors. The x and y dimension
+ * values are scaled by {@code sx} and {@code opt_sy} respectively.
+ * If {@code opt_sy} is not given, then {@code sx} is used for both x and y.
+ *
+ * @param {number} sx The scale factor to use for the x dimension.
+ * @param {number=} opt_sy The scale factor to use for the y dimension.
+ * @return {!goog.math.Box} This box after scaling.
+ */
+goog.math.Box.prototype.scale = function(sx, opt_sy) {
+  var sy = goog.isNumber(opt_sy) ? opt_sy : sx;
+  this.left *= sx;
+  this.right *= sx;
+  this.top *= sy;
+  this.bottom *= sy;
+  return this;
+};
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22984,10 +26367,10 @@ goog.math.Box.intersectsWithPadding = function(a, b, padding) {
  * @fileoverview A utility class for representing rectangles.
  */
 
-
 goog.provide('goog.math.Rect');
 
 goog.require('goog.math.Box');
+goog.require('goog.math.Coordinate');
 goog.require('goog.math.Size');
 
 
@@ -23001,35 +26384,22 @@ goog.require('goog.math.Size');
  * @constructor
  */
 goog.math.Rect = function(x, y, w, h) {
-  /**
-   * Left
-   * @type {number}
-   */
+  /** @type {number} */
   this.left = x;
 
-  /**
-   * Top
-   * @type {number}
-   */
+  /** @type {number} */
   this.top = y;
 
-  /**
-   * Width
-   * @type {number}
-   */
+  /** @type {number} */
   this.width = w;
 
-  /**
-   * Height
-   * @type {number}
-   */
+  /** @type {number} */
   this.height = h;
 };
 
 
 /**
- * Returns a new copy of the rectangle.
- * @return {!goog.math.Rect} A clone of this Rectangle.
+ * @return {!goog.math.Rect} A new copy of this Rectangle.
  */
 goog.math.Rect.prototype.clone = function() {
   return new goog.math.Rect(this.left, this.top, this.width, this.height);
@@ -23068,6 +26438,7 @@ if (goog.DEBUG) {
   /**
    * Returns a nice string representing size and dimensions of rectangle.
    * @return {string} In the form (50, 73 - 75w x 25h).
+   * @override
    */
   goog.math.Rect.prototype.toString = function() {
     return '(' + this.left + ', ' + this.top + ' - ' + this.width + 'w x ' +
@@ -23300,11 +26671,208 @@ goog.math.Rect.prototype.contains = function(another) {
 
 
 /**
- * Returns the size of this rectangle.
+ * @param {!goog.math.Coordinate} point A coordinate.
+ * @return {number} The squared distance between the point and the closest
+ *     point inside the rectangle. Returns 0 if the point is inside the
+ *     rectangle.
+ */
+goog.math.Rect.prototype.squaredDistance = function(point) {
+  var dx = point.x < this.left ?
+      this.left - point.x : Math.max(point.x - (this.left + this.width), 0);
+  var dy = point.y < this.top ?
+      this.top - point.y : Math.max(point.y - (this.top + this.height), 0);
+  return dx * dx + dy * dy;
+};
+
+
+/**
+ * @param {!goog.math.Coordinate} point A coordinate.
+ * @return {number} The distance between the point and the closest point
+ *     inside the rectangle. Returns 0 if the point is inside the rectangle.
+ */
+goog.math.Rect.prototype.distance = function(point) {
+  return Math.sqrt(this.squaredDistance(point));
+};
+
+
+/**
  * @return {!goog.math.Size} The size of this rectangle.
  */
 goog.math.Rect.prototype.getSize = function() {
   return new goog.math.Size(this.width, this.height);
+};
+
+
+/**
+ * @return {!goog.math.Coordinate} A new coordinate for the top-left corner of
+ *     the rectangle.
+ */
+goog.math.Rect.prototype.getTopLeft = function() {
+  return new goog.math.Coordinate(this.left, this.top);
+};
+
+
+/**
+ * @return {!goog.math.Coordinate} A new coordinate for the center of the
+ *     rectangle.
+ */
+goog.math.Rect.prototype.getCenter = function() {
+  return new goog.math.Coordinate(
+      this.left + this.width / 2, this.top + this.height / 2);
+};
+
+
+/**
+ * @return {!goog.math.Coordinate} A new coordinate for the bottom-right corner
+ *     of the rectangle.
+ */
+goog.math.Rect.prototype.getBottomRight = function() {
+  return new goog.math.Coordinate(
+      this.left + this.width, this.top + this.height);
+};
+
+
+/**
+ * Rounds the fields to the next larger integer values.
+ * @return {!goog.math.Rect} This rectangle with ceil'd fields.
+ */
+goog.math.Rect.prototype.ceil = function() {
+  this.left = Math.ceil(this.left);
+  this.top = Math.ceil(this.top);
+  this.width = Math.ceil(this.width);
+  this.height = Math.ceil(this.height);
+  return this;
+};
+
+
+/**
+ * Rounds the fields to the next smaller integer values.
+ * @return {!goog.math.Rect} This rectangle with floored fields.
+ */
+goog.math.Rect.prototype.floor = function() {
+  this.left = Math.floor(this.left);
+  this.top = Math.floor(this.top);
+  this.width = Math.floor(this.width);
+  this.height = Math.floor(this.height);
+  return this;
+};
+
+
+/**
+ * Rounds the fields to nearest integer values.
+ * @return {!goog.math.Rect} This rectangle with rounded fields.
+ */
+goog.math.Rect.prototype.round = function() {
+  this.left = Math.round(this.left);
+  this.top = Math.round(this.top);
+  this.width = Math.round(this.width);
+  this.height = Math.round(this.height);
+  return this;
+};
+
+
+/**
+ * Translates this rectangle by the given offsets. If a
+ * {@code goog.math.Coordinate} is given, then the left and top values are
+ * translated by the coordinate's x and y values. Otherwise, top and left are
+ * translated by {@code tx} and {@code opt_ty} respectively.
+ * @param {number|goog.math.Coordinate} tx The value to translate left by or the
+ *     the coordinate to translate this rect by.
+ * @param {number=} opt_ty The value to translate top by.
+ * @return {!goog.math.Rect} This rectangle after translating.
+ */
+goog.math.Rect.prototype.translate = function(tx, opt_ty) {
+  if (tx instanceof goog.math.Coordinate) {
+    this.left += tx.x;
+    this.top += tx.y;
+  } else {
+    this.left += tx;
+    if (goog.isNumber(opt_ty)) {
+      this.top += opt_ty;
+    }
+  }
+  return this;
+};
+
+
+/**
+ * Scales this rectangle by the given scale factors. The left and width values
+ * are scaled by {@code sx} and the top and height values are scaled by
+ * {@code opt_sy}.  If {@code opt_sy} is not given, then all fields are scaled
+ * by {@code sx}.
+ * @param {number} sx The scale factor to use for the x dimension.
+ * @param {number=} opt_sy The scale factor to use for the y dimension.
+ * @return {!goog.math.Rect} This rectangle after scaling.
+ */
+goog.math.Rect.prototype.scale = function(sx, opt_sy) {
+  var sy = goog.isNumber(opt_sy) ? opt_sy : sx;
+  this.left *= sx;
+  this.width *= sx;
+  this.top *= sy;
+  this.height *= sy;
+  return this;
+};
+// Copyright 2012 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Vendor prefix getters.
+ */
+
+goog.provide('goog.dom.vendor');
+
+goog.require('goog.userAgent');
+
+
+/**
+ * Returns the JS vendor prefix used in CSS properties. Different vendors
+ * use different methods of changing the case of the property names.
+ *
+ * @return {?string} The JS vendor prefix or null if there is none.
+ */
+goog.dom.vendor.getVendorJsPrefix = function() {
+  if (goog.userAgent.WEBKIT) {
+    return 'Webkit';
+  } else if (goog.userAgent.GECKO) {
+    return 'Moz';
+  } else if (goog.userAgent.IE) {
+    return 'ms';
+  } else if (goog.userAgent.OPERA) {
+    return 'O';
+  }
+
+  return null;
+};
+
+
+/**
+ * Returns the vendor prefix used in CSS properties.
+ *
+ * @return {?string} The vendor prefix or null if there is none.
+ */
+goog.dom.vendor.getVendorPrefix = function() {
+  if (goog.userAgent.WEBKIT) {
+    return '-webkit';
+  } else if (goog.userAgent.GECKO) {
+    return '-moz';
+  } else if (goog.userAgent.IE) {
+    return '-ms';
+  } else if (goog.userAgent.OPERA) {
+    return '-o';
+  }
+
+  return null;
 };
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
@@ -23332,7 +26900,10 @@ goog.provide('goog.style');
 
 
 goog.require('goog.array');
+goog.require('goog.asserts');
 goog.require('goog.dom');
+goog.require('goog.dom.NodeType');
+goog.require('goog.dom.vendor');
 goog.require('goog.math.Box');
 goog.require('goog.math.Coordinate');
 goog.require('goog.math.Rect');
@@ -23340,6 +26911,13 @@ goog.require('goog.math.Size');
 goog.require('goog.object');
 goog.require('goog.string');
 goog.require('goog.userAgent');
+
+
+/**
+ * @define {boolean} Whether we know at compile time that
+ *     getBoundingClientRect() is present and bug-free on the browser.
+ */
+goog.define('goog.style.GET_BOUNDING_CLIENT_RECT_ALWAYS_EXISTS', false);
 
 
 /**
@@ -23369,14 +26947,69 @@ goog.style.setStyle = function(element, style, opt_value) {
 
 /**
  * Sets a style value on an element, with parameters swapped to work with
- * {@code goog.object.forEach()}.
+ * {@code goog.object.forEach()}. Prepends a vendor-specific prefix when
+ * necessary.
  * @param {Element} element The element to change.
  * @param {string|number|boolean|undefined} value Style value.
  * @param {string} style Style name.
  * @private
  */
 goog.style.setStyle_ = function(element, value, style) {
-  element.style[goog.string.toCamelCase(style)] = value;
+  var propertyName = goog.style.getVendorJsStyleName_(element, style);
+
+  if (propertyName) {
+    element.style[propertyName] = value;
+  }
+};
+
+
+/**
+ * Returns the style property name in camel-case. If it does not exist and a
+ * vendor-specific version of the property does exist, then return the vendor-
+ * specific property name instead.
+ * @param {Element} element The element to change.
+ * @param {string} style Style name.
+ * @return {string} Vendor-specific style.
+ * @private
+ */
+goog.style.getVendorJsStyleName_ = function(element, style) {
+  var camelStyle = goog.string.toCamelCase(style);
+
+  if (element.style[camelStyle] === undefined) {
+    var prefixedStyle = goog.dom.vendor.getVendorJsPrefix() +
+        goog.string.toTitleCase(style);
+
+    if (element.style[prefixedStyle] !== undefined) {
+      return prefixedStyle;
+    }
+  }
+
+  return camelStyle;
+};
+
+
+/**
+ * Returns the style property name in CSS notation. If it does not exist and a
+ * vendor-specific version of the property does exist, then return the vendor-
+ * specific property name instead.
+ * @param {Element} element The element to change.
+ * @param {string} style Style name.
+ * @return {string} Vendor-specific style.
+ * @private
+ */
+goog.style.getVendorStyleName_ = function(element, style) {
+  var camelStyle = goog.string.toCamelCase(style);
+
+  if (element.style[camelStyle] === undefined) {
+    var prefixedStyle = goog.dom.vendor.getVendorJsPrefix() +
+        goog.string.toTitleCase(style);
+
+    if (element.style[prefixedStyle] !== undefined) {
+      return goog.dom.vendor.getVendorPrefix() + '-' + style;
+    }
+  }
+
+  return style;
 };
 
 
@@ -23395,7 +27028,16 @@ goog.style.getStyle = function(element, property) {
   // For for browser specific styles as 'filter' is undefined
   // so we need to return '' explicitly to make it consistent across
   // browsers.
-  return element.style[goog.string.toCamelCase(property)] || '';
+  var styleValue = element.style[goog.string.toCamelCase(property)];
+
+  // Using typeof here because of a bug in Safari 5.1, where this value
+  // was undefined, but === undefined returned false.
+  if (typeof(styleValue) !== 'undefined') {
+    return styleValue;
+  }
+
+  return element.style[goog.style.getVendorJsStyleName_(element, property)] ||
+      '';
 };
 
 
@@ -23416,7 +27058,7 @@ goog.style.getComputedStyle = function(element, property) {
     if (styles) {
       // element.style[..] is undefined for browser specific styles
       // as 'filter'.
-      return styles[property] || styles.getPropertyValue(property);
+      return styles[property] || styles.getPropertyValue(property) || '';
     }
   }
 
@@ -23433,6 +27075,7 @@ goog.style.getComputedStyle = function(element, property) {
  * @return {string} Style value.
  */
 goog.style.getCascadedStyle = function(element, style) {
+  // TODO(nicksantos): This should be documented to return null. #fixTypes
   return element.currentStyle ? element.currentStyle[style] : null;
 };
 
@@ -23541,7 +27184,9 @@ goog.style.getComputedCursor = function(element) {
 
 /**
  * Sets the top/left values of an element.  If no unit is specified in the
- * argument then it will add px.
+ * argument then it will add px. The second argument is required if the first
+ * argument is a string or number and is ignored if the first argument
+ * is a coordinate.
  * @param {Element} el Element to move.
  * @param {string|number|goog.math.Coordinate} arg1 Left position or coordinate.
  * @param {string|number=} opt_arg2 Top position.
@@ -23550,7 +27195,7 @@ goog.style.setPosition = function(el, arg1, opt_arg2) {
   var x, y;
   var buggyGeckoSubPixelPos = goog.userAgent.GECKO &&
       (goog.userAgent.MAC || goog.userAgent.X11) &&
-      goog.userAgent.isVersion('1.9');
+      goog.userAgent.isVersionOrHigher('1.9');
 
   if (arg1 instanceof goog.math.Coordinate) {
     x = arg1.x;
@@ -23588,21 +27233,33 @@ goog.style.getPosition = function(element) {
 goog.style.getClientViewportElement = function(opt_node) {
   var doc;
   if (opt_node) {
-    if (opt_node.nodeType == goog.dom.NodeType.DOCUMENT) {
-      doc = opt_node;
-    } else {
-      doc = goog.dom.getOwnerDocument(opt_node);
-    }
+    doc = goog.dom.getOwnerDocument(opt_node);
   } else {
     doc = goog.dom.getDocument();
   }
 
   // In old IE versions the document.body represented the viewport
-  if (goog.userAgent.IE && !goog.userAgent.isDocumentMode(9) &&
+  if (goog.userAgent.IE && !goog.userAgent.isDocumentModeOrHigher(9) &&
       !goog.dom.getDomHelper(doc).isCss1CompatMode()) {
     return doc.body;
   }
   return doc.documentElement;
+};
+
+
+/**
+ * Calculates the viewport coordinates relative to the page/document
+ * containing the node. The viewport may be the browser viewport for
+ * non-iframe document, or the iframe container for iframe'd document.
+ * @param {!Document} doc The document to use as the reference point.
+ * @return {!goog.math.Coordinate} The page offset of the viewport.
+ */
+goog.style.getViewportPageOffset = function(doc) {
+  var body = doc.body;
+  var documentElement = doc.documentElement;
+  var scrollLeft = body.scrollLeft || documentElement.scrollLeft;
+  var scrollTop = body.scrollTop || documentElement.scrollTop;
+  return new goog.math.Coordinate(scrollLeft, scrollTop);
 };
 
 
@@ -23613,19 +27270,27 @@ goog.style.getClientViewportElement = function(opt_node) {
  * long-time presence in IE), replacing the error-prone parent offset
  * computation and the now-deprecated Gecko getBoxObjectFor.
  *
- * This utility patches common browser bugs in getClientBoundingRect. It
- * will fail if getClientBoundingRect is unsupported.
+ * This utility patches common browser bugs in getBoundingClientRect. It
+ * will fail if getBoundingClientRect is unsupported.
  *
  * If the element is not in the DOM, the result is undefined, and an error may
  * be thrown depending on user agent.
  *
- * @param {Element} el The element whose bounding rectangle is being queried.
+ * @param {!Element} el The element whose bounding rectangle is being queried.
  * @return {Object} A native bounding rectangle with numerical left, top,
  *     right, and bottom.  Reported by Firefox to be of object type ClientRect.
  * @private
  */
 goog.style.getBoundingClientRect_ = function(el) {
-  var rect = el.getBoundingClientRect();
+  var rect;
+  try {
+    rect = el.getBoundingClientRect();
+  } catch (e) {
+    // In IE < 9, calling getBoundingClientRect on an orphan element raises an
+    // "Unspecified Error". All other browsers return zeros.
+    return {'left': 0, 'top': 0, 'right': 0, 'bottom': 0};
+  }
+
   // Patch the result in IE only, so that this function can be inlined if
   // compiled for non-IE.
   if (goog.userAgent.IE) {
@@ -23639,7 +27304,7 @@ goog.style.getBoundingClientRect_ = function(el) {
     // In quirks mode, the offset can be determined by querying the body's
     // clientLeft/clientTop, but in standards mode, it is found by querying
     // the document element's clientLeft/clientTop.  Since we already called
-    // getClientBoundingRect we have already forced a reflow, so it is not
+    // getBoundingClientRect we have already forced a reflow, so it is not
     // too expensive just to query them all.
 
     // See: http://msdn.microsoft.com/en-us/library/ms536433(VS.85).aspx
@@ -23660,7 +27325,7 @@ goog.style.getOffsetParent = function(element) {
   // element.offsetParent does the right thing in IE7 and below.  In other
   // browsers it only includes elements with position absolute, relative or
   // fixed, not elements with overflow set to auto or scroll.
-  if (goog.userAgent.IE && !goog.userAgent.isDocumentMode(8)) {
+  if (goog.userAgent.IE && !goog.userAgent.isDocumentModeOrHigher(8)) {
     return element.offsetParent;
   }
 
@@ -23820,7 +27485,7 @@ goog.style.scrollIntoContainerView = function(element, container, opt_center) {
 goog.style.getClientLeftTop = function(el) {
   // NOTE(eae): Gecko prior to 1.9 doesn't support clientTop/Left, see
   // https://bugzilla.mozilla.org/show_bug.cgi?id=111207
-  if (goog.userAgent.GECKO && !goog.userAgent.isVersion('1.9')) {
+  if (goog.userAgent.GECKO && !goog.userAgent.isVersionOrHigher('1.9')) {
     var left = parseFloat(goog.style.getComputedStyle(el, 'borderLeftWidth'));
     if (goog.style.isRightToLeft(el)) {
       var scrollbarWidth = el.offsetWidth - el.clientWidth - left -
@@ -23848,12 +27513,16 @@ goog.style.getClientLeftTop = function(el) {
 goog.style.getPageOffset = function(el) {
   var box, doc = goog.dom.getOwnerDocument(el);
   var positionStyle = goog.style.getStyle_(el, 'position');
+  // TODO(gboyer): Update the jsdoc in a way that doesn't break the universe.
+  goog.asserts.assertObject(el, 'Parameter is required');
 
   // NOTE(eae): Gecko pre 1.9 normally use getBoxObjectFor to calculate the
   // position. When invoked for an element with position absolute and a negative
   // position though it can be off by one. Therefor the recursive implementation
   // is used in those (relatively rare) cases.
-  var BUGGY_GECKO_BOX_OBJECT = goog.userAgent.GECKO && doc.getBoxObjectFor &&
+  var BUGGY_GECKO_BOX_OBJECT =
+      !goog.style.GET_BOUNDING_CLIENT_RECT_ALWAYS_EXISTS &&
+      goog.userAgent.GECKO && doc.getBoxObjectFor &&
       !el.getBoundingClientRect && positionStyle == 'absolute' &&
       (box = doc.getBoxObjectFor(el)) && (box.screenX < 0 || box.screenY < 0);
 
@@ -23872,8 +27541,9 @@ goog.style.getPageOffset = function(el) {
     return pos;
   }
 
-  // IE and Gecko 1.9+.
-  if (el.getBoundingClientRect) {
+  // IE, Gecko 1.9+, and most modern WebKit.
+  if (goog.style.GET_BOUNDING_CLIENT_RECT_ALWAYS_EXISTS ||
+      el.getBoundingClientRect) {
     box = goog.style.getBoundingClientRect_(el);
     // Must add the scroll coordinates in to get the absolute page offset
     // of element since getBoundingClientRect returns relative coordinates to
@@ -23987,7 +27657,8 @@ goog.style.getFramedPageOffset = function(el, relativeWin) {
     // the outer window.
     var offset = currentWin == relativeWin ?
         goog.style.getPageOffset(currentEl) :
-        goog.style.getClientPosition(currentEl);
+        goog.style.getClientPositionForElement_(
+            goog.asserts.assert(currentEl));
 
     position.x += offset.x;
     position.y += offset.y;
@@ -24047,23 +27718,47 @@ goog.style.getRelativePosition = function(a, b) {
 /**
  * Returns the position of the event or the element's border box relative to
  * the client viewport.
+ * @param {!Element} el Element whose position to get.
+ * @return {!goog.math.Coordinate} The position.
+ * @private
+ */
+goog.style.getClientPositionForElement_ = function(el) {
+  var pos;
+  if (goog.style.GET_BOUNDING_CLIENT_RECT_ALWAYS_EXISTS ||
+      el.getBoundingClientRect) {
+    // IE, Gecko 1.9+, and most modern WebKit
+    var box = goog.style.getBoundingClientRect_(el);
+    pos = new goog.math.Coordinate(box.left, box.top);
+  } else {
+    var scrollCoord = goog.dom.getDomHelper(el).getDocumentScroll();
+    var pageCoord = goog.style.getPageOffset(el);
+    pos = new goog.math.Coordinate(
+        pageCoord.x - scrollCoord.x,
+        pageCoord.y - scrollCoord.y);
+  }
+
+  // Gecko below version 12 doesn't add CSS translation to the client position
+  // (using either getBoundingClientRect or getBoxOffsetFor) so we need to do
+  // so manually.
+  if (goog.userAgent.GECKO && !goog.userAgent.isVersionOrHigher(12)) {
+    return goog.math.Coordinate.sum(pos, goog.style.getCssTranslation(el));
+  } else {
+    return pos;
+  }
+};
+
+
+/**
+ * Returns the position of the event or the element's border box relative to
+ * the client viewport.
  * @param {Element|Event|goog.events.Event} el Element or a mouse / touch event.
  * @return {!goog.math.Coordinate} The position.
  */
 goog.style.getClientPosition = function(el) {
-  var pos = new goog.math.Coordinate;
+  goog.asserts.assert(el);
   if (el.nodeType == goog.dom.NodeType.ELEMENT) {
-    if (el.getBoundingClientRect) {  // IE and Gecko 1.9+
-      var box = goog.style.getBoundingClientRect_(/** @type {Element} */ (el));
-      pos.x = box.left;
-      pos.y = box.top;
-    } else {
-      var scrollCoord = goog.dom.getDomHelper(/** @type {Element} */ (el))
-          .getDocumentScroll();
-      var pageCoord = goog.style.getPageOffset(/** @type {Element} */ (el));
-      pos.x = pageCoord.x - scrollCoord.x;
-      pos.y = pageCoord.y - scrollCoord.y;
-    }
+    return goog.style.getClientPositionForElement_(
+        /** @type {!Element} */ (el));
   } else {
     var isAbstractedEvent = goog.isFunction(el.getBrowserEvent);
     var targetEvent = el;
@@ -24074,11 +27769,10 @@ goog.style.getClientPosition = function(el) {
       targetEvent = el.getBrowserEvent().targetTouches[0];
     }
 
-    pos.x = targetEvent.clientX;
-    pos.y = targetEvent.clientY;
+    return new goog.math.Coordinate(
+        targetEvent.clientX,
+        targetEvent.clientY);
   }
-
-  return pos;
 };
 
 
@@ -24174,7 +27868,7 @@ goog.style.setHeight = function(element, height) {
 
 /**
  * Set the width of an element.  Sets the element's style property.
- * @param {Element} element Element to set the height of.
+ * @param {Element} element Element to set the width of.
  * @param {string|number} width The width value to set.  If a number, 'px'
  *     will be appended, otherwise the value will be applied directly.
  */
@@ -24339,7 +28033,7 @@ goog.style.setTransparentBackgroundImage = function(el, src) {
   // It is safe to use the style.filter in IE only. In Safari 'filter' is in
   // style object but access to style.filter causes it to throw an exception.
   // Note: IE8 supports images with an alpha channel.
-  if (goog.userAgent.IE && !goog.userAgent.isVersion('8')) {
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('8')) {
     // See TODO in setOpacity.
     style.filter = 'progid:DXImageTransform.Microsoft.AlphaImageLoader(' +
         'src="' + src + '", sizingMethod="crop")';
@@ -24387,25 +28081,51 @@ goog.style.clearTransparentBackgroundImage = function(el) {
  * stylesheet.
  * @param {Element} el Element to show or hide.
  * @param {*} display True to render the element in its default style,
- * false to disable rendering the element.
+ *     false to disable rendering the element.
+ * @deprecated Use goog.style.setElementShown instead.
  */
 goog.style.showElement = function(el, display) {
-  el.style.display = display ? '' : 'none';
+  goog.style.setElementShown(el, display);
+};
+
+
+/**
+ * Shows or hides an element from the page. Hiding the element is done by
+ * setting the display property to "none", removing the element from the
+ * rendering hierarchy so it takes up no space. To show the element, the default
+ * inherited display property is restored (defined either in stylesheets or by
+ * the browser's default style rules).
+ *
+ * Caveat 1: if the inherited display property for the element is set to "none"
+ * by the stylesheets, that is the property that will be restored by a call to
+ * setElementShown(), effectively toggling the display between "none" and
+ * "none".
+ *
+ * Caveat 2: if the element display style is set inline (by setting either
+ * element.style.display or a style attribute in the HTML), a call to
+ * setElementShown will clear that setting and defer to the inherited style in
+ * the stylesheet.
+ * @param {Element} el Element to show or hide.
+ * @param {*} isShown True to render the element in its default style,
+ *     false to disable rendering the element.
+ */
+goog.style.setElementShown = function(el, isShown) {
+  el.style.display = isShown ? '' : 'none';
 };
 
 
 /**
  * Test whether the given element has been shown or hidden via a call to
- * {@link #showElement}.
+ * {@link #setElementShown}.
  *
  * Note this is strictly a companion method for a call
- * to {@link #showElement} and the same caveats apply; in particular, this
+ * to {@link #setElementShown} and the same caveats apply; in particular, this
  * method does not guarantee that the return value will be consistent with
  * whether or not the element is actually visible.
  *
  * @param {Element} el The element to test.
  * @return {boolean} Whether the element has been shown.
- * @see #showElement
+ * @see #setElementShown
  */
 goog.style.isElementShown = function(el) {
   return el.style.display != 'none';
@@ -24476,8 +28196,7 @@ goog.style.setStyles = function(element, stylesString) {
     // the style node works fine and ignores CSS that IE doesn't understand
     element.cssText = stylesString;
   } else {
-    var propToSet = goog.userAgent.WEBKIT ? 'innerText' : 'innerHTML';
-    element[propToSet] = stylesString;
+    element.innerHTML = stylesString;
   }
 };
 
@@ -24496,7 +28215,7 @@ goog.style.setStyles = function(element, stylesString) {
  */
 goog.style.setPreWrap = function(el) {
   var style = el.style;
-  if (goog.userAgent.IE && !goog.userAgent.isVersion('8')) {
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('8')) {
     style.whiteSpace = 'pre';
     style.wordWrap = 'break-word';
   } else if (goog.userAgent.GECKO) {
@@ -24519,7 +28238,7 @@ goog.style.setInlineBlock = function(el) {
   // Without position:relative, weirdness ensues.  Just accept it and move on.
   style.position = 'relative';
 
-  if (goog.userAgent.IE && !goog.userAgent.isVersion('8')) {
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('8')) {
     // IE8 supports inline-block so fall through to the else
     // Zoom:1 forces hasLayout, display:inline gives inline behavior.
     style.zoom = '1';
@@ -24527,7 +28246,7 @@ goog.style.setInlineBlock = function(el) {
   } else if (goog.userAgent.GECKO) {
     // Pre-Firefox 3, Gecko doesn't support inline-block, but -moz-inline-box
     // is close enough.
-    style.display = goog.userAgent.isVersion('1.9a') ? 'inline-block' :
+    style.display = goog.userAgent.isVersionOrHigher('1.9a') ? 'inline-block' :
         '-moz-inline-box';
   } else {
     // Opera, Webkit, and Safari seem to do OK with the standard inline-block
@@ -24637,7 +28356,7 @@ goog.style.setBorderBoxSize = function(element, size) {
   var isCss1CompatMode = goog.dom.getDomHelper(doc).isCss1CompatMode();
 
   if (goog.userAgent.IE &&
-      (!isCss1CompatMode || !goog.userAgent.isVersion('8'))) {
+      (!isCss1CompatMode || !goog.userAgent.isVersionOrHigher('8'))) {
     var style = element.style;
     if (isCss1CompatMode) {
       var paddingBox = goog.style.getPaddingBox(element);
@@ -24700,7 +28419,7 @@ goog.style.setContentBoxSize = function(element, size) {
   var doc = goog.dom.getOwnerDocument(element);
   var isCss1CompatMode = goog.dom.getDomHelper(doc).isCss1CompatMode();
   if (goog.userAgent.IE &&
-      (!isCss1CompatMode || !goog.userAgent.isVersion('8'))) {
+      (!isCss1CompatMode || !goog.userAgent.isVersionOrHigher('8'))) {
     var style = element.style;
     if (isCss1CompatMode) {
       style.pixelWidth = size.width;
@@ -24784,9 +28503,9 @@ goog.style.getIePixelValue_ = function(element, value, name, pixelName) {
  * @private
  */
 goog.style.getIePixelDistance_ = function(element, propName) {
-  return goog.style.getIePixelValue_(element,
-      goog.style.getCascadedStyle(element, propName),
-      'left', 'pixelLeft');
+  var value = goog.style.getCascadedStyle(element, propName);
+  return value ?
+      goog.style.getIePixelValue_(element, value, 'left', 'pixelLeft') : 0;
 };
 
 
@@ -25132,7 +28851,7 @@ goog.style.getScrollbarWidth = function(opt_className) {
   if (opt_className) {
     outerDiv.className = opt_className;
   }
-  outerDiv.style.cssText = 'visiblity:hidden;overflow:auto;' +
+  outerDiv.style.cssText = 'overflow:auto;' +
       'position:absolute;top:0;width:100px;height:100px';
   var innerDiv = goog.dom.createElement('div');
   goog.style.setSize(innerDiv, '200px', '200px');
@@ -25141,6 +28860,57 @@ goog.style.getScrollbarWidth = function(opt_className) {
   var width = outerDiv.offsetWidth - outerDiv.clientWidth;
   goog.dom.removeNode(outerDiv);
   return width;
+};
+
+
+/**
+ * Regular expression to extract x and y translation components from a CSS
+ * transform Matrix representation.
+ *
+ * @type {!RegExp}
+ * @const
+ * @private
+ */
+goog.style.MATRIX_TRANSLATION_REGEX_ =
+    new RegExp('matrix\\([0-9\\.\\-]+, [0-9\\.\\-]+, ' +
+               '[0-9\\.\\-]+, [0-9\\.\\-]+, ' +
+               '([0-9\\.\\-]+)p?x?, ([0-9\\.\\-]+)p?x?\\)');
+
+
+/**
+ * Returns the x,y translation component of any CSS transforms applied to the
+ * element, in pixels.
+ *
+ * @param {!Element} element The element to get the translation of.
+ * @return {!goog.math.Coordinate} The CSS translation of the element in px.
+ */
+goog.style.getCssTranslation = function(element) {
+  var property;
+  if (goog.userAgent.IE) {
+    property = '-ms-transform';
+  } else if (goog.userAgent.WEBKIT) {
+    property = '-webkit-transform';
+  } else if (goog.userAgent.OPERA) {
+    property = '-o-transform';
+  } else if (goog.userAgent.GECKO) {
+    property = '-moz-transform';
+  }
+  var transform;
+  if (property) {
+    transform = goog.style.getStyle_(element, property);
+  }
+  if (!transform) {
+    transform = goog.style.getStyle_(element, 'transform');
+  }
+  if (!transform) {
+    return new goog.math.Coordinate(0, 0);
+  }
+  var matches = transform.match(goog.style.MATRIX_TRANSLATION_REGEX_);
+  if (!matches) {
+    return new goog.math.Coordinate(0, 0);
+  }
+  return new goog.math.Coordinate(parseFloat(matches[1]),
+                                  parseFloat(matches[2]));
 };
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
 //
@@ -25227,8 +28997,9 @@ goog.provide('goog.ui.Component.EventType');
 goog.provide('goog.ui.Component.State');
 
 goog.require('goog.array');
-goog.require('goog.array.ArrayLike');
+goog.require('goog.asserts');
 goog.require('goog.dom');
+goog.require('goog.dom.NodeType');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventTarget');
 goog.require('goog.object');
@@ -25252,6 +29023,15 @@ goog.ui.Component = function(opt_domHelper) {
   this.rightToLeft_ = goog.ui.Component.defaultRightToLeft_;
 };
 goog.inherits(goog.ui.Component, goog.events.EventTarget);
+
+
+/**
+ * @define {boolean} Whether to support calling decorate with an element that is
+ *     not yet in the document. If true, we check if the element is in the
+ *     document, and avoid calling enterDocument if it isn't. If false, we
+ *     maintain legacy behavior (always call enterDocument from decorate).
+ */
+goog.define('goog.ui.Component.ALLOW_DETACHED_DECORATION', false);
 
 
 /**
@@ -25675,6 +29455,21 @@ goog.ui.Component.prototype.getElement = function() {
 
 
 /**
+ * Gets the component's element. This differs from getElement in that
+ * it assumes that the element exists (i.e. the component has been
+ * rendered/decorated) and will cause an assertion error otherwise (if
+ * assertion is enabled).
+ * @return {!Element} The element for the component.
+ */
+goog.ui.Component.prototype.getElementStrict = function() {
+  var el = this.element_;
+  goog.asserts.assert(
+      el, 'Can not call getElementStrict before rendering/decorating.');
+  return el;
+};
+
+
+/**
  * Sets the component's root element to the given element.  Considered
  * protected and final.
  *
@@ -25682,8 +29477,9 @@ goog.ui.Component.prototype.getElement = function() {
  * does not actually change which element is rendered, only the element that is
  * associated with this UI component.
  *
+ * This should only be used by subclasses and its associated renderers.
+ *
  * @param {Element} element Root element for the component.
- * @protected
  */
 goog.ui.Component.prototype.setElementInternal = function(element) {
   this.element_ = element;
@@ -25711,6 +29507,21 @@ goog.ui.Component.prototype.getElementsByClass = function(className) {
 goog.ui.Component.prototype.getElementByClass = function(className) {
   return this.element_ ?
       this.dom_.getElementByClass(className, this.element_) : null;
+};
+
+
+/**
+ * Similar to {@code getElementByClass} except that it expects the
+ * element to be present in the dom thus returning a required value. Otherwise,
+ * will assert.
+ * @param {string} className The name of the class to look for.
+ * @return {!Element} The first item with the class name provided.
+ */
+goog.ui.Component.prototype.getRequiredElementByClass = function(className) {
+  var el = this.getElementByClass(className);
+  goog.asserts.assert(el, 'Expected element in component with class: %s',
+      className);
+  return el;
 };
 
 
@@ -25883,7 +29694,12 @@ goog.ui.Component.prototype.render_ = function(opt_parentElement,
 
 
 /**
- * Decorates the element for the UI component.
+ * Decorates the element for the UI component. If the element is in the
+ * document, the enterDocument method will be called.
+ *
+ * If goog.ui.Component.ALLOW_DETACHED_DECORATION is false, the caller must
+ * pass an element that is in the document.
+ *
  * @param {Element} element Element to decorate.
  */
 goog.ui.Component.prototype.decorate = function(element) {
@@ -25893,14 +29709,19 @@ goog.ui.Component.prototype.decorate = function(element) {
     this.wasDecorated_ = true;
 
     // Set the DOM helper of the component to match the decorated element.
-    if (!this.dom_ ||
-        this.dom_.getDocument() != goog.dom.getOwnerDocument(element)) {
+    var doc = goog.dom.getOwnerDocument(element);
+    if (!this.dom_ || this.dom_.getDocument() != doc) {
       this.dom_ = goog.dom.getDomHelper(element);
     }
 
     // Call specific component decorate logic.
     this.decorateInternal(element);
-    this.enterDocument();
+
+    // If supporting detached decoration, check that element is in doc.
+    if (!goog.ui.Component.ALLOW_DETACHED_DECORATION ||
+        goog.dom.contains(doc, element)) {
+      this.enterDocument();
+    }
   } else {
     throw Error(goog.ui.Component.Error.DECORATE_INVALID);
   }
@@ -25950,6 +29771,9 @@ goog.ui.Component.prototype.enterDocument = function() {
   this.inDocument_ = true;
 
   // Propagate enterDocument to child components that have a DOM, if any.
+  // If a child was decorated before entering the document (permitted when
+  // goog.ui.Component.ALLOW_DETACHED_DECORATION is true), its enterDocument
+  // will be called here.
   this.forEachChild(function(child) {
     if (!child.isInDocument() && child.getElement()) {
       child.enterDocument();
@@ -25994,8 +29818,6 @@ goog.ui.Component.prototype.exitDocument = function() {
  * @protected
  */
 goog.ui.Component.prototype.disposeInternal = function() {
-  goog.ui.Component.superClass_.disposeInternal.call(this);
-
   if (this.inDocument_) {
     this.exitDocument();
   }
@@ -26020,7 +29842,8 @@ goog.ui.Component.prototype.disposeInternal = function() {
   this.element_ = null;
   this.model_ = null;
   this.parent_ = null;
-  // TODO(gboyer): delete this.dom_ breaks many unit tests.
+
+  goog.ui.Component.superClass_.disposeInternal.call(this);
 };
 
 
@@ -26106,6 +29929,11 @@ goog.ui.Component.prototype.getElementByFragment = function(idFragment) {
  *    into the parent.
  */
 goog.ui.Component.prototype.addChild = function(child, opt_render) {
+  // TODO(gboyer): addChildAt(child, this.getChildCount(), false) will
+  // reposition any already-rendered child to the end.  Instead, perhaps
+  // addChild(child, false) should never reposition the child; instead, clients
+  // that need the repositioning will use addChildAt explicitly.  Right now,
+  // clients can get around this by calling addChild first.
   this.addChildAt(child, this.getChildCount(), opt_render);
 };
 
@@ -26120,7 +29948,9 @@ goog.ui.Component.prototype.addChild = function(child, opt_render) {
  *    <li>the child component's element must be a descendant of the parent
  *        component's element, and
  *    <li>the DOM state of the child component must be consistent with the DOM
- *        state of the parent component (see {@code isInDocument}).
+ *        state of the parent component (see {@code isInDocument}) in the
+ *        steady state -- the exception is to addChildAt(child, i, false) and
+ *        then immediately decorate/render the child.
  *  </ul>
  *
  * In particular, {@code parent.addChild(child)} will throw an error if the
@@ -26129,14 +29959,13 @@ goog.ui.Component.prototype.addChild = function(child, opt_render) {
  * Clients of this API may call {@code addChild} and {@code addChildAt} with
  * {@code opt_render} set to true.  If {@code opt_render} is true, calling these
  * methods will automatically render the child component's element into the
- * parent component's element.  However, {@code parent.addChild(child, true)}
- * will throw an error if:
- *  <ul>
- *    <li>the parent component has no DOM (i.e. {@code parent.getElement()} is
- *        null), or
- *    <li>the child component is already in the document, regardless of the
- *        parent's DOM state.
- *  </ul>
+ * parent component's element. If the parent does not yet have an element, then
+ * {@code createDom} will automatically be invoked on the parent before
+ * rendering the child.
+ *
+ * Invoking {@code parent.addChild(child, true)} will throw an error if the
+ * child component is already in the document, regardless of the parent's DOM
+ * state.
  *
  * If {@code opt_render} is true and the parent component is not already
  * in the document, {@code enterDocument} will not be called on this component
@@ -26208,12 +30037,18 @@ goog.ui.Component.prototype.addChildAt = function(child, index, opt_render) {
     var sibling = this.getChildAt(index + 1);
     // render_() calls enterDocument() if the parent is already in the document.
     child.render_(this.getContentElement(), sibling ? sibling.element_ : null);
-  } else {
-    // We don't touch the DOM, but if the parent is in the document, the child
-    // isn't, and the child has a DOM, then we call enterDocument on the child.
-    if (this.inDocument_ && !child.inDocument_ && child.element_) {
-      child.enterDocument();
-    }
+  } else if (this.inDocument_ && !child.inDocument_ && child.element_ &&
+      child.element_.parentNode &&
+      // Under some circumstances, IE8 implicitly creates a Document Fragment
+      // for detached nodes, so ensure the parent is an Element as it should be.
+      child.element_.parentNode.nodeType == goog.dom.NodeType.ELEMENT) {
+    // We don't touch the DOM, but if the parent is in the document, and the
+    // child element is in the document but not marked as such, then we call
+    // enterDocument on the child.
+    // TODO(gboyer): It would be nice to move this condition entirely, but
+    // there's a large risk of breaking existing applications that manually
+    // append the child to the DOM and then call addChild.
+    child.enterDocument();
   }
 };
 
@@ -26304,7 +30139,7 @@ goog.ui.Component.prototype.getChildIds = function() {
  */
 goog.ui.Component.prototype.getChild = function(id) {
   // Use childIndex_ for O(1) access by ID.
-  return (this.childIndex_ && id) ? (/** @type {goog.ui.Component} */
+  return (this.childIndex_ && id) ? /** @type {goog.ui.Component} */ (
       goog.object.get(this.childIndex_, id)) || null : null;
 };
 
@@ -26325,9 +30160,10 @@ goog.ui.Component.prototype.getChildAt = function(index) {
  * {@code opt_obj} is provided, it will be used as the 'this' object in the
  * function when called.  The function should take two arguments:  the child
  * component and its 0-based index.  The return value is ignored.
- * @param {Function} f The function to call for every child component; should
- *    take 2 arguments (the child and its index).
- * @param {Object=} opt_obj Used as the 'this' object in f when called.
+ * @param {function(this:T,?,number):?} f The function to call for every
+ * child component; should take 2 arguments (the child and its index).
+ * @param {T=} opt_obj Used as the 'this' object in f when called.
+ * @template T
  */
 goog.ui.Component.prototype.forEachChild = function(f, opt_obj) {
   if (this.children_) {
@@ -26419,18 +30255,21 @@ goog.ui.Component.prototype.removeChildAt = function(index, opt_unrender) {
 
 
 /**
- * Removes every child component attached to this one.
+ * Removes every child component attached to this one and returns them.
  *
  * @see goog.ui.Component#removeChild
  * @param {boolean=} opt_unrender If true, calls {@link #exitDocument} on the
  *    removed child components, and detaches their DOM from the document.
+ * @return {!Array.<goog.ui.Component>} The removed components if any.
  */
 goog.ui.Component.prototype.removeChildren = function(opt_unrender) {
+  var removedChildren = [];
   while (this.hasChildren()) {
-    this.removeChildAt(0, opt_unrender);
+    removedChildren.push(this.removeChildAt(0, opt_unrender));
   }
+  return removedChildren;
 };
-// Copyright 2009 The Closure Library Authors. All Rights Reserved.
+// Copyright 2013 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26444,58 +30283,36 @@ goog.ui.Component.prototype.removeChildren = function(opt_unrender) {
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+
 /**
- * @fileoverview Type declaration for control content.
+ * @fileoverview The file contains generated enumerations for ARIA states
+ * and properties as defined by W3C ARIA standard:
+ * http://www.w3.org/TR/wai-aria/.
  *
- * @author nicksantos@google.com (Nick Santos)
+ * This is auto-generated code. Do not manually edit! For more details
+ * about how to edit it via the generator check go/closure-ariagen.
  */
-goog.provide('goog.ui.ControlContent');
+
+goog.provide('goog.a11y.aria.AutoCompleteValues');
+goog.provide('goog.a11y.aria.CheckedValues');
+goog.provide('goog.a11y.aria.DropEffectValues');
+goog.provide('goog.a11y.aria.ExpandedValues');
+goog.provide('goog.a11y.aria.GrabbedValues');
+goog.provide('goog.a11y.aria.InvalidValues');
+goog.provide('goog.a11y.aria.LivePriority');
+goog.provide('goog.a11y.aria.OrientationValues');
+goog.provide('goog.a11y.aria.PressedValues');
+goog.provide('goog.a11y.aria.RelevantValues');
+goog.provide('goog.a11y.aria.SelectedValues');
+goog.provide('goog.a11y.aria.SortValues');
+goog.provide('goog.a11y.aria.State');
 
 
 /**
- * Type declaration for text caption or DOM structure to be used as the content
- * of {@link goog.ui.Control}s.
- * @typedef {string|Node|Array.<Node>|NodeList}
- */
-goog.ui.ControlContent;
-// Copyright 2007 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
- * @fileoverview Utilities for adding, removing and setting ARIA roles
- * as defined by W3C ARIA Working Draft:
- *     http://www.w3.org/TR/2010/WD-wai-aria-20100916/
- * All modern browsers have some form of ARIA support, so no browser checks are
- * performed when adding ARIA to components.
- *
- */
-goog.provide('goog.dom.a11y');
-goog.provide('goog.dom.a11y.Announcer');
-goog.provide('goog.dom.a11y.LivePriority');
-goog.provide('goog.dom.a11y.Role');
-goog.provide('goog.dom.a11y.State');
-
-goog.require('goog.Disposable');
-goog.require('goog.dom');
-goog.require('goog.object');
-
-
-/**
- * Enumeration of ARIA states and properties.
+ * ARIA states and properties.
  * @enum {string}
  */
-goog.dom.a11y.State = {
+goog.a11y.aria.State = {
   // ARIA property for setting the currently active descendant of an element,
   // for example the selected item in a list box. Value: ID of an element.
   ACTIVEDESCENDANT: 'activedescendant',
@@ -26517,8 +30334,8 @@ goog.dom.a11y.State = {
   CHECKED: 'checked',
 
   // ARIA property that identifies the element or elements whose contents or
-  // presence are controlled by this element. Value: space-separated IDs of
-  // other elements.
+  // presence are controlled by this element.
+  // Value: space-separated IDs of other elements.
   CONTROLS: 'controls',
 
   // ARIA property that identifies the element or elements that describe
@@ -26546,8 +30363,8 @@ goog.dom.a11y.State = {
   // Value: one of {true, false, undefined}.
   GRABBED: 'grabbed',
 
-  // ARIA property indicating whether the element has a popup. Value: one of
-  // {true, false}.
+  // ARIA property indicating whether the element has a popup.
+  // Value: one of {true, false}.
   HASPOPUP: 'haspopup',
 
   // ARIA state indicating that the element is not visible or perceivable
@@ -26597,12 +30414,12 @@ goog.dom.a11y.State = {
   // Value: integer.
   POSINSET: 'posinset',
 
-  // ARIA state for a pressed item. Value: one of {true, false, undefined,
-  // 'mixed'}.
+  // ARIA state for a pressed item.
+  // Value: one of {true, false, undefined, 'mixed'}.
   PRESSED: 'pressed',
 
-  // ARIA property indicating that an element is not editable.  Value:
-  // one of {true, false}.
+  // ARIA property indicating that an element is not editable.
+  // Value: one of {true, false}.
   READONLY: 'readonly',
 
   // ARIA property indicating that change notifications within this subtree
@@ -26634,16 +30451,312 @@ goog.dom.a11y.State = {
   // ARIA property for slider active value. Value: number.
   VALUENOW: 'valuenow',
 
-  // ARIA property for slider active value represented as text. Value: string.
+  // ARIA property for slider active value represented as text.
+  // Value: string.
   VALUETEXT: 'valuetext'
 };
 
 
 /**
- * Enumeration of ARIA roles.
+ * ARIA state values for AutoCompleteValues.
  * @enum {string}
  */
-goog.dom.a11y.Role = {
+goog.a11y.aria.AutoCompleteValues = {
+  // The system provides text after the caret as a suggestion
+  // for how to complete the field.
+  INLINE: 'inline',
+  // A list of choices appears from which the user can choose,
+  // but the edit box retains focus.
+  LIST: 'list',
+  // A list of choices appears and the currently selected suggestion
+  // also appears inline.
+  BOTH: 'both',
+  // No input completion suggestions are provided.
+  NONE: 'none'
+};
+
+
+/**
+ * ARIA state values for DropEffectValues.
+ * @enum {string}
+ */
+goog.a11y.aria.DropEffectValues = {
+  // A duplicate of the source object will be dropped into the target.
+  COPY: 'copy',
+  // The source object will be removed from its current location
+  // and dropped into the target.
+  MOVE: 'move',
+  // A reference or shortcut to the dragged object
+  // will be created in the target object.
+  LINK: 'link',
+  // A function supported by the drop target is
+  // executed, using the drag source as an input.
+  EXECUTE: 'execute',
+  // There is a popup menu or dialog that allows the user to choose
+  // one of the drag operations (copy, move, link, execute) and any other
+  // drag functionality, such as cancel.
+  POPUP: 'popup',
+  // No operation can be performed; effectively
+  // cancels the drag operation if an attempt is made to drop on this object.
+  NONE: 'none'
+};
+
+
+/**
+ * ARIA state values for LivePriority.
+ * @enum {string}
+ */
+goog.a11y.aria.LivePriority = {
+  // Updates to the region will not be presented to the user
+  // unless the assitive technology is currently focused on that region.
+  OFF: 'off',
+  // (Background change) Assistive technologies SHOULD announce
+  // updates at the next graceful opportunity, such as at the end of
+  // speaking the current sentence or when the user pauses typing.
+  POLITE: 'polite',
+  // This information has the highest priority and assistive
+  // technologies SHOULD notify the user immediately.
+  // Because an interruption may disorient users or cause them to not complete
+  // their current task, authors SHOULD NOT use the assertive value unless the
+  // interruption is imperative.
+  ASSERTIVE: 'assertive'
+};
+
+
+/**
+ * ARIA state values for OrientationValues.
+ * @enum {string}
+ */
+goog.a11y.aria.OrientationValues = {
+  // The element is oriented vertically.
+  VERTICAL: 'vertical',
+  // The element is oriented horizontally.
+  HORIZONTAL: 'horizontal'
+};
+
+
+/**
+ * ARIA state values for RelevantValues.
+ * @enum {string}
+ */
+goog.a11y.aria.RelevantValues = {
+  // Element nodes are added to the DOM within the live region.
+  ADDITIONS: 'additions',
+  // Text or element nodes within the live region are removed from the DOM.
+  REMOVALS: 'removals',
+  // Text is added to any DOM descendant nodes of the live region.
+  TEXT: 'text',
+  // Equivalent to the combination of all values, "additions removals text".
+  ALL: 'all'
+};
+
+
+/**
+ * ARIA state values for SortValues.
+ * @enum {string}
+ */
+goog.a11y.aria.SortValues = {
+  // Items are sorted in ascending order by this column.
+  ASCENDING: 'ascending',
+  // Items are sorted in descending order by this column.
+  DESCENDING: 'descending',
+  // There is no defined sort applied to the column.
+  NONE: 'none',
+  // A sort algorithm other than ascending or descending has been applied.
+  OTHER: 'other'
+};
+
+
+/**
+ * ARIA state values for CheckedValues.
+ * @enum {string}
+ */
+goog.a11y.aria.CheckedValues = {
+  // The selectable element is checked.
+  TRUE: 'true',
+  // The selectable element is not checked.
+  FALSE: 'false',
+  // Indicates a mixed mode value for a tri-state
+  // checkbox or menuitemcheckbox.
+  MIXED: 'mixed',
+  // The element does not support being checked.
+  UNDEFINED: 'undefined'
+};
+
+
+/**
+ * ARIA state values for ExpandedValues.
+ * @enum {string}
+ */
+goog.a11y.aria.ExpandedValues = {
+  // The element, or another grouping element it controls, is expanded.
+  TRUE: 'true',
+  // The element, or another grouping element it controls, is collapsed.
+  FALSE: 'false',
+  // The element, or another grouping element
+  // it controls, is neither expandable nor collapsible; all its
+  // child elements are shown or there are no child elements.
+  UNDEFINED: 'undefined'
+};
+
+
+/**
+ * ARIA state values for GrabbedValues.
+ * @enum {string}
+ */
+goog.a11y.aria.GrabbedValues = {
+  // Indicates that the element has been "grabbed" for dragging.
+  TRUE: 'true',
+  // Indicates that the element supports being dragged.
+  FALSE: 'false',
+  // Indicates that the element does not support being dragged.
+  UNDEFINED: 'undefined'
+};
+
+
+/**
+ * ARIA state values for InvalidValues.
+ * @enum {string}
+ */
+goog.a11y.aria.InvalidValues = {
+  // There are no detected errors in the value.
+  FALSE: 'false',
+  // The value entered by the user has failed validation.
+  TRUE: 'true',
+  // A grammatical error was detected.
+  GRAMMAR: 'grammar',
+  // A spelling error was detected.
+  SPELLING: 'spelling'
+};
+
+
+/**
+ * ARIA state values for PressedValues.
+ * @enum {string}
+ */
+goog.a11y.aria.PressedValues = {
+  // The element is pressed.
+  TRUE: 'true',
+  // The element supports being pressed but is not currently pressed.
+  FALSE: 'false',
+  // Indicates a mixed mode value for a tri-state toggle button.
+  MIXED: 'mixed',
+  // The element does not support being pressed.
+  UNDEFINED: 'undefined'
+};
+
+
+/**
+ * ARIA state values for SelectedValues.
+ * @enum {string}
+ */
+goog.a11y.aria.SelectedValues = {
+  // The selectable element is selected.
+  TRUE: 'true',
+  // The selectable element is not selected.
+  FALSE: 'false',
+  // The element is not selectable.
+  UNDEFINED: 'undefined'
+};
+// Copyright 2013 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+
+
+/**
+ * @fileoverview The file contains data tables generated from the ARIA
+ * standard schema http://www.w3.org/TR/wai-aria/.
+ *
+ * This is auto-generated code. Do not manually edit!
+ */
+
+goog.provide('goog.a11y.aria.datatables');
+
+goog.require('goog.a11y.aria.State');
+goog.require('goog.object');
+
+
+/**
+ * A map that contains mapping between an ARIA state and the default value
+ * for it. Note that not all ARIA states have default values.
+ *
+ * @type {Object.<!(goog.a11y.aria.State|string), (string|boolean|number)>}
+ */
+goog.a11y.aria.DefaultStateValueMap_;
+
+
+/**
+ * A method that creates a map that contains mapping between an ARIA state and
+ * the default value for it. Note that not all ARIA states have default values.
+ *
+ * @return {Object.<!(goog.a11y.aria.State|string), (string|boolean|number)>}
+ *      The names for each of the notification methods.
+ */
+goog.a11y.aria.datatables.getDefaultValuesMap = function() {
+  if (!goog.a11y.aria.DefaultStateValueMap_) {
+    goog.a11y.aria.DefaultStateValueMap_ = goog.object.create(
+        goog.a11y.aria.State.ATOMIC, false,
+        goog.a11y.aria.State.AUTOCOMPLETE, 'none',
+        goog.a11y.aria.State.DROPEFFECT, 'none',
+        goog.a11y.aria.State.HASPOPUP, false,
+        goog.a11y.aria.State.LIVE, 'off',
+        goog.a11y.aria.State.MULTILINE, false,
+        goog.a11y.aria.State.MULTISELECTABLE, false,
+        goog.a11y.aria.State.ORIENTATION, 'vertical',
+        goog.a11y.aria.State.READONLY, false,
+        goog.a11y.aria.State.RELEVANT, 'additions text',
+        goog.a11y.aria.State.REQUIRED, false,
+        goog.a11y.aria.State.SORT, 'none',
+        goog.a11y.aria.State.BUSY, false,
+        goog.a11y.aria.State.DISABLED, false,
+        goog.a11y.aria.State.HIDDEN, false,
+        goog.a11y.aria.State.INVALID, 'false');
+  }
+
+  return goog.a11y.aria.DefaultStateValueMap_;
+};
+// Copyright 2013 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+
+/**
+ * @fileoverview The file contains generated enumerations for ARIA roles
+ * as defined by W3C ARIA standard: http://www.w3.org/TR/wai-aria/.
+ *
+ * This is auto-generated code. Do not manually edit! For more details
+ * about how to edit it via the generator check go/closure-ariagen.
+ */
+
+goog.provide('goog.a11y.aria.Role');
+
+
+/**
+ * ARIA role values.
+ * @enum {string}
+ */
+goog.a11y.aria.Role = {
   // ARIA role for an alert element that doesn't need to be explicitly closed.
   ALERT: 'alert',
 
@@ -26673,6 +30786,13 @@ goog.dom.a11y.Role = {
 
   // ARIA role for a supporting section of the document.
   COMPLEMENTARY: 'complementary',
+
+  // ARIA role for a large perceivable region that contains information
+  // about the parent document.
+  CONTENTINFO: 'contentinfo',
+
+  // ARIA role for a definition of a term or concept.
+  DEFINITION: 'definition',
 
   // ARIA role for a dialog, some descendant must take initial focus.
   DIALOG: 'dialog',
@@ -26822,182 +30942,367 @@ goog.dom.a11y.Role = {
   // ARIA role for a tree item that sometimes may be expanded or collapsed.
   TREEITEM: 'treeitem'
 };
+// Copyright 2007 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 
 /**
- * Enumeration of ARIA state values for live regions.
+ * @fileoverview Utilities for adding, removing and setting ARIA roles and
+ * states as defined by W3C ARIA standard: http://www.w3.org/TR/wai-aria/
+ * All modern browsers have some form of ARIA support, so no browser checks are
+ * performed when adding ARIA to components.
  *
- * See http://www.w3.org/TR/wai-aria/states_and_properties#aria-live
- * for more information.
- * @enum {string}
  */
-goog.dom.a11y.LivePriority = {
-  /**
-   * Default value.  Used for live regions that should never be spoken.
-   */
-  OFF: 'off',
-  /**
-   * Spoke only when the user is idle.  Best option in most cases.
-   */
-  POLITE: 'polite',
-  /**
-   * Spoken as soon as possible, which means that the information has a
-   * higher priority than normal, but does not necessarily interrupt
-   * immediately.
-   */
-  ASSERTIVE: 'assertive'
-};
+
+goog.provide('goog.a11y.aria');
+
+goog.require('goog.a11y.aria.Role');
+goog.require('goog.a11y.aria.State');
+goog.require('goog.a11y.aria.datatables');
+goog.require('goog.array');
+goog.require('goog.asserts');
+goog.require('goog.dom');
+goog.require('goog.dom.TagName');
+goog.require('goog.object');
+goog.require('goog.string');
 
 
 /**
- * Sets the role of an element.
- * @param {Element} element DOM node to set role of.
- * @param {string} roleName role name(s).
+ * ARIA states/properties prefix.
+ * @private
  */
-goog.dom.a11y.setRole = function(element, roleName) {
-  element.setAttribute('role', roleName);
-  element.roleName = roleName;
+goog.a11y.aria.ARIA_PREFIX_ = 'aria-';
+
+
+/**
+ * ARIA role attribute.
+ * @private
+ */
+goog.a11y.aria.ROLE_ATTRIBUTE_ = 'role';
+
+
+/**
+ * A list of tag names for which we don't need to set ARIA role and states
+ * because they have well supported semantics for screen readers or because
+ * they don't contain content to be made accessible.
+ * @private
+ */
+goog.a11y.aria.TAGS_WITH_ASSUMED_ROLES_ = [
+  goog.dom.TagName.A,
+  goog.dom.TagName.AREA,
+  goog.dom.TagName.BUTTON,
+  goog.dom.TagName.HEAD,
+  goog.dom.TagName.INPUT,
+  goog.dom.TagName.LINK,
+  goog.dom.TagName.MENU,
+  goog.dom.TagName.META,
+  goog.dom.TagName.OPTGROUP,
+  goog.dom.TagName.OPTION,
+  goog.dom.TagName.PROGRESS,
+  goog.dom.TagName.STYLE,
+  goog.dom.TagName.SELECT,
+  goog.dom.TagName.SOURCE,
+  goog.dom.TagName.TEXTAREA,
+  goog.dom.TagName.TITLE,
+  goog.dom.TagName.TRACK
+];
+
+
+/**
+ * Sets the role of an element. If the roleName is
+ * empty string or null, the role for the element is removed.
+ * We encourage clients to call the goog.a11y.aria.removeRole
+ * method instead of setting null and empty string values.
+ * Special handling for this case is added to ensure
+ * backword compatibility with existing code.
+ *
+ * @param {!Element} element DOM node to set role of.
+ * @param {!goog.a11y.aria.Role|string} roleName role name(s).
+ */
+goog.a11y.aria.setRole = function(element, roleName) {
+  if (!roleName) {
+    // Setting the ARIA role to empty string is not allowed
+    // by the ARIA standard.
+    goog.a11y.aria.removeRole(element);
+  } else {
+    if (goog.asserts.ENABLE_ASSERTS) {
+      goog.asserts.assert(goog.object.containsValue(
+          goog.a11y.aria.Role, roleName), 'No such ARIA role ' + roleName);
+    }
+    element.setAttribute(goog.a11y.aria.ROLE_ATTRIBUTE_, roleName);
+  }
 };
 
 
 /**
  * Gets role of an element.
- * @param {Element} element DOM node to get role of.
- * @return {string} rolename.
+ * @param {!Element} element DOM element to get role of.
+ * @return {?goog.a11y.aria.Role} ARIA Role name.
  */
-goog.dom.a11y.getRole = function(element) {
-  return element.roleName || '';
+goog.a11y.aria.getRole = function(element) {
+  var role = element.getAttribute(goog.a11y.aria.ROLE_ATTRIBUTE_);
+  return /** @type {goog.a11y.aria.Role} */ (role) || null;
+};
+
+
+/**
+ * Removes role of an element.
+ * @param {!Element} element DOM element to remove the role from.
+ */
+goog.a11y.aria.removeRole = function(element) {
+  element.removeAttribute(goog.a11y.aria.ROLE_ATTRIBUTE_);
 };
 
 
 /**
  * Sets the state or property of an element.
- * @param {Element} element DOM node where we set state.
- * @param {string} state State attribute being set. Automatically adds prefix
- *     'aria-' to the state name.
- * @param {string|boolean|number} value Value for the state attribute.
+ * @param {!Element} element DOM node where we set state.
+ * @param {!(goog.a11y.aria.State|string)} stateName State attribute being set.
+ *     Automatically adds prefix 'aria-' to the state name if the attribute is
+ *     not an extra attribute.
+ * @param {string|boolean|number|!goog.array.ArrayLike.<string>} value Value
+ * for the state attribute.
  */
-goog.dom.a11y.setState = function(element, state, value) {
-  element.setAttribute('aria-' + state, value);
+goog.a11y.aria.setState = function(element, stateName, value) {
+  if (goog.isArrayLike(value)) {
+    var array = /** @type {!goog.array.ArrayLike.<string>} */ (value);
+    value = array.join(' ');
+  }
+  var attrStateName = goog.a11y.aria.getAriaAttributeName_(stateName);
+  if (value === '' || value == undefined) {
+    var defaultValueMap = goog.a11y.aria.datatables.getDefaultValuesMap();
+    // Work around for browsers that don't properly support ARIA.
+    // According to the ARIA W3C standard, user agents should allow
+    // setting empty value which results in setting the default value
+    // for the ARIA state if such exists. The exact text from the ARIA W3C
+    // standard (http://www.w3.org/TR/wai-aria/states_and_properties):
+    // "When a value is indicated as the default, the user agent
+    // MUST follow the behavior prescribed by this value when the state or
+    // property is empty or undefined."
+    // The defaultValueMap contains the default values for the ARIA states
+    // and has as a key the goog.a11y.aria.State constant for the state.
+    if (stateName in defaultValueMap) {
+      element.setAttribute(attrStateName, defaultValueMap[stateName]);
+    } else {
+      element.removeAttribute(attrStateName);
+    }
+  } else {
+    element.setAttribute(attrStateName, value);
+  }
+};
+
+
+/**
+ * Remove the state or property for the element.
+ * @param {!Element} element DOM node where we set state.
+ * @param {!goog.a11y.aria.State} stateName State name.
+ */
+goog.a11y.aria.removeState = function(element, stateName) {
+  element.removeAttribute(goog.a11y.aria.getAriaAttributeName_(stateName));
 };
 
 
 /**
  * Gets value of specified state or property.
- * @param {Element} element DOM node to get state from.
- * @param {string} stateName State name.
+ * @param {!Element} element DOM node to get state from.
+ * @param {!goog.a11y.aria.State|string} stateName State name.
  * @return {string} Value of the state attribute.
  */
-goog.dom.a11y.getState = function(element, stateName) {
-  var attrb =
-      /** @type {string|number|boolean} */(element.getAttribute('aria-' +
-          stateName));
-  // Check for multiple representations -  attrb might
-  // be a boolean or a string
-  if ((attrb === true) || (attrb === false)) {
-    return attrb ? 'true' : 'false';
-  } else if (!attrb) {
-    return '';
-  } else {
-    return String(attrb);
-  }
+goog.a11y.aria.getState = function(element, stateName) {
+  // TODO(user): return properly typed value result --
+  // boolean, number, string, null. We should be able to chain
+  // getState(...) and setState(...) methods.
+
+  var attr =
+      /** @type {string|number|boolean} */ (element.getAttribute(
+      goog.a11y.aria.getAriaAttributeName_(stateName)));
+  var isNullOrUndefined = attr == null || attr == undefined;
+  return isNullOrUndefined ? '' : String(attr);
 };
 
 
 /**
- * Gets the activedescendant of the given element.
- * @param {Element} element DOM node to get activedescendant from.
- * @return {Element} DOM node of the activedescendant.
+ * Returns the activedescendant element for the input element by
+ * using the activedescendant ARIA property of the given element.
+ * @param {!Element} element DOM node to get activedescendant
+ *     element for.
+ * @return {?Element} DOM node of the activedescendant, if found.
  */
-goog.dom.a11y.getActiveDescendant = function(element) {
-  var id = goog.dom.a11y.getState(
-      element, goog.dom.a11y.State.ACTIVEDESCENDANT);
+goog.a11y.aria.getActiveDescendant = function(element) {
+  var id = goog.a11y.aria.getState(
+      element, goog.a11y.aria.State.ACTIVEDESCENDANT);
   return goog.dom.getOwnerDocument(element).getElementById(id);
 };
 
 
 /**
- * Sets the activedescendant value for an element.
- * @param {Element} element DOM node to set activedescendant to.
- * @param {Element} activeElement DOM node being set as activedescendant.
+ * Sets the activedescendant ARIA property value for an element.
+ * If the activeElement is not null, it should have an id set.
+ * @param {!Element} element DOM node to set activedescendant ARIA property to.
+ * @param {?Element} activeElement DOM node being set as activedescendant.
  */
-goog.dom.a11y.setActiveDescendant = function(element, activeElement) {
-  goog.dom.a11y.setState(element, goog.dom.a11y.State.ACTIVEDESCENDANT,
-      activeElement ? activeElement.id : '');
-};
+goog.a11y.aria.setActiveDescendant = function(element, activeElement) {
+  var id = '';
+  if (activeElement) {
+    id = activeElement.id;
+    goog.asserts.assert(id, 'The active element should have an id.');
+  }
 
-
-
-/**
- * Class that allows messages to be spoken by assistive technologies that the
- * user may have active.
- *
- * @param {goog.dom.DomHelper} domHelper DOM helper.
- * @constructor
- * @extends {goog.Disposable}
- */
-goog.dom.a11y.Announcer = function(domHelper) {
-  goog.base(this);
-
-  /**
-   * @type {goog.dom.DomHelper}
-   * @private
-   */
-  this.domHelper_ = domHelper;
-
-  /**
-   * Map of priority to live region elements to use for communicating updates.
-   * Elements are created on demand.
-   * @type {Object.<goog.dom.a11y.LivePriority, Element>}
-   * @private
-   */
-  this.liveRegions_ = {};
-};
-goog.inherits(goog.dom.a11y.Announcer, goog.Disposable);
-
-
-/** @override */
-goog.dom.a11y.Announcer.prototype.disposeInternal = function() {
-  goog.object.forEach(
-      this.liveRegions_, this.domHelper_.removeNode, this.domHelper_);
-  this.liveRegions_ = null;
-  this.domHelper_ = null;
-  goog.base(this, 'disposeInternal');
+  goog.a11y.aria.setState(element, goog.a11y.aria.State.ACTIVEDESCENDANT, id);
 };
 
 
 /**
- * Announce a message to be read by any assistive technologies the user may
- * have active.
- * @param {string} message The message to announce to screen readers.
- * @param {goog.dom.a11y.LivePriority=} opt_priority The priority of the
- *     message. Defaults to POLITE.
+ * Gets the label of the given element.
+ * @param {!Element} element DOM node to get label from.
+ * @return {string} label The label.
  */
-goog.dom.a11y.Announcer.prototype.say = function(message, opt_priority) {
-  goog.dom.setTextContent(this.getLiveRegion_(
-      opt_priority || goog.dom.a11y.LivePriority.POLITE), message);
+goog.a11y.aria.getLabel = function(element) {
+  return goog.a11y.aria.getState(element, goog.a11y.aria.State.LABEL);
 };
 
 
 /**
- * Returns an aria-live region that can be used to communicate announcements.
- * @param {goog.dom.a11y.LivePriority} priority The required priority.
- * @return {Element} A live region of the requested priority.
+ * Sets the label of the given element.
+ * @param {!Element} element DOM node to set label to.
+ * @param {string} label The label to set.
+ */
+goog.a11y.aria.setLabel = function(element, label) {
+  goog.a11y.aria.setState(element, goog.a11y.aria.State.LABEL, label);
+};
+
+
+/**
+ * Asserts that the element has a role set if it's not an HTML element whose
+ * semantics is well supported by most screen readers.
+ * Only to be used internally by the ARIA library in goog.a11y.aria.*.
+ * @param {!Element} element The element to assert an ARIA role set.
+ * @param {!goog.array.ArrayLike.<string>} allowedRoles The child roles of
+ * the roles.
+ */
+goog.a11y.aria.assertRoleIsSetInternalUtil = function(element, allowedRoles) {
+  if (goog.array.contains(goog.a11y.aria.TAGS_WITH_ASSUMED_ROLES_,
+      element.tagName)) {
+    return;
+  }
+  var elementRole = /** @type {string}*/ (goog.a11y.aria.getRole(element));
+  goog.asserts.assert(elementRole != null,
+      'The element ARIA role cannot be null.');
+
+  goog.asserts.assert(goog.array.contains(allowedRoles, elementRole),
+      'Non existing or incorrect role set for element.' +
+      'The role set is "' + elementRole +
+      '". The role should be any of "' + allowedRoles +
+      '". Check the ARIA specification for more details ' +
+      'http://www.w3.org/TR/wai-aria/roles.');
+};
+
+
+/**
+ * Gets the boolean value of an ARIA state/property.
+ * Only to be used internally by the ARIA library in goog.a11y.aria.*.
+ * @param {!Element} element The element to get the ARIA state for.
+ * @param {!goog.a11y.aria.State|string} stateName the ARIA state name.
+ * @return {?boolean} Boolean value for the ARIA state value or null if
+ *     the state value is not 'true' or 'false'.
+ */
+goog.a11y.aria.getBooleanStateInternalUtil = function(element, stateName) {
+  var stringValue = goog.a11y.aria.getState(element, stateName);
+  if (stringValue == 'true') {
+    return true;
+  }
+  if (stringValue == 'false') {
+    return false;
+  }
+  return null;
+};
+
+
+/**
+ * Gets the number value of an ARIA state/property.
+ * Only to be used internally by the ARIA library in goog.a11y.aria.*.
+ * @param {!Element} element The element to get the ARIA state for.
+ * @param {!goog.a11y.aria.State|string} stateName the ARIA state name.
+ * @return {?number} Number value for the ARIA state value or null if
+ *     the state value is not a number.
+ */
+goog.a11y.aria.getNumberStateInternalUtil = function(element, stateName) {
+  var stringValue = goog.a11y.aria.getState(element, stateName);
+  if (goog.string.isNumeric(stringValue)) {
+    return goog.string.toNumber(stringValue);
+  }
+  return null;
+};
+
+
+/**
+ * Gets array of strings value of the specified state or
+ * property for the element.
+ * Only to be used internally by the ARIA library in goog.a11y.aria.*.
+ * @param {!Element} element DOM node to get state from.
+ * @param {!goog.a11y.aria.State} stateName State name.
+ * @return {!goog.array.ArrayLike.<string>} string Array
+ *     value of the state attribute.
+ */
+goog.a11y.aria.getStringArrayStateInternalUtil = function(element, stateName) {
+  var attrValue = element.getAttribute(
+      goog.a11y.aria.getAriaAttributeName_(stateName));
+  return goog.a11y.aria.splitStringOnWhitespace_(attrValue);
+};
+
+
+/**
+ * Gets the string value of an ARIA state/property.
+ * Only to be used internally by the ARIA library in goog.a11y.aria.*.
+ * @param {!Element} element The element to get the ARIA state for.
+ * @param {!goog.a11y.aria.State|string} stateName the ARIA state name.
+ * @return {?string} String value for the ARIA state value or null if
+ *     the state value is empty string.
+ */
+goog.a11y.aria.getStringStateInternalUtil = function(element, stateName) {
+  var stringValue = goog.a11y.aria.getState(element, stateName);
+  return stringValue || null;
+};
+
+
+/**
+ * Splits the input stringValue on whitespace.
+ * @param {string} stringValue The value of the string to split.
+ * @return {!goog.array.ArrayLike.<string>} string Array
+ *     value as result of the split.
  * @private
  */
-goog.dom.a11y.Announcer.prototype.getLiveRegion_ = function(priority) {
-  if (this.liveRegions_[priority]) {
-    return this.liveRegions_[priority];
+goog.a11y.aria.splitStringOnWhitespace_ = function(stringValue) {
+  return stringValue ? stringValue.split(/\s+/) : [];
+};
+
+
+/**
+ * Adds the 'aria-' prefix to ariaName.
+ * @param {string} ariaName ARIA state/property name.
+ * @private
+ * @return {string} The ARIA attribute name with added 'aria-' prefix.
+ * @throws {Error} If no such attribute exists.
+ */
+goog.a11y.aria.getAriaAttributeName_ = function(ariaName) {
+  if (goog.asserts.ENABLE_ASSERTS) {
+    goog.asserts.assert(ariaName, 'ARIA attribute cannot be empty.');
+    goog.asserts.assert(goog.object.containsValue(
+        goog.a11y.aria.State, ariaName),
+        'No such ARIA attribute ' + ariaName);
   }
-  var liveRegion;
-  liveRegion = this.domHelper_.createElement('div');
-  liveRegion.style.position = 'absolute';
-  liveRegion.style.top = '-1000px';
-  goog.dom.a11y.setState(liveRegion, 'live', priority);
-  goog.dom.a11y.setState(liveRegion, 'atomic', 'true');
-  this.domHelper_.getDocument().body.appendChild(liveRegion);
-  this.liveRegions_[priority] = liveRegion;
-  return liveRegion;
+  return goog.a11y.aria.ARIA_PREFIX_ + ariaName;
 };
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
 //
@@ -27022,15 +31327,15 @@ goog.dom.a11y.Announcer.prototype.getLiveRegion_ = function(priority) {
 
 goog.provide('goog.ui.ControlRenderer');
 
+goog.require('goog.a11y.aria');
+goog.require('goog.a11y.aria.State');
 goog.require('goog.array');
+goog.require('goog.asserts');
 goog.require('goog.dom');
-goog.require('goog.dom.a11y');
-goog.require('goog.dom.a11y.State');
 goog.require('goog.dom.classes');
 goog.require('goog.object');
 goog.require('goog.style');
-goog.require('goog.ui.Component.State');
-goog.require('goog.ui.ControlContent');
+goog.require('goog.ui.Component');
 goog.require('goog.userAgent');
 
 
@@ -27160,7 +31465,7 @@ goog.ui.ControlRenderer.ARIA_STATE_MAP_;
 /**
  * Returns the ARIA role to be applied to the control.
  * See http://wiki/Main/ARIA for more info.
- * @return {goog.dom.a11y.Role|undefined} ARIA role.
+ * @return {goog.a11y.aria.Role|undefined} ARIA role.
  */
 goog.ui.ControlRenderer.prototype.getAriaRole = function() {
   // By default, the ARIA role is unspecified.
@@ -27210,12 +31515,12 @@ goog.ui.ControlRenderer.prototype.getContentElement = function(element) {
  */
 goog.ui.ControlRenderer.prototype.enableClassName = function(control,
     className, enable) {
-  var element = (/** @type {Element} */
+  var element = /** @type {Element} */ (
       control.getElement ? control.getElement() : control);
   if (element) {
     // For IE6, we need to enable any combined classes involving this class
     // as well.
-    if (goog.userAgent.IE && !goog.userAgent.isVersion('7')) {
+    if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('7')) {
       var combinedClasses = this.getAppliedCombinedClassNames_(
           goog.dom.classes.get(element), className);
       combinedClasses.push(className);
@@ -27262,7 +31567,6 @@ goog.ui.ControlRenderer.prototype.canDecorate = function(element) {
  * @param {goog.ui.Control} control Control instance to decorate the element.
  * @param {Element} element Element to decorate.
  * @return {Element} Decorated element.
- * @suppress {visibility} setContentInternal and setStateInternal
  */
 goog.ui.ControlRenderer.prototype.decorate = function(control, element) {
   // Set the control's ID to the decorated element's DOM ID, if any.
@@ -27321,7 +31625,7 @@ goog.ui.ControlRenderer.prototype.decorate = function(control, element) {
 
   // For IE6, rewrite all classes on the decorated element if any combined
   // classes apply.
-  if (goog.userAgent.IE && !goog.userAgent.isVersion('7')) {
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('7')) {
     var combinedClasses = this.getAppliedCombinedClassNames_(
         classNames);
     if (combinedClasses.length > 0) {
@@ -27369,13 +31673,15 @@ goog.ui.ControlRenderer.prototype.initializeDom = function(control) {
 /**
  * Sets the element's ARIA role.
  * @param {Element} element Element to update.
- * @param {?goog.dom.a11y.Role=} opt_preferredRole The preferred ARIA role.
+ * @param {?goog.a11y.aria.Role=} opt_preferredRole The preferred ARIA role.
  */
 goog.ui.ControlRenderer.prototype.setAriaRole = function(element,
     opt_preferredRole) {
   var ariaRole = opt_preferredRole || this.getAriaRole();
   if (ariaRole) {
-    goog.dom.a11y.setRole(element, ariaRole);
+    goog.asserts.assert(element,
+        'The element passed as a first parameter cannot be null.');
+    goog.a11y.aria.setRole(element, ariaRole);
   }
 };
 
@@ -27390,21 +31696,26 @@ goog.ui.ControlRenderer.prototype.setAriaRole = function(element,
 goog.ui.ControlRenderer.prototype.setAriaStates = function(control, element) {
   goog.asserts.assert(control);
   goog.asserts.assert(element);
-  if (!control.isEnabled()) {
-    this.updateAriaState(element, goog.ui.Component.State.DISABLED,
-                         true);
+
+  if (!control.isVisible()) {
+    goog.a11y.aria.setState(
+        element, goog.a11y.aria.State.HIDDEN, !control.isVisible());
   }
-  if (control.isSelected()) {
-    this.updateAriaState(element, goog.ui.Component.State.SELECTED,
-                         true);
+  if (!control.isEnabled()) {
+    this.updateAriaState(
+        element, goog.ui.Component.State.DISABLED, !control.isEnabled());
+  }
+  if (control.isSupportedState(goog.ui.Component.State.SELECTED)) {
+    this.updateAriaState(
+        element, goog.ui.Component.State.SELECTED, control.isSelected());
   }
   if (control.isSupportedState(goog.ui.Component.State.CHECKED)) {
-    this.updateAriaState(element, goog.ui.Component.State.CHECKED,
-                         control.isChecked());
+    this.updateAriaState(
+        element, goog.ui.Component.State.CHECKED, control.isChecked());
   }
   if (control.isSupportedState(goog.ui.Component.State.OPENED)) {
-    this.updateAriaState(element, goog.ui.Component.State.OPENED,
-                         control.isOpen());
+    this.updateAriaState(
+        element, goog.ui.Component.State.OPENED, control.isOpen());
   }
 };
 
@@ -27500,7 +31811,10 @@ goog.ui.ControlRenderer.prototype.setFocusable = function(control, focusable) {
 goog.ui.ControlRenderer.prototype.setVisible = function(element, visible) {
   // The base class implementation is trivial; subclasses should override as
   // needed.  It should be possible to do animated reveals, for example.
-  goog.style.showElement(element, visible);
+  goog.style.setElementShown(element, visible);
+  if (element) {
+    goog.a11y.aria.setState(element, goog.a11y.aria.State.HIDDEN, !visible);
+  }
 };
 
 
@@ -27535,14 +31849,16 @@ goog.ui.ControlRenderer.prototype.updateAriaState = function(element, state,
   // Ensure the ARIA state map exists.
   if (!goog.ui.ControlRenderer.ARIA_STATE_MAP_) {
     goog.ui.ControlRenderer.ARIA_STATE_MAP_ = goog.object.create(
-        goog.ui.Component.State.DISABLED, goog.dom.a11y.State.DISABLED,
-        goog.ui.Component.State.SELECTED, goog.dom.a11y.State.SELECTED,
-        goog.ui.Component.State.CHECKED, goog.dom.a11y.State.CHECKED,
-        goog.ui.Component.State.OPENED, goog.dom.a11y.State.EXPANDED);
+        goog.ui.Component.State.DISABLED, goog.a11y.aria.State.DISABLED,
+        goog.ui.Component.State.SELECTED, goog.a11y.aria.State.SELECTED,
+        goog.ui.Component.State.CHECKED, goog.a11y.aria.State.CHECKED,
+        goog.ui.Component.State.OPENED, goog.a11y.aria.State.EXPANDED);
   }
   var ariaState = goog.ui.ControlRenderer.ARIA_STATE_MAP_[state];
   if (ariaState) {
-    goog.dom.a11y.setState(element, ariaState, enable);
+    goog.asserts.assert(element,
+        'The element passed as a first parameter cannot be null.');
+    goog.a11y.aria.setState(element, ariaState, enable);
   }
 };
 
@@ -27695,7 +32011,7 @@ goog.ui.ControlRenderer.prototype.getClassNames = function(control) {
   }
 
   // Add composite classes for IE6 support
-  if (goog.userAgent.IE && !goog.userAgent.isVersion('7')) {
+  if (goog.userAgent.IE && !goog.userAgent.isVersionOrHigher('7')) {
     classNames.push.apply(classNames,
         this.getAppliedCombinedClassNames_(classNames));
   }
@@ -28048,6 +32364,34 @@ goog.ui.decorate = function(element) {
   }
   return decorator;
 };
+// Copyright 2009 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Type declaration for control content.
+ *
+ * @author nicksantos@google.com (Nick Santos)
+ */
+goog.provide('goog.ui.ControlContent');
+
+
+/**
+ * Type declaration for text caption or DOM structure to be used as the content
+ * of {@link goog.ui.Control}s.
+ * @typedef {string|Node|Array.<Node>|NodeList}
+ */
+goog.ui.ControlContent;
 // Copyright 2006 The Closure Library Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28290,7 +32634,7 @@ goog.events.KeyCodes.isTextModifyingKeyEvent = function(e) {
 goog.events.KeyCodes.firesKeyPressEvent = function(keyCode, opt_heldKeyCode,
     opt_shiftKey, opt_ctrlKey, opt_altKey) {
   if (!goog.userAgent.IE &&
-      !(goog.userAgent.WEBKIT && goog.userAgent.isVersion('525'))) {
+      !(goog.userAgent.WEBKIT && goog.userAgent.isVersionOrHigher('525'))) {
     return true;
   }
 
@@ -28308,8 +32652,29 @@ goog.events.KeyCodes.firesKeyPressEvent = function(keyCode, opt_heldKeyCode,
   // check the user agent.
   if (!opt_shiftKey &&
       (opt_heldKeyCode == goog.events.KeyCodes.CTRL ||
-       opt_heldKeyCode == goog.events.KeyCodes.ALT)) {
+       opt_heldKeyCode == goog.events.KeyCodes.ALT ||
+       goog.userAgent.MAC &&
+       opt_heldKeyCode == goog.events.KeyCodes.META)) {
     return false;
+  }
+
+  // Some keys with Ctrl/Shift do not issue keypress in WEBKIT.
+  if (goog.userAgent.WEBKIT && opt_ctrlKey && opt_shiftKey) {
+    switch (keyCode) {
+      case goog.events.KeyCodes.BACKSLASH:
+      case goog.events.KeyCodes.OPEN_SQUARE_BRACKET:
+      case goog.events.KeyCodes.CLOSE_SQUARE_BRACKET:
+      case goog.events.KeyCodes.TILDE:
+      case goog.events.KeyCodes.SEMICOLON:
+      case goog.events.KeyCodes.DASH:
+      case goog.events.KeyCodes.EQUALS:
+      case goog.events.KeyCodes.COMMA:
+      case goog.events.KeyCodes.PERIOD:
+      case goog.events.KeyCodes.SLASH:
+      case goog.events.KeyCodes.APOSTROPHE:
+      case goog.events.KeyCodes.SINGLE_QUOTE:
+        return false;
+    }
   }
 
   // When Ctrl+<somekey> is held in IE, it only fires a keypress once, but it
@@ -28321,7 +32686,7 @@ goog.events.KeyCodes.firesKeyPressEvent = function(keyCode, opt_heldKeyCode,
   switch (keyCode) {
     case goog.events.KeyCodes.ENTER:
       // IE9 does not fire KEYPRESS on ENTER.
-      return !(goog.userAgent.IE && goog.userAgent.isDocumentMode(9));
+      return !(goog.userAgent.IE && goog.userAgent.isDocumentModeOrHigher(9));
     case goog.events.KeyCodes.ESC:
       return !goog.userAgent.WEBKIT;
   }
@@ -28551,7 +32916,7 @@ goog.events.KeyHandler.prototype.element_ = null;
 
 /**
  * The key for the key press listener.
- * @type {?number}
+ * @type {goog.events.Key}
  * @private
  */
 goog.events.KeyHandler.prototype.keyPressKey_ = null;
@@ -28559,7 +32924,7 @@ goog.events.KeyHandler.prototype.keyPressKey_ = null;
 
 /**
  * The key for the key down listener.
- * @type {?number}
+ * @type {goog.events.Key}
  * @private
  */
 goog.events.KeyHandler.prototype.keyDownKey_ = null;
@@ -28567,7 +32932,7 @@ goog.events.KeyHandler.prototype.keyDownKey_ = null;
 
 /**
  * The key for the key up listener.
- * @type {?number}
+ * @type {goog.events.Key}
  * @private
  */
 goog.events.KeyHandler.prototype.keyUpKey_ = null;
@@ -28588,6 +32953,15 @@ goog.events.KeyHandler.prototype.lastKey_ = -1;
  * @type {number}
  */
 goog.events.KeyHandler.prototype.keyCode_ = -1;
+
+
+/**
+ * Alt key recorded for key down events. FF on Mac does not report the alt key
+ * flag in the key press event, we need to record it in the key down phase.
+ * @type {boolean}
+ * @private
+ */
+goog.events.KeyHandler.prototype.altKey_ = false;
 
 
 /**
@@ -28676,7 +33050,18 @@ goog.events.KeyHandler.keyIdentifier_ = {
  * @private
  */
 goog.events.KeyHandler.USES_KEYDOWN_ = goog.userAgent.IE ||
-    goog.userAgent.WEBKIT && goog.userAgent.isVersion('525');
+    goog.userAgent.WEBKIT && goog.userAgent.isVersionOrHigher('525');
+
+
+/**
+ * If true, the alt key flag is saved during the key down and reused when
+ * handling the key press. FF on Mac does not set the alt flag in the key press
+ * event.
+ * @type {boolean}
+ * @private
+ */
+goog.events.KeyHandler.SAVE_ALT_FOR_KEYPRESS_ = goog.userAgent.MAC &&
+    goog.userAgent.GECKO;
 
 
 /**
@@ -28687,15 +33072,28 @@ goog.events.KeyHandler.USES_KEYDOWN_ = goog.userAgent.IE ||
  * @private
  */
 goog.events.KeyHandler.prototype.handleKeyDown_ = function(e) {
-
   // Ctrl-Tab and Alt-Tab can cause the focus to be moved to another window
   // before we've caught a key-up event.  If the last-key was one of these we
   // reset the state.
-  if (goog.userAgent.WEBKIT &&
-      (this.lastKey_ == goog.events.KeyCodes.CTRL && !e.ctrlKey ||
-       this.lastKey_ == goog.events.KeyCodes.ALT && !e.altKey)) {
-    this.lastKey_ = -1;
-    this.keyCode_ = -1;
+
+  if (goog.userAgent.WEBKIT) {
+    if (this.lastKey_ == goog.events.KeyCodes.CTRL && !e.ctrlKey ||
+        this.lastKey_ == goog.events.KeyCodes.ALT && !e.altKey ||
+        goog.userAgent.MAC &&
+        this.lastKey_ == goog.events.KeyCodes.META && !e.metaKey) {
+      this.lastKey_ = -1;
+      this.keyCode_ = -1;
+    }
+  }
+
+  if (this.lastKey_ == -1) {
+    if (e.ctrlKey && e.keyCode != goog.events.KeyCodes.CTRL) {
+      this.lastKey_ = goog.events.KeyCodes.CTRL;
+    } else if (e.altKey && e.keyCode != goog.events.KeyCodes.ALT) {
+      this.lastKey_ = goog.events.KeyCodes.ALT;
+    } else if (e.metaKey && e.keyCode != goog.events.KeyCodes.META) {
+      this.lastKey_ = goog.events.KeyCodes.META;
+    }
   }
 
   if (goog.events.KeyHandler.USES_KEYDOWN_ &&
@@ -28706,7 +33104,21 @@ goog.events.KeyHandler.prototype.handleKeyDown_ = function(e) {
     this.keyCode_ = goog.userAgent.GECKO ?
         goog.events.KeyCodes.normalizeGeckoKeyCode(e.keyCode) :
         e.keyCode;
+    if (goog.events.KeyHandler.SAVE_ALT_FOR_KEYPRESS_) {
+      this.altKey_ = e.altKey;
+    }
   }
+};
+
+
+/**
+ * Resets the stored previous values. Needed to be called for webkit which will
+ * not generate a key up for meta key operations. This should only be called
+ * when having finished with repeat key possiblities.
+ */
+goog.events.KeyHandler.prototype.resetState = function() {
+  this.lastKey_ = -1;
+  this.keyCode_ = -1;
 };
 
 
@@ -28718,8 +33130,8 @@ goog.events.KeyHandler.prototype.handleKeyDown_ = function(e) {
  * @private
  */
 goog.events.KeyHandler.prototype.handleKeyup_ = function(e) {
-  this.lastKey_ = -1;
-  this.keyCode_ = -1;
+  this.resetState();
+  this.altKey_ = e.altKey;
 };
 
 
@@ -28731,6 +33143,7 @@ goog.events.KeyHandler.prototype.handleKeyup_ = function(e) {
 goog.events.KeyHandler.prototype.handleEvent = function(e) {
   var be = e.getBrowserEvent();
   var keyCode, charCode;
+  var altKey = be.altKey;
 
   // IE reports the character code in the keyCode field for keypress events.
   // There are two exceptions however, Enter and Escape.
@@ -28759,6 +33172,9 @@ goog.events.KeyHandler.prototype.handleEvent = function(e) {
   } else {
     keyCode = be.keyCode || this.keyCode_;
     charCode = be.charCode || 0;
+    if (goog.events.KeyHandler.SAVE_ALT_FOR_KEYPRESS_) {
+      altKey = this.altKey_;
+    }
     // On the Mac, shift-/ triggers a question mark char code and no key code
     // (normalized to WIN_KEY), so we synthesize the latter.
     if (goog.userAgent.MAC &&
@@ -28797,11 +33213,8 @@ goog.events.KeyHandler.prototype.handleEvent = function(e) {
   this.lastKey_ = key;
 
   var event = new goog.events.KeyEvent(key, charCode, repeat, be);
-  try {
-    this.dispatchEvent(event);
-  } finally {
-    event.dispose();
-  }
+  event.altKey = altKey;
+  this.dispatchEvent(event);
 };
 
 
@@ -28941,17 +33354,13 @@ goog.provide('goog.ui.Control');
 
 goog.require('goog.array');
 goog.require('goog.dom');
-goog.require('goog.events.BrowserEvent.MouseButton');
+goog.require('goog.events.BrowserEvent');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.events.KeyHandler');
-goog.require('goog.events.KeyHandler.EventType');
 goog.require('goog.string');
 goog.require('goog.ui.Component');
-goog.require('goog.ui.Component.Error');
-goog.require('goog.ui.Component.EventType');
-goog.require('goog.ui.Component.State');
 goog.require('goog.ui.ControlContent');
 goog.require('goog.ui.ControlRenderer');
 goog.require('goog.ui.decorate');
@@ -29154,7 +33563,7 @@ goog.ui.Control.prototype.allowTextSelection_ = false;
 
 /**
  * The control's preferred ARIA role.
- * @type {?goog.dom.a11y.Role}
+ * @type {?goog.a11y.aria.Role}
  * @private
  */
 goog.ui.Control.prototype.preferredAriaRole_ = null;
@@ -29291,8 +33700,8 @@ goog.ui.Control.prototype.addClassName = function(className) {
  *     element.
  */
 goog.ui.Control.prototype.removeClassName = function(className) {
-  if (className && this.extraClassNames_) {
-    goog.array.remove(this.extraClassNames_, className);
+  if (className && this.extraClassNames_ &&
+      goog.array.remove(this.extraClassNames_, className)) {
     if (this.extraClassNames_.length == 0) {
       this.extraClassNames_ = null;
     }
@@ -29353,7 +33762,7 @@ goog.ui.Control.prototype.createDom = function() {
  * cases where a different ARIA role is appropriate for a control because of the
  * context in which it's used.  E.g., a {@link goog.ui.MenuButton} added to a
  * {@link goog.ui.Select} should have an ARIA role of LISTBOX and not MENUITEM.
- * @return {?goog.dom.a11y.Role} This control's preferred ARIA role or null if
+ * @return {?goog.a11y.aria.Role} This control's preferred ARIA role or null if
  *     no preferred ARIA role is set.
  */
 goog.ui.Control.prototype.getPreferredAriaRole = function() {
@@ -29367,7 +33776,7 @@ goog.ui.Control.prototype.getPreferredAriaRole = function() {
  * different ARIA role is appropriate for a control because of the
  * context in which it's used.  E.g., a {@link goog.ui.MenuButton} added to a
  * {@link goog.ui.Select} should have an ARIA role of LISTBOX and not MENUITEM.
- * @param {goog.dom.a11y.Role} role This control's preferred ARIA role.
+ * @param {goog.a11y.aria.Role} role This control's preferred ARIA role.
  */
 goog.ui.Control.prototype.setPreferredAriaRole = function(role) {
   this.preferredAriaRole_ = role;
@@ -29379,6 +33788,7 @@ goog.ui.Control.prototype.setPreferredAriaRole = function(role) {
  * or null if the control itself hasn't been rendered yet.  Overrides
  * {@link goog.ui.Component#getContentElement} by delegating to the renderer.
  * @return {Element} Element to contain child elements (null if none).
+ * @override
  */
 goog.ui.Control.prototype.getContentElement = function() {
   // Delegate to renderer.
@@ -29391,6 +33801,7 @@ goog.ui.Control.prototype.getContentElement = function() {
  * Overrides {@link goog.ui.Component#canDecorate}.
  * @param {Element} element Element to decorate.
  * @return {boolean} Whether the element can be decorated by this component.
+ * @override
  */
 goog.ui.Control.prototype.canDecorate = function(element) {
   // Controls support pluggable renderers; delegate to the renderer.
@@ -29482,6 +33893,10 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
         listen(element, goog.events.EventType.MOUSEDOWN, this.handleMouseDown).
         listen(element, goog.events.EventType.MOUSEUP, this.handleMouseUp).
         listen(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
+    if (this.handleContextMenu != goog.nullFunction) {
+      handler.listen(element, goog.events.EventType.CONTEXTMENU,
+          this.handleContextMenu);
+    }
     if (goog.userAgent.IE) {
       handler.listen(element, goog.events.EventType.DBLCLICK,
           this.handleDblClick);
@@ -29494,6 +33909,10 @@ goog.ui.Control.prototype.enableMouseEventHandling_ = function(enable) {
             this.handleMouseDown).
         unlisten(element, goog.events.EventType.MOUSEUP, this.handleMouseUp).
         unlisten(element, goog.events.EventType.MOUSEOUT, this.handleMouseOut);
+    if (this.handleContextMenu != goog.nullFunction) {
+      handler.unlisten(element, goog.events.EventType.CONTEXTMENU,
+          this.handleContextMenu);
+    }
     if (goog.userAgent.IE) {
       handler.unlisten(element, goog.events.EventType.DBLCLICK,
           this.handleDblClick);
@@ -29566,11 +33985,12 @@ goog.ui.Control.prototype.setContent = function(content) {
 /**
  * Sets the component's content to the given text caption, element, or array
  * of nodes.  Unlike {@link #setContent}, doesn't modify the component's DOM.
- * Called by renderers during element decoration.  Considered protected; should
- * only be used within this package and by subclasses.
+ * Called by renderers during element decoration.
+ *
+ * This should only be used by subclasses and its associated renderers.
+ *
  * @param {goog.ui.ControlContent} content Text caption or DOM structure
  *     to set as the component's contents.
- * @protected
  */
 goog.ui.Control.prototype.setContentInternal = function(content) {
   this.content_ = content;
@@ -29918,8 +34338,10 @@ goog.ui.Control.prototype.setState = function(state, enable) {
  * update the component's styling, and doesn't reject unsupported states.
  * Called by renderers during element decoration.  Considered protected;
  * should only be used within this package and by subclasses.
+ *
+ * This should only be used by subclasses and its associated renderers.
+ *
  * @param {number} state Bit mask representing component state.
- * @protected
  */
 goog.ui.Control.prototype.setStateInternal = function(state) {
   this.state_ = state;
@@ -30082,6 +34504,13 @@ goog.ui.Control.prototype.handleMouseOut = function(e) {
     }
   }
 };
+
+
+/**
+ * Handles contextmenu events.
+ * @param {goog.events.BrowserEvent} e Event to handle.
+ */
+goog.ui.Control.prototype.handleContextMenu = goog.nullFunction;
 
 
 /**
@@ -30346,9 +34775,11 @@ goog.ui.ButtonSide = {
 
 goog.provide('goog.ui.ButtonRenderer');
 
-goog.require('goog.dom.a11y');
-goog.require('goog.dom.a11y.Role');
-goog.require('goog.dom.a11y.State');
+goog.require('goog.a11y.aria');
+goog.require('goog.a11y.aria.Role');
+goog.require('goog.a11y.aria.State');
+goog.require('goog.asserts');
+goog.require('goog.string');
 goog.require('goog.ui.ButtonSide');
 goog.require('goog.ui.Component.State');
 goog.require('goog.ui.ControlRenderer');
@@ -30388,17 +34819,18 @@ goog.ui.ButtonRenderer.CSS_CLASS = goog.getCssName('goog-button');
 
 /**
  * Returns the ARIA role to be applied to buttons.
- * @return {goog.dom.a11y.Role|undefined} ARIA role.
+ * @return {goog.a11y.aria.Role|undefined} ARIA role.
  * @override
  */
 goog.ui.ButtonRenderer.prototype.getAriaRole = function() {
-  return goog.dom.a11y.Role.BUTTON;
+  return goog.a11y.aria.Role.BUTTON;
 };
 
 
 /**
  * Updates the button's ARIA (accessibility) state if the button is being
- * treated as a checkbox.
+ * treated as a checkbox. Also makes sure that attributes which aren't
+ * supported by buttons aren't being added.
  * @param {Element} element Element whose ARIA state is to be updated.
  * @param {goog.ui.Component.State} state Component state being enabled or
  *     disabled.
@@ -30408,24 +34840,27 @@ goog.ui.ButtonRenderer.prototype.getAriaRole = function() {
  */
 goog.ui.ButtonRenderer.prototype.updateAriaState = function(element, state,
     enable) {
-  // If button has CHECKED state, assign ARIA atrribute aria-pressed
-  if (state == goog.ui.Component.State.CHECKED) {
-    goog.dom.a11y.setState(element, goog.dom.a11y.State.PRESSED, enable);
-  } else {
-    goog.ui.ButtonRenderer.superClass_.updateAriaState.call(this, element,
-        state, enable);
+  switch (state) {
+    // If button has CHECKED or SELECTED state, assign aria-pressed
+    case goog.ui.Component.State.SELECTED:
+    case goog.ui.Component.State.CHECKED:
+      goog.asserts.assert(element,
+          'The button DOM element cannot be null.');
+      goog.a11y.aria.setState(element, goog.a11y.aria.State.PRESSED, enable);
+      break;
+    default:
+    case goog.ui.Component.State.OPENED:
+    case goog.ui.Component.State.DISABLED:
+      goog.base(this, 'updateAriaState', element, state, enable);
+      break;
   }
 };
 
 
 /** @override */
 goog.ui.ButtonRenderer.prototype.createDom = function(button) {
-  var element = goog.ui.ButtonRenderer.superClass_.createDom.call(this, button);
-
-  var tooltip = button.getTooltip();
-  if (tooltip) {
-    this.setTooltip(element, tooltip);
-  }
+  var element = goog.base(this, 'createDom', button);
+  this.setTooltip(element, button.getTooltip());
 
   var value = button.getValue();
   if (value) {
@@ -30498,8 +34933,10 @@ goog.ui.ButtonRenderer.prototype.getTooltip = function(element) {
  * @protected
  */
 goog.ui.ButtonRenderer.prototype.setTooltip = function(element, tooltip) {
-  if (element) {
-    element.title = tooltip || '';
+  // Don't set a title attribute if there isn't a tooltip. Blank title
+  // attributes can be interpreted incorrectly by screen readers.
+  if (element && tooltip) {
+    element.title = tooltip;
   }
 };
 
@@ -30629,9 +35066,9 @@ goog.ui.NativeButtonRenderer.prototype.decorate = function(button, element) {
 
 
 /**
- * @override
  * Native buttons natively support BiDi and keyboard focus.
  * @suppress {visibility} getHandler and performActionInternal
+ * @override
  */
 goog.ui.NativeButtonRenderer.prototype.initializeDom = function(button) {
   // WARNING:  This is a hack, and it is only applicable to native buttons,
@@ -30954,41 +35391,36 @@ goog.ui.registry.setDecoratorByClassName(goog.ui.ButtonRenderer.CSS_CLASS,
 goog.provide('calendarmailer.soy.picker');
 
 goog.require('soy');
-goog.require('soy.StringBuilder');
+goog.require('soydata');
 
 
 /**
  * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
+ * @param {(null|undefined)=} opt_ignored
  * @return {string}
  * @notypecheck
  */
-calendarmailer.soy.picker.all = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="picker-base">', (opt_data.title) ? '<div class="picker-title picker-title-hidden">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '', '<button class="picker-select picker-select-all action-button">Select all</button><button class="picker-select picker-select-none action-button">Select none</button><div class="picker-boxes">');
+calendarmailer.soy.picker.all = function(opt_data, opt_ignored) {
+  var output = '<div class="picker-base">' + ((opt_data.title) ? '<div class="picker-title picker-title-hidden">' + soy.$$escapeHtml(opt_data.title) + '</div>' : '') + '<button class="picker-select picker-select-all action-button">Select all</button><button class="picker-select picker-select-none action-button">Select none</button><div class="picker-boxes">';
   var itemList16 = opt_data.items;
   var itemListLen16 = itemList16.length;
   for (var itemIndex16 = 0; itemIndex16 < itemListLen16; itemIndex16++) {
     var itemData16 = itemList16[itemIndex16];
-    if (! (itemData16.status && itemData16.status.cancelled)) {
-      calendarmailer.soy.picker.row({idprefix: opt_data.idprefix, item: itemData16}, output);
-    }
+    output += (! (itemData16.status && itemData16.status.cancelled)) ? calendarmailer.soy.picker.row({idprefix: opt_data.idprefix, item: itemData16}) : '';
   }
-  output.append('</div><button class="picker-submit primary-button">Go!</button></div>');
-  return opt_sb ? '' : output.toString();
+  output += '</div><button class="picker-submit primary-button">Go!</button></div>';
+  return output;
 };
 
 
 /**
  * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
+ * @param {(null|undefined)=} opt_ignored
  * @return {string}
  * @notypecheck
  */
-calendarmailer.soy.picker.row = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="picker-row"><div id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" value="', soy.$$escapeHtml(opt_data.item.id), '" name="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="goog-checkbox goog-checkbox-unchecked"></div><label id="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '-label" for="', soy.$$escapeHtml(opt_data.idprefix), '-', soy.$$escapeHtml(opt_data.item.id), '" class="picker-label checkbox-label">', (opt_data.item.summary) ? soy.$$escapeHtml(opt_data.item.summary) : '(No Title)', '</label></div>');
-  return opt_sb ? '' : output.toString();
+calendarmailer.soy.picker.row = function(opt_data, opt_ignored) {
+  return '<div class="picker-row"><div id="' + soy.$$escapeHtml(opt_data.idprefix) + '-' + soy.$$escapeHtml(opt_data.item.id) + '" value="' + soy.$$escapeHtml(opt_data.item.id) + '" name="' + soy.$$escapeHtml(opt_data.idprefix) + '-' + soy.$$escapeHtml(opt_data.item.id) + '" class="goog-checkbox goog-checkbox-unchecked"></div><label id="' + soy.$$escapeHtml(opt_data.idprefix) + '-' + soy.$$escapeHtml(opt_data.item.id) + '-label" for="' + soy.$$escapeHtml(opt_data.idprefix) + '-' + soy.$$escapeHtml(opt_data.item.id) + '" class="picker-label checkbox-label">' + ((opt_data.item.summary) ? soy.$$escapeHtml(opt_data.item.summary) : '(No Title)') + '</label></div>';
 };
 // Copyright 2011 The Closure Library Authors. All Rights Reserved.
 //
@@ -31011,11 +35443,11 @@ calendarmailer.soy.picker.row = function(opt_data, opt_sb) {
 
 goog.provide('goog.ui.CheckboxRenderer');
 
+goog.require('goog.a11y.aria');
+goog.require('goog.a11y.aria.Role');
+goog.require('goog.a11y.aria.State');
 goog.require('goog.array');
 goog.require('goog.asserts');
-goog.require('goog.dom.a11y');
-goog.require('goog.dom.a11y.Role');
-goog.require('goog.dom.a11y.State');
 goog.require('goog.dom.classes');
 goog.require('goog.object');
 goog.require('goog.ui.ControlRenderer');
@@ -31076,9 +35508,9 @@ goog.ui.CheckboxRenderer.prototype.decorate = function(checkbox, element) {
     checked = goog.ui.Checkbox.State.UNCHECKED;
   }
   checkbox.setCheckedInternal(checked);
-
-  goog.dom.a11y.setState(element, goog.dom.a11y.State.CHECKED,
-                         this.ariaStateFromCheckState_(checked));
+  goog.asserts.assert(element, 'The element cannot be null.');
+  goog.a11y.aria.setState(element, goog.a11y.aria.State.CHECKED,
+      this.ariaStateFromCheckState_(checked));
 
   return element;
 };
@@ -31086,11 +35518,11 @@ goog.ui.CheckboxRenderer.prototype.decorate = function(checkbox, element) {
 
 /**
  * Returns the ARIA role to be applied to checkboxes.
- * @return {goog.dom.a11y.Role} ARIA role.
+ * @return {goog.a11y.aria.Role} ARIA role.
  * @override
  */
 goog.ui.CheckboxRenderer.prototype.getAriaRole = function() {
-  return goog.dom.a11y.Role.CHECKBOX;
+  return goog.a11y.aria.Role.CHECKBOX;
 };
 
 
@@ -31113,7 +35545,7 @@ goog.ui.CheckboxRenderer.prototype.setCheckboxState = function(
       goog.dom.classes.enable(element, className,
           className == classToAdd);
     }, this);
-    goog.dom.a11y.setState(element, goog.dom.a11y.State.CHECKED,
+    goog.a11y.aria.setState(element, goog.a11y.aria.State.CHECKED,
         this.ariaStateFromCheckState_(state));
   }
 };
@@ -31122,7 +35554,7 @@ goog.ui.CheckboxRenderer.prototype.setCheckboxState = function(
 /**
  * Gets the checkbox's ARIA (accessibility) state from its checked state.
  * @param {goog.ui.Checkbox.State} state Checkbox state.
- * @return {string} The value of goog.dom.a11y.state.CHECKED. Either 'true',
+ * @return {string} The value of goog.a11y.aria.state.CHECKED. Either 'true',
  *     'false', or 'mixed'.
  * @private
  */
@@ -31184,8 +35616,9 @@ goog.ui.CheckboxRenderer.prototype.getClassForCheckboxState = function(state) {
 goog.provide('goog.ui.Checkbox');
 goog.provide('goog.ui.Checkbox.State');
 
-goog.require('goog.dom.a11y');
-goog.require('goog.dom.a11y.State');
+goog.require('goog.a11y.aria');
+goog.require('goog.a11y.aria.State');
+goog.require('goog.asserts');
 goog.require('goog.events.EventType');
 goog.require('goog.events.KeyCodes');
 goog.require('goog.ui.CheckboxRenderer');
@@ -31256,6 +35689,7 @@ goog.ui.Checkbox.prototype.getChecked = function() {
 
 /**
  * @return {boolean} Whether the checkbox is checked.
+ * @override
  */
 goog.ui.Checkbox.prototype.isChecked = function() {
   return this.checked_ == goog.ui.Checkbox.State.CHECKED;
@@ -31281,6 +35715,7 @@ goog.ui.Checkbox.prototype.isUndetermined = function() {
 /**
  * Sets the checked state of the checkbox.
  * @param {?boolean} checked The checked state to set.
+ * @override
  */
 goog.ui.Checkbox.prototype.setChecked = function(checked) {
   if (checked != this.checked_) {
@@ -31367,8 +35802,12 @@ goog.ui.Checkbox.prototype.enterDocument = function() {
     if (!this.label_.id) {
       this.label_.id = this.makeId('lbl');
     }
-    goog.dom.a11y.setState(this.getElement(),
-        goog.dom.a11y.State.LABELLEDBY, this.label_.id);
+    var checkboxElement = this.getElement();
+    goog.asserts.assert(checkboxElement,
+        'The checkbox DOM element cannot be null.');
+    goog.a11y.aria.setState(checkboxElement,
+        goog.a11y.aria.State.LABELLEDBY,
+        this.label_.id);
   }
 };
 
@@ -31909,19 +36348,17 @@ calendarmailer.picker.ui.NameList.prototype.addItem = function(item) {
 goog.provide('calendarmailer.soy.filteringwidget');
 
 goog.require('soy');
-goog.require('soy.StringBuilder');
+goog.require('soydata');
 
 
 /**
  * @param {Object.<string, *>=} opt_data
- * @param {soy.StringBuilder=} opt_sb
+ * @param {(null|undefined)=} opt_ignored
  * @return {string}
  * @notypecheck
  */
-calendarmailer.soy.filteringwidget.all = function(opt_data, opt_sb) {
-  var output = opt_sb || new soy.StringBuilder();
-  output.append('<div class="filter-base"><div id="filter-calendars" class="filter-section"><div class="filter-title">Filter calendars</div><textarea class="filter-textbox" rows="1"></textarea></div><div id="filter-events" class="filter-section"><div class="filter-title">Filter events</div><div class="filter-box-row"><div id="repeatingfilter" name="repeatingfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div><label id="repeatingfilter-label" for="repeatingfilter" class="checkbox-label">Show repeating events only.</label></div></div><div id="filter-select-control" class="filter-section"><div class="filter-title">Event selection global control</div><button class="filter-selectall filter-button action-button">Select all visible events</button><button class="filter-selectnone filter-button action-button">Deselect all visible events</button><button class="filter-submit filter-button primary-button">Add owners of all selected events to be mailed.</button></div></div>');
-  return opt_sb ? '' : output.toString();
+calendarmailer.soy.filteringwidget.all = function(opt_data, opt_ignored) {
+  return '<div class="filter-base"><div id="filter-calendars" class="filter-section"><div class="filter-title">Filter calendars</div><textarea class="filter-textbox" rows="1"></textarea></div><div id="filter-events" class="filter-section"><div class="filter-title">Filter events</div><div class="filter-box-row"><div id="repeatingfilter" name="repeatingfilter" class="goog-checkbox goog-checkbox-unchecked filter-checkbox"></div><label id="repeatingfilter-label" for="repeatingfilter" class="checkbox-label">Show repeating events only.</label></div></div><div id="filter-select-control" class="filter-section"><div class="filter-title">Event selection global control</div><button class="filter-selectall filter-button action-button">Select all visible events</button><button class="filter-selectnone filter-button action-button">Deselect all visible events</button><button class="filter-submit filter-button primary-button">Add owners of all selected events to be mailed.</button></div></div>';
 };
 // Copyright 2008 The Closure Library Authors. All Rights Reserved.
 //
@@ -31950,46 +36387,46 @@ goog.require('goog.userAgent');
 /**
  * @define {boolean} Whether the code is running on the Firefox web browser.
  */
-goog.userAgent.product.ASSUME_FIREFOX = false;
+goog.define('goog.userAgent.product.ASSUME_FIREFOX', false);
 
 
 /**
  * @define {boolean} Whether the code is running on the Camino web browser.
  */
-goog.userAgent.product.ASSUME_CAMINO = false;
+goog.define('goog.userAgent.product.ASSUME_CAMINO', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the product is an
  *     iPhone.
  */
-goog.userAgent.product.ASSUME_IPHONE = false;
+goog.define('goog.userAgent.product.ASSUME_IPHONE', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the product is an
  *     iPad.
  */
-goog.userAgent.product.ASSUME_IPAD = false;
+goog.define('goog.userAgent.product.ASSUME_IPAD', false);
 
 
 /**
  * @define {boolean} Whether we know at compile-time that the product is an
  *     Android phone.
  */
-goog.userAgent.product.ASSUME_ANDROID = false;
+goog.define('goog.userAgent.product.ASSUME_ANDROID', false);
 
 
 /**
  * @define {boolean} Whether the code is running on the Chrome web browser.
  */
-goog.userAgent.product.ASSUME_CHROME = false;
+goog.define('goog.userAgent.product.ASSUME_CHROME', false);
 
 
 /**
  * @define {boolean} Whether the code is running on the Safari web browser.
  */
-goog.userAgent.product.ASSUME_SAFARI = false;
+goog.define('goog.userAgent.product.ASSUME_SAFARI', false);
 
 
 /**
@@ -32233,6 +36670,7 @@ goog.ui.TextareaRenderer.prototype.getAriaRole = function() {
 
 /** @override */
 goog.ui.TextareaRenderer.prototype.decorate = function(control, element) {
+  this.setUpTextarea_(control);
   goog.ui.TextareaRenderer.superClass_.decorate.call(this, control,
       element);
   control.setContent(element.value);
@@ -32368,6 +36806,7 @@ goog.ui.TextareaRenderer.prototype.getCssClass = function() {
  */
 
 goog.provide('goog.ui.Textarea');
+goog.provide('goog.ui.Textarea.EventType');
 
 goog.require('goog.Timer');
 goog.require('goog.events.EventType');
@@ -32386,7 +36825,7 @@ goog.require('goog.userAgent.product');
  * @param {string} content Text to set as the textarea's value.
  * @param {goog.ui.TextareaRenderer=} opt_renderer Renderer used to render or
  *     decorate the textarea. Defaults to {@link goog.ui.TextareaRenderer}.
- * @param {goog.dom.DomHelper=} opt_domHelper Optional DOM hepler, used for
+ * @param {goog.dom.DomHelper=} opt_domHelper Optional DOM helper, used for
  *     document interaction.
  * @constructor
  * @extends {goog.ui.Control}
@@ -32509,6 +36948,15 @@ goog.ui.Textarea.prototype.borderBox_;
 
 
 /**
+ * Constants for event names.
+ * @enum {string}
+ */
+goog.ui.Textarea.EventType = {
+  RESIZE: 'resize'
+};
+
+
+/**
  * @return {number} The padding plus the border box height.
  * @private
  */
@@ -32574,7 +37022,7 @@ goog.ui.Textarea.prototype.getMaxHeight_ = function() {
 
 
 /**
- * Sets a minimum height for the textarea, and calls resize if rendered.
+ * Sets a maximum height for the textarea, and calls resize if rendered.
  * @param {number} height New maxHeight value.
  */
 goog.ui.Textarea.prototype.setMaxHeight = function(height) {
@@ -32628,6 +37076,7 @@ goog.ui.Textarea.prototype.resize = function() {
 
 /** @override **/
 goog.ui.Textarea.prototype.enterDocument = function() {
+  goog.base(this, 'enterDocument');
   var textarea = this.getElement();
 
   // Eliminates the vertical scrollbar and changes the box-sizing mode for the
@@ -32797,6 +37246,7 @@ goog.ui.Textarea.prototype.grow_ = function(opt_e) {
   var shouldCallShrink = false;
   this.isResizing_ = true;
   var textarea = this.getElement();
+  var oldHeight = this.height_;
   if (textarea.scrollHeight) {
     var setMinHeight = false;
     var setMaxHeight = false;
@@ -32831,11 +37281,14 @@ goog.ui.Textarea.prototype.grow_ = function(opt_e) {
   if (shouldCallShrink) {
     this.shrink_();
   }
+  if (oldHeight != this.height_) {
+    this.dispatchEvent(goog.ui.Textarea.EventType.RESIZE);
+  }
 };
 
 
 /**
- * Resizes the texarea to shrink to fit its contents. The way this works is
+ * Resizes the textarea to shrink to fit its contents. The way this works is
  * by increasing the padding of the textarea by 1px (it's important here that
  * we're in box-sizing: border-box mode). If the size of the textarea grows,
  * then the box is filled up to the padding box with text.
@@ -32846,12 +37299,6 @@ goog.ui.Textarea.prototype.shrink_ = function() {
   var textarea = this.getElement();
   if (!this.isResizing_) {
     this.isResizing_ = true;
-    var isEmpty = false;
-    if (!textarea.value) {
-      // Prevents height from becoming 0.
-      textarea.value = ' ';
-      isEmpty = true;
-    }
     var scrollHeight = textarea.scrollHeight;
     if (!scrollHeight) {
       this.setHeightToEstimate_();
@@ -32879,9 +37326,6 @@ goog.ui.Textarea.prototype.shrink_ = function() {
         }
         textarea.style.paddingBottom = paddingBox.bottom + 'px';
       }
-    }
-    if (isEmpty) {
-      textarea.value = '';
     }
     this.isResizing_ = false;
   }
@@ -33266,7 +37710,7 @@ goog.json.isValid_ = function(s) {
   // Don't make these static since they have the global flag.
   var backslashesRe = /\\["\\\/bfnrtu]/g;
   var simpleValuesRe =
-      /"[^"\\\n\r\u2028\u2029\x00-\x08\x10-\x1f\x80-\x9f]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
+      /"[^"\\\n\r\u2028\u2029\x00-\x08\x0a-\x1f]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
   var openBracketsRe = /(?:^|:|,)(?:[\s\u2028\u2029]*\[)+/g;
   var remainderRe = /^[\],:{}\s\u2028\u2029]*$/;
 
@@ -33322,6 +37766,14 @@ goog.json.Replacer;
 
 
 /**
+ * JSON reviver, as defined in Section 15.12.2 of the ES5 spec.
+ *
+ * @typedef {function(this:Object, string, *): *}
+ */
+goog.json.Reviver;
+
+
+/**
  * Serializes an object or a value to a JSON string.
  *
  * @param {*} object The object to serialize.
@@ -33333,8 +37785,15 @@ goog.json.Replacer;
  * @return {string} A JSON string representation of the input.
  */
 goog.json.serialize = function(object, opt_replacer) {
-  // TODO(nicksantos): Change this to default to JSON.stringify when available.
-  // I need to fiddle with the default externs a bit to make this happen.
+  // NOTE(nicksantos): Currently, we never use JSON.stringify.
+  //
+  // The last time I evaluated this, JSON.stringify had subtle bugs and behavior
+  // differences on all browsers, and the performance win was not large enough
+  // to justify all the issues. This may change in the future as browser
+  // implementations get better.
+  //
+  // assertSerialize in json_test contains if branches for the cases
+  // that fail.
   return new goog.json.Serializer(opt_replacer).serialize(object);
 };
 
@@ -33378,10 +37837,10 @@ goog.json.Serializer.prototype.serialize = function(object) {
 goog.json.Serializer.prototype.serialize_ = function(object, sb) {
   switch (typeof object) {
     case 'string':
-      this.serializeString_((/** @type {string} */ object), sb);
+      this.serializeString_(/** @type {string} */ (object), sb);
       break;
     case 'number':
-      this.serializeNumber_((/** @type {number} */ object), sb);
+      this.serializeNumber_(/** @type {number} */ (object), sb);
       break;
     case 'boolean':
       sb.push(object);
@@ -33395,13 +37854,13 @@ goog.json.Serializer.prototype.serialize_ = function(object, sb) {
         break;
       }
       if (goog.isArray(object)) {
-        this.serializeArray_((/** @type {!Array} */ object), sb);
+        this.serializeArray(/** @type {!Array} */ (object), sb);
         break;
       }
       // should we allow new String, new Number and new Boolean to be treated
       // as string, number and boolean? Most implementations do not and the
       // need is not very big
-      this.serializeObject_((/** @type {Object} */ object), sb);
+      this.serializeObject_(/** @type {Object} */ (object), sb);
       break;
     case 'function':
       // Skip functions.
@@ -33486,11 +37945,11 @@ goog.json.Serializer.prototype.serializeNumber_ = function(n, sb) {
 
 /**
  * Serializes an array to a JSON string
- * @private
  * @param {Array} arr The array to serialize.
  * @param {Array} sb Array used as a string builder.
+ * @protected
  */
-goog.json.Serializer.prototype.serializeArray_ = function(arr, sb) {
+goog.json.Serializer.prototype.serializeArray = function(arr, sb) {
   var l = arr.length;
   sb.push('[');
   var sep = '';
@@ -33730,7 +38189,7 @@ calendarmailer.picker.ui.Calendar.prototype.getUnendingRecurrence_ =
  * re-encoding.
  *
  * Uses features of RFC 3986 for parsing/formatting URIs:
- *   http://gbiv.com/protocols/uri/rfc/rfc3986.html
+ *   http://www.ietf.org/rfc/rfc3986.txt
  *
  * @author gboyer@google.com (Garrett Boyer) - The "lightened" design.
  * @author msamuel@google.com (Mike Samuel) - Domain knowledge and regexes.
@@ -33779,46 +38238,46 @@ goog.uri.utils.CharCode_ = {
  */
 goog.uri.utils.buildFromEncodedParts = function(opt_scheme, opt_userInfo,
     opt_domain, opt_port, opt_path, opt_queryData, opt_fragment) {
-  var out = [];
+  var out = '';
 
   if (opt_scheme) {
-    out.push(opt_scheme, ':');
+    out += opt_scheme + ':';
   }
 
   if (opt_domain) {
-    out.push('//');
+    out += '//';
 
     if (opt_userInfo) {
-      out.push(opt_userInfo, '@');
+      out += opt_userInfo + '@';
     }
 
-    out.push(opt_domain);
+    out += opt_domain;
 
     if (opt_port) {
-      out.push(':', opt_port);
+      out += ':' + opt_port;
     }
   }
 
   if (opt_path) {
-    out.push(opt_path);
+    out += opt_path;
   }
 
   if (opt_queryData) {
-    out.push('?', opt_queryData);
+    out += '?' + opt_queryData;
   }
 
   if (opt_fragment) {
-    out.push('#', opt_fragment);
+    out += '#' + opt_fragment;
   }
 
-  return out.join('');
+  return out;
 };
 
 
 /**
  * A regular expression for breaking a URI into its component parts.
  *
- * {@link http://www.gbiv.com/protocols/uri/rfc/rfc3986.html#RFC2234} says
+ * {@link http://www.ietf.org/rfc/rfc3986.txt} says in Appendix B
  * As the "first-match-wins" algorithm is identical to the "greedy"
  * disambiguation method used by POSIX regular expressions, it is natural and
  * commonplace to use a regular expression for parsing the potential five
@@ -33886,10 +38345,9 @@ goog.uri.utils.splitRe_ = new RegExp(
     ':)?' +
     '(?://' +
       '(?:([^/?#]*)@)?' +                 // userInfo
-      '([\\w\\d\\-\\u0100-\\uffff.%]*)' + // domain - restrict to letters,
-                                          // digits, dashes, dots, percent
-                                          // escapes, and unicode characters.
+      '([^/#?]*?)' +                      // domain
       '(?::([0-9]+))?' +                  // port
+      '(?=[/#?]|$)' +                     // authority-terminating character
     ')?' +
     '([^?#]+)?' +                         // path
     '(?:\\?([^#]*))?' +                   // query
@@ -33928,6 +38386,7 @@ goog.uri.utils.ComponentIndex = {
  *     arbitrary strings may still look like path names.
  */
 goog.uri.utils.split = function(uri) {
+  goog.uri.utils.phishingProtection_();
 
   // See @return comment -- never null.
   return /** @type {!Array.<string|undefined>} */ (
@@ -33935,6 +38394,56 @@ goog.uri.utils.split = function(uri) {
 };
 
 
+/**
+ * Safari has a nasty bug where if you have an http URL with a username, e.g.,
+ * http://evil.com%2F@google.com/
+ * Safari will report that window.location.href is
+ * http://evil.com/google.com/
+ * so that anyone who tries to parse the domain of that URL will get
+ * the wrong domain. We've seen exploits where people use this to trick
+ * Safari into loading resources from evil domains.
+ *
+ * To work around this, we run a little "Safari phishing check", and throw
+ * an exception if we see this happening.
+ *
+ * There is no convenient place to put this check. We apply it to
+ * anyone doing URI parsing on Webkit. We're not happy about this, but
+ * it fixes the problem.
+ *
+ * This should be removed once Safari fixes their bug.
+ *
+ * Exploit reported by Masato Kinugawa.
+ *
+ * @type {boolean}
+ * @private
+ */
+goog.uri.utils.needsPhishingProtection_ = goog.userAgent.WEBKIT;
+
+
+/**
+ * Check to see if the user is being phished.
+ * @private
+ */
+goog.uri.utils.phishingProtection_ = function() {
+  if (goog.uri.utils.needsPhishingProtection_) {
+    // Turn protection off, so that we don't recurse.
+    goog.uri.utils.needsPhishingProtection_ = false;
+
+    // Use quoted access, just in case the user isn't using location externs.
+    var location = goog.global['location'];
+    if (location) {
+      var href = location['href'];
+      if (href) {
+        var domain = goog.uri.utils.getDomain(href);
+        if (domain && domain != location['hostname']) {
+          // Phishing attack
+          goog.uri.utils.needsPhishingProtection_ = true;
+          throw Error();
+        }
+      }
+    }
+  }
+};
 
 
 /**
@@ -34280,25 +38789,23 @@ goog.uri.utils.appendQueryData_ = function(buffer) {
  */
 goog.uri.utils.appendKeyValuePairs_ = function(key, value, pairs) {
   if (goog.isArray(value)) {
-    // It's an array, so append all elements.  Here, we must convince
-    // jscompiler that it is, indeed, an array.
-    value = /** @type {Array} */ (value);
+    // Convince the compiler it's an array.
+    goog.asserts.assertArray(value);
     for (var j = 0; j < value.length; j++) {
-      pairs.push('&', key);
-      // Check for empty string, null and undefined get encoded
-      // into the url as literal strings
-      if (value[j] !== '') {
-        pairs.push('=', goog.string.urlEncode(value[j]));
-      }
+      // Convert to string explicitly, to short circuit the null and array
+      // logic in this function -- this ensures that null and undefined get
+      // written as literal 'null' and 'undefined', and arrays don't get
+      // expanded out but instead encoded in the default way.
+      goog.uri.utils.appendKeyValuePairs_(key, String(value[j]), pairs);
     }
   } else if (value != null) {
-    // Not null or undefined, so safe to append.
-    pairs.push('&', key);
-    // Check for empty string, null and undefined get encoded
-    // into the url as literal strings
-    if (value !== '') {
-      pairs.push('=', goog.string.urlEncode(value));
-    }
+    // Skip a top-level null or undefined entirely.
+    pairs.push('&', key,
+        // Check for empty string. Zero gets encoded into the url as literal
+        // strings.  For empty string, skip the equal sign, to be consistent
+        // with UriBuilder.java.
+        value === '' ? '' : '=',
+        goog.string.urlEncode(value));
   }
 };
 
@@ -34439,13 +38946,17 @@ goog.uri.utils.appendParamsFromMap = function(uri, map) {
  *
  * @param {string} uri The original URI, which may already have query data.
  * @param {string} key The key, which must already be URI encoded.
- * @param {*} value The value, which will be stringized and encoded (assumed
- *     not already to be encoded).
+ * @param {*=} opt_value The value, which will be stringized and encoded
+ *     (assumed not already to be encoded).  If omitted, undefined, or null, the
+ *     key will be added as a valueless parameter.
  * @return {string} The URI with the query parameter added.
  */
-goog.uri.utils.appendParam = function(uri, key, value) {
-  return goog.uri.utils.appendQueryData_(
-      [uri, '&', key, '=', goog.string.urlEncode(value)]);
+goog.uri.utils.appendParam = function(uri, key, opt_value) {
+  var paramArr = [uri, '&', key];
+  if (goog.isDefAndNotNull(opt_value)) {
+    paramArr.push('=', goog.string.urlEncode(opt_value));
+  }
+  return goog.uri.utils.appendQueryData_(paramArr);
 };
 
 
@@ -34830,19 +39341,23 @@ goog.iter.toIterator = function(iterable) {
  * @param {goog.iter.Iterable} iterable  The iterator to iterate
  *     over.  If the iterable is an object {@code toIterator} will be called on
  *     it.
- * @param {Function} f  The function to call for every element.  This function
+* @param {function(this:T,?,?,?):?} f  The function to call for every
+ *     element.  This function
  *     takes 3 arguments (the element, undefined, and the iterator) and the
  *     return value is irrelevant.  The reason for passing undefined as the
  *     second argument is so that the same function can be used in
  *     {@see goog.array#forEach} as well as others.
- * @param {Object=} opt_obj  The object to be used as the value of 'this' within
+ * @param {T=} opt_obj  The object to be used as the value of 'this' within
  *     {@code f}.
+ * @template T
  */
 goog.iter.forEach = function(iterable, f, opt_obj) {
   if (goog.isArrayLike(iterable)) {
     /** @preserveTry */
     try {
-      goog.array.forEach((/** @type {goog.array.ArrayLike} */ iterable), f,
+      // NOTES: this passes the index number to the second parameter
+      // of the callback contrary to the documentation above.
+      goog.array.forEach(/** @type {goog.array.ArrayLike} */(iterable), f,
                          opt_obj);
     } catch (ex) {
       if (ex !== goog.iter.StopIteration) {
@@ -34870,23 +39385,25 @@ goog.iter.forEach = function(iterable, f, opt_obj) {
  * returns true adds the element to a new iterator.
  *
  * @param {goog.iter.Iterable} iterable The iterator to iterate over.
- * @param {Function} f The function to call for every element.  This function
+ * @param {function(this:T,?,undefined,?):boolean} f The function to call for
+ *     every element. This function
  *     takes 3 arguments (the element, undefined, and the iterator) and should
  *     return a boolean.  If the return value is true the element will be
  *     included  in the returned iteror.  If it is false the element is not
  *     included.
- * @param {Object=} opt_obj The object to be used as the value of 'this' within
+ * @param {T=} opt_obj The object to be used as the value of 'this' within
  *     {@code f}.
  * @return {!goog.iter.Iterator} A new iterator in which only elements that
  *     passed the test are present.
+ * @template T
  */
 goog.iter.filter = function(iterable, f, opt_obj) {
-  iterable = goog.iter.toIterator(iterable);
+  var iterator = goog.iter.toIterator(iterable);
   var newIter = new goog.iter.Iterator;
   newIter.next = function() {
     while (true) {
-      var val = iterable.next();
-      if (f.call(opt_obj, val, undefined, iterable)) {
+      var val = iterator.next();
+      if (f.call(opt_obj, val, undefined, iterator)) {
         return val;
       }
     }
@@ -34954,21 +39471,23 @@ goog.iter.join = function(iterable, deliminator) {
  * with that value.
  *
  * @param {goog.iter.Iterable} iterable The iterator to iterate over.
- * @param {Function} f The function to call for every element.  This function
+ * @param {function(this:T,?,undefined,?):?} f The function to call for every
+ *     element.  This function
  *     takes 3 arguments (the element, undefined, and the iterator) and should
  *     return a new value.
- * @param {Object=} opt_obj The object to be used as the value of 'this' within
+ * @param {T=} opt_obj The object to be used as the value of 'this' within
  *     {@code f}.
  * @return {!goog.iter.Iterator} A new iterator that returns the results of
  *     applying the function to each element in the original iterator.
+ * @template T
  */
 goog.iter.map = function(iterable, f, opt_obj) {
-  iterable = goog.iter.toIterator(iterable);
+  var iterator = goog.iter.toIterator(iterable);
   var newIter = new goog.iter.Iterator;
   newIter.next = function() {
     while (true) {
-      var val = iterable.next();
-      return f.call(opt_obj, val, undefined, iterable);
+      var val = iterator.next();
+      return f.call(opt_obj, val, undefined, iterator);
     }
   };
   return newIter;
@@ -34980,15 +39499,16 @@ goog.iter.map = function(iterable, f, opt_obj) {
  * result.
  *
  * @param {goog.iter.Iterable} iterable The iterator to iterate over.
- * @param {Function} f The function to call for every element. This function
- *     takes 2 arguments (the function's previous result or the initial value,
- *     and the value of the current element).
+ * @param {function(this:T,V,?):V} f The function to call for every
+ *     element. This function takes 2 arguments (the function's previous result
+ *     or the initial value, and the value of the current element).
  *     function(previousValue, currentElement) : newValue.
- * @param {*} val The initial value to pass into the function on the first call.
- * @param {Object=} opt_obj  The object to be used as the value of 'this'
+ * @param {V} val The initial value to pass into the function on the first call.
+ * @param {T=} opt_obj  The object to be used as the value of 'this'
  *     within f.
- * @return {*} Result of evaluating f repeatedly across the values of
+ * @return {V} Result of evaluating f repeatedly across the values of
  *     the iterator.
+ * @template T,V
  */
 goog.iter.reduce = function(iterable, f, val, opt_obj) {
   var rval = val;
@@ -35005,12 +39525,14 @@ goog.iter.reduce = function(iterable, f, val, opt_obj) {
  * return false this will return false.
  *
  * @param {goog.iter.Iterable} iterable  The iterator object.
- * @param {Function} f  The function to call for every value. This function
+ * @param {function(this:T,?,undefined,?):boolean} f  The function to call for
+ *     every value. This function
  *     takes 3 arguments (the value, undefined, and the iterator) and should
  *     return a boolean.
- * @param {Object=} opt_obj The object to be used as the value of 'this' within
+ * @param {T=} opt_obj The object to be used as the value of 'this' within
  *     {@code f}.
  * @return {boolean} true if any value passes the test.
+ * @template T
  */
 goog.iter.some = function(iterable, f, opt_obj) {
   iterable = goog.iter.toIterator(iterable);
@@ -35036,12 +39558,14 @@ goog.iter.some = function(iterable, f, opt_obj) {
  * return true this will return true.
  *
  * @param {goog.iter.Iterable} iterable  The iterator object.
- * @param {Function} f  The function to call for every value. This function
+ * @param {function(this:T,?,undefined,?):boolean} f  The function to call for
+ *     every value. This function
  *     takes 3 arguments (the value, undefined, and the iterator) and should
  *     return a boolean.
- * @param {Object=} opt_obj The object to be used as the value of 'this' within
+ * @param {T=} opt_obj The object to be used as the value of 'this' within
  *     {@code f}.
  * @return {boolean} true if every value passes the test.
+ * @template T
  */
 goog.iter.every = function(iterable, f, opt_obj) {
   iterable = goog.iter.toIterator(iterable);
@@ -35105,22 +39629,24 @@ goog.iter.chain = function(var_args) {
  * Builds a new iterator that iterates over the original, but skips elements as
  * long as a supplied function returns true.
  * @param {goog.iter.Iterable} iterable  The iterator object.
- * @param {Function} f  The function to call for every value. This function
+ * @param {function(this:T,?,undefined,?):boolean} f  The function to call for
+ *     every value. This function
  *     takes 3 arguments (the value, undefined, and the iterator) and should
  *     return a boolean.
- * @param {Object=} opt_obj The object to be used as the value of 'this' within
+ * @param {T=} opt_obj The object to be used as the value of 'this' within
  *     {@code f}.
  * @return {!goog.iter.Iterator} A new iterator that drops elements from the
  *     original iterator as long as {@code f} is true.
+ * @template T
  */
 goog.iter.dropWhile = function(iterable, f, opt_obj) {
-  iterable = goog.iter.toIterator(iterable);
+  var iterator = goog.iter.toIterator(iterable);
   var newIter = new goog.iter.Iterator;
   var dropping = true;
   newIter.next = function() {
     while (true) {
-      var val = iterable.next();
-      if (dropping && f.call(opt_obj, val, undefined, iterable)) {
+      var val = iterator.next();
+      if (dropping && f.call(opt_obj, val, undefined, iterator)) {
         continue;
       } else {
         dropping = false;
@@ -35136,22 +39662,24 @@ goog.iter.dropWhile = function(iterable, f, opt_obj) {
  * Builds a new iterator that iterates over the original, but only as long as a
  * supplied function returns true.
  * @param {goog.iter.Iterable} iterable  The iterator object.
- * @param {Function} f  The function to call for every value. This function
+ * @param {function(this:T,?,undefined,?):boolean} f  The function to call for
+ *     every value. This function
  *     takes 3 arguments (the value, undefined, and the iterator) and should
  *     return a boolean.
- * @param {Object=} opt_obj This is used as the 'this' object in f when called.
+ * @param {T=} opt_obj This is used as the 'this' object in f when called.
  * @return {!goog.iter.Iterator} A new iterator that keeps elements in the
  *     original iterator as long as the function is true.
+ * @template T
  */
 goog.iter.takeWhile = function(iterable, f, opt_obj) {
-  iterable = goog.iter.toIterator(iterable);
+  var iterator = goog.iter.toIterator(iterable);
   var newIter = new goog.iter.Iterator;
   var taking = true;
   newIter.next = function() {
     while (true) {
       if (taking) {
-        var val = iterable.next();
-        if (f.call(opt_obj, val, undefined, iterable)) {
+        var val = iterator.next();
+        if (f.call(opt_obj, val, undefined, iterator)) {
           return val;
         } else {
           taking = false;
@@ -35173,7 +39701,7 @@ goog.iter.takeWhile = function(iterable, f, opt_obj) {
 goog.iter.toArray = function(iterable) {
   // Fast path for array-like.
   if (goog.isArrayLike(iterable)) {
-    return goog.array.toArray((/** @type {!goog.array.ArrayLike} */ iterable));
+    return goog.array.toArray(/** @type {!goog.array.ArrayLike} */(iterable));
   }
   iterable = goog.iter.toIterator(iterable);
   var array = [];
@@ -35348,7 +39876,6 @@ goog.iter.cycle = function(iterable) {
 
     // Pull elements off the original iterator if not using cache
     if (!useCache) {
-
       try {
         // Return the element from the iterable
         returnElement = baseIterator.next();
@@ -35391,357 +39918,16 @@ goog.iter.cycle = function(iterable) {
 // limitations under the License.
 
 /**
- * @fileoverview Generics method for collection-like classes and objects.
- *
- * @author arv@google.com (Erik Arvidsson)
- *
- * This file contains functions to work with collections. It supports using
- * Map, Set, Array and Object and other classes that implement collection-like
- * methods.
- */
-
-
-goog.provide('goog.structs');
-
-goog.require('goog.array');
-goog.require('goog.object');
-
-
-// We treat an object as a dictionary if it has getKeys or it is an object that
-// isn't arrayLike.
-
-
-/**
- * Returns the number of values in the collection-like object.
- * @param {Object} col The collection-like object.
- * @return {number} The number of values in the collection-like object.
- */
-goog.structs.getCount = function(col) {
-  if (typeof col.getCount == 'function') {
-    return col.getCount();
-  }
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    return col.length;
-  }
-  return goog.object.getCount(col);
-};
-
-
-/**
- * Returns the values of the collection-like object.
- * @param {Object} col The collection-like object.
- * @return {!Array} The values in the collection-like object.
- */
-goog.structs.getValues = function(col) {
-  if (typeof col.getValues == 'function') {
-    return col.getValues();
-  }
-  if (goog.isString(col)) {
-    return col.split('');
-  }
-  if (goog.isArrayLike(col)) {
-    var rv = [];
-    var l = col.length;
-    for (var i = 0; i < l; i++) {
-      rv.push(col[i]);
-    }
-    return rv;
-  }
-  return goog.object.getValues(col);
-};
-
-
-/**
- * Returns the keys of the collection. Some collections have no notion of
- * keys/indexes and this function will return undefined in those cases.
- * @param {Object} col The collection-like object.
- * @return {!Array|undefined} The keys in the collection.
- */
-goog.structs.getKeys = function(col) {
-  if (typeof col.getKeys == 'function') {
-    return col.getKeys();
-  }
-  // if we have getValues but no getKeys we know this is a key-less collection
-  if (typeof col.getValues == 'function') {
-    return undefined;
-  }
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    var rv = [];
-    var l = col.length;
-    for (var i = 0; i < l; i++) {
-      rv.push(i);
-    }
-    return rv;
-  }
-
-  return goog.object.getKeys(col);
-};
-
-
-/**
- * Whether the collection contains the given value. This is O(n) and uses
- * equals (==) to test the existence.
- * @param {Object} col The collection-like object.
- * @param {*} val The value to check for.
- * @return {boolean} True if the map contains the value.
- */
-goog.structs.contains = function(col, val) {
-  if (typeof col.contains == 'function') {
-    return col.contains(val);
-  }
-  if (typeof col.containsValue == 'function') {
-    return col.containsValue(val);
-  }
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    return goog.array.contains(/** @type {Array} */ (col), val);
-  }
-  return goog.object.containsValue(col, val);
-};
-
-
-/**
- * Whether the collection is empty.
- * @param {Object} col The collection-like object.
- * @return {boolean} True if empty.
- */
-goog.structs.isEmpty = function(col) {
-  if (typeof col.isEmpty == 'function') {
-    return col.isEmpty();
-  }
-
-  // We do not use goog.string.isEmpty because here we treat the string as
-  // collection and as such even whitespace matters
-
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    return goog.array.isEmpty(/** @type {Array} */ (col));
-  }
-  return goog.object.isEmpty(col);
-};
-
-
-/**
- * Removes all the elements from the collection.
- * @param {Object} col The collection-like object.
- */
-goog.structs.clear = function(col) {
-  // NOTE(arv): This should not contain strings because strings are immutable
-  if (typeof col.clear == 'function') {
-    col.clear();
-  } else if (goog.isArrayLike(col)) {
-    goog.array.clear((/** @type {goog.array.ArrayLike} */ col));
-  } else {
-    goog.object.clear(col);
-  }
-};
-
-
-/**
- * Calls a function for each value in a collection. The function takes
- * three arguments; the value, the key and the collection.
- *
- * @param {Object} col The collection-like object.
- * @param {Function} f The function to call for every value. This function takes
- *     3 arguments (the value, the key or undefined if the collection has no
- *     notion of keys, and the collection) and the return value is irrelevant.
- * @param {Object=} opt_obj The object to be used as the value of 'this'
- *     within {@code f}.
- */
-goog.structs.forEach = function(col, f, opt_obj) {
-  if (typeof col.forEach == 'function') {
-    col.forEach(f, opt_obj);
-  } else if (goog.isArrayLike(col) || goog.isString(col)) {
-    goog.array.forEach(/** @type {Array} */ (col), f, opt_obj);
-  } else {
-    var keys = goog.structs.getKeys(col);
-    var values = goog.structs.getValues(col);
-    var l = values.length;
-    for (var i = 0; i < l; i++) {
-      f.call(opt_obj, values[i], keys && keys[i], col);
-    }
-  }
-};
-
-
-/**
- * Calls a function for every value in the collection. When a call returns true,
- * adds the value to a new collection (Array is returned by default).
- *
- * @param {Object} col The collection-like object.
- * @param {Function} f The function to call for every value. This function takes
- *     3 arguments (the value, the key or undefined if the collection has no
- *     notion of keys, and the collection) and should return a Boolean. If the
- *     return value is true the value is added to the result collection. If it
- *     is false the value is not included.
- * @param {Object=} opt_obj The object to be used as the value of 'this'
- *     within {@code f}.
- * @return {!Object|!Array} A new collection where the passed values are
- *     present. If col is a key-less collection an array is returned.  If col
- *     has keys and values a plain old JS object is returned.
- */
-goog.structs.filter = function(col, f, opt_obj) {
-  if (typeof col.filter == 'function') {
-    return col.filter(f, opt_obj);
-  }
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    return goog.array.filter(/** @type {!Array} */ (col), f, opt_obj);
-  }
-
-  var rv;
-  var keys = goog.structs.getKeys(col);
-  var values = goog.structs.getValues(col);
-  var l = values.length;
-  if (keys) {
-    rv = {};
-    for (var i = 0; i < l; i++) {
-      if (f.call(opt_obj, values[i], keys[i], col)) {
-        rv[keys[i]] = values[i];
-      }
-    }
-  } else {
-    // We should not use goog.array.filter here since we want to make sure that
-    // the index is undefined as well as make sure that col is passed to the
-    // function.
-    rv = [];
-    for (var i = 0; i < l; i++) {
-      if (f.call(opt_obj, values[i], undefined, col)) {
-        rv.push(values[i]);
-      }
-    }
-  }
-  return rv;
-};
-
-
-/**
- * Calls a function for every value in the collection and adds the result into a
- * new collection (defaults to creating a new Array).
- *
- * @param {Object} col The collection-like object.
- * @param {Function} f The function to call for every value. This function
- *     takes 3 arguments (the value, the key or undefined if the collection has
- *     no notion of keys, and the collection) and should return something. The
- *     result will be used as the value in the new collection.
- * @param {Object=} opt_obj  The object to be used as the value of 'this'
- *     within {@code f}.
- * @return {!Object|!Array} A new collection with the new values.  If col is a
- *     key-less collection an array is returned.  If col has keys and values a
- *     plain old JS object is returned.
- */
-goog.structs.map = function(col, f, opt_obj) {
-  if (typeof col.map == 'function') {
-    return col.map(f, opt_obj);
-  }
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    return goog.array.map(/** @type {!Array} */ (col), f, opt_obj);
-  }
-
-  var rv;
-  var keys = goog.structs.getKeys(col);
-  var values = goog.structs.getValues(col);
-  var l = values.length;
-  if (keys) {
-    rv = {};
-    for (var i = 0; i < l; i++) {
-      rv[keys[i]] = f.call(opt_obj, values[i], keys[i], col);
-    }
-  } else {
-    // We should not use goog.array.map here since we want to make sure that
-    // the index is undefined as well as make sure that col is passed to the
-    // function.
-    rv = [];
-    for (var i = 0; i < l; i++) {
-      rv[i] = f.call(opt_obj, values[i], undefined, col);
-    }
-  }
-  return rv;
-};
-
-
-/**
- * Calls f for each value in a collection. If any call returns true this returns
- * true (without checking the rest). If all returns false this returns false.
- *
- * @param {Object|Array|string} col The collection-like object.
- * @param {Function} f The function to call for every value. This function takes
- *     3 arguments (the value, the key or undefined if the collection has no
- *     notion of keys, and the collection) and should return a Boolean.
- * @param {Object=} opt_obj  The object to be used as the value of 'this'
- *     within {@code f}.
- * @return {boolean} True if any value passes the test.
- */
-goog.structs.some = function(col, f, opt_obj) {
-  if (typeof col.some == 'function') {
-    return col.some(f, opt_obj);
-  }
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    return goog.array.some(/** @type {!Array} */ (col), f, opt_obj);
-  }
-  var keys = goog.structs.getKeys(col);
-  var values = goog.structs.getValues(col);
-  var l = values.length;
-  for (var i = 0; i < l; i++) {
-    if (f.call(opt_obj, values[i], keys && keys[i], col)) {
-      return true;
-    }
-  }
-  return false;
-};
-
-
-/**
- * Calls f for each value in a collection. If all calls return true this return
- * true this returns true. If any returns false this returns false at this point
- *  and does not continue to check the remaining values.
- *
- * @param {Object} col The collection-like object.
- * @param {Function} f The function to call for every value. This function takes
- *     3 arguments (the value, the key or undefined if the collection has no
- *     notion of keys, and the collection) and should return a Boolean.
- * @param {Object=} opt_obj  The object to be used as the value of 'this'
- *     within {@code f}.
- * @return {boolean} True if all key-value pairs pass the test.
- */
-goog.structs.every = function(col, f, opt_obj) {
-  if (typeof col.every == 'function') {
-    return col.every(f, opt_obj);
-  }
-  if (goog.isArrayLike(col) || goog.isString(col)) {
-    return goog.array.every(/** @type {!Array} */ (col), f, opt_obj);
-  }
-  var keys = goog.structs.getKeys(col);
-  var values = goog.structs.getValues(col);
-  var l = values.length;
-  for (var i = 0; i < l; i++) {
-    if (!f.call(opt_obj, values[i], keys && keys[i], col)) {
-      return false;
-    }
-  }
-  return true;
-};
-// Copyright 2006 The Closure Library Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS-IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/**
  * @fileoverview Datastructure: Hash Map.
  *
  * @author arv@google.com (Erik Arvidsson)
  * @author jonp@google.com (Jon Perlow) Optimized for IE6
  *
  * This file contains an implementation of a Map structure. It implements a lot
- * of the methods used in goog.structs so those functions work on hashes.  For
- * convenience with common usage the methods accept any type for the key, though
- * internally they will be cast to strings.
+ * of the methods used in goog.structs so those functions work on hashes. This
+ * is best suited for complex key types. For simple keys such as numbers and
+ * strings, and where special names like __proto__ are not a concern, consider
+ * using the lighter-weight utilities in goog.object.
  */
 
 
@@ -35750,7 +39936,6 @@ goog.provide('goog.structs.Map');
 goog.require('goog.iter.Iterator');
 goog.require('goog.iter.StopIteration');
 goog.require('goog.object');
-goog.require('goog.structs');
 
 
 
@@ -35880,7 +40065,7 @@ goog.structs.Map.prototype.containsValue = function(val) {
 /**
  * Whether this map is equal to the argument map.
  * @param {goog.structs.Map} otherMap The map against which to test equality.
- * @param {function(*, *) : boolean=} opt_equalityFn Optional equality function
+ * @param {function(?, ?) : boolean=} opt_equalityFn Optional equality function
  *     to test equality of values. If not specified, this will test whether
  *     the values contained in each map are identical objects.
  * @return {boolean} Whether the maps are equal.
@@ -36023,6 +40208,7 @@ goog.structs.Map.prototype.get = function(key, opt_val) {
  * Adds a key-value pair to the map.
  * @param {*} key The key.
  * @param {*} value The value to add.
+ * @return {*} Some subclasses return a value.
  */
 goog.structs.Map.prototype.set = function(key, value) {
   if (!(goog.structs.Map.hasKey_(this.map_, key))) {
@@ -36386,7 +40572,8 @@ goog.net.HttpStatus = {
  * Returns whether the given status should be considered successful.
  *
  * Successful codes are OK (200), CREATED (201), ACCEPTED (202),
- * NO CONTENT (204), NOT MODIFIED (304), and IE's no content code (1223).
+ * NO CONTENT (204), PARTIAL CONTENT (206), NOT MODIFIED (304),
+ * and IE's no content code (1223).
  *
  * @param {number} status The status code to test.
  * @return {boolean} Whether the status code should be considered successful.
@@ -36397,6 +40584,7 @@ goog.net.HttpStatus.isSuccess = function(status) {
     case goog.net.HttpStatus.CREATED:
     case goog.net.HttpStatus.ACCEPTED:
     case goog.net.HttpStatus.NO_CONTENT:
+    case goog.net.HttpStatus.PARTIAL_CONTENT:
     case goog.net.HttpStatus.NOT_MODIFIED:
     case goog.net.HttpStatus.QUIRK_IE_NO_CONTENT:
       return true;
@@ -36576,6 +40764,13 @@ goog.net.XmlHttp = function() {
 
 
 /**
+ * @define {boolean} Whether to assume XMLHttpRequest exists. Setting this to
+ *     true strips the ActiveX probing code.
+ */
+goog.define('goog.net.XmlHttp.ASSUME_NATIVE_XHR', false);
+
+
+/**
  * Gets the options to use with the XMLHttpRequest objects obtained using
  * the static methods.
  * @return {Object} The options.
@@ -36655,8 +40850,8 @@ goog.net.XmlHttp.factory_;
  */
 goog.net.XmlHttp.setFactory = function(factory, optionsFactory) {
   goog.net.XmlHttp.setGlobalFactory(new goog.net.WrapperXmlHttpFactory(
-      (/** @type {function() : !(XMLHttpRequest|GearsHttpRequest)} */ factory),
-      (/** @type {function() : !Object}*/ optionsFactory)));
+      /** @type {function() : !(XMLHttpRequest|GearsHttpRequest)} */ (factory),
+      /** @type {function() : !Object}*/ (optionsFactory)));
 };
 
 
@@ -36707,10 +40902,10 @@ goog.net.DefaultXmlHttpFactory.prototype.internalGetOptions = function() {
 
 /**
  * The ActiveX PROG ID string to use to create xhr's in IE. Lazily initialized.
- * @type {?string}
+ * @type {string|undefined}
  * @private
  */
-goog.net.DefaultXmlHttpFactory.prototype.ieProgId_ = null;
+goog.net.DefaultXmlHttpFactory.prototype.ieProgId_;
 
 
 /**
@@ -36719,6 +40914,10 @@ goog.net.DefaultXmlHttpFactory.prototype.ieProgId_ = null;
  * @private
  */
 goog.net.DefaultXmlHttpFactory.prototype.getProgId_ = function() {
+  if (goog.net.XmlHttp.ASSUME_NATIVE_XHR) {
+    return '';
+  }
+
   // The following blog post describes what PROG IDs to use to create the
   // XMLHTTP object in Internet Explorer:
   // http://blogs.msdn.com/xmlteam/archive/2006/10/23/using-the-right-version-of-msxml-in-internet-explorer.aspx
@@ -36790,6 +40989,357 @@ goog.net.EventType = {
   TIMEOUT: 'timeout',
   INCREMENTAL_DATA: 'incrementaldata',
   PROGRESS: 'progress'
+};
+// Copyright 2006 The Closure Library Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * @fileoverview Generics method for collection-like classes and objects.
+ *
+ * @author arv@google.com (Erik Arvidsson)
+ *
+ * This file contains functions to work with collections. It supports using
+ * Map, Set, Array and Object and other classes that implement collection-like
+ * methods.
+ */
+
+
+goog.provide('goog.structs');
+
+goog.require('goog.array');
+goog.require('goog.object');
+
+
+// We treat an object as a dictionary if it has getKeys or it is an object that
+// isn't arrayLike.
+
+
+/**
+ * Returns the number of values in the collection-like object.
+ * @param {Object} col The collection-like object.
+ * @return {number} The number of values in the collection-like object.
+ */
+goog.structs.getCount = function(col) {
+  if (typeof col.getCount == 'function') {
+    return col.getCount();
+  }
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    return col.length;
+  }
+  return goog.object.getCount(col);
+};
+
+
+/**
+ * Returns the values of the collection-like object.
+ * @param {Object} col The collection-like object.
+ * @return {!Array} The values in the collection-like object.
+ */
+goog.structs.getValues = function(col) {
+  if (typeof col.getValues == 'function') {
+    return col.getValues();
+  }
+  if (goog.isString(col)) {
+    return col.split('');
+  }
+  if (goog.isArrayLike(col)) {
+    var rv = [];
+    var l = col.length;
+    for (var i = 0; i < l; i++) {
+      rv.push(col[i]);
+    }
+    return rv;
+  }
+  return goog.object.getValues(col);
+};
+
+
+/**
+ * Returns the keys of the collection. Some collections have no notion of
+ * keys/indexes and this function will return undefined in those cases.
+ * @param {Object} col The collection-like object.
+ * @return {!Array|undefined} The keys in the collection.
+ */
+goog.structs.getKeys = function(col) {
+  if (typeof col.getKeys == 'function') {
+    return col.getKeys();
+  }
+  // if we have getValues but no getKeys we know this is a key-less collection
+  if (typeof col.getValues == 'function') {
+    return undefined;
+  }
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    var rv = [];
+    var l = col.length;
+    for (var i = 0; i < l; i++) {
+      rv.push(i);
+    }
+    return rv;
+  }
+
+  return goog.object.getKeys(col);
+};
+
+
+/**
+ * Whether the collection contains the given value. This is O(n) and uses
+ * equals (==) to test the existence.
+ * @param {Object} col The collection-like object.
+ * @param {*} val The value to check for.
+ * @return {boolean} True if the map contains the value.
+ */
+goog.structs.contains = function(col, val) {
+  if (typeof col.contains == 'function') {
+    return col.contains(val);
+  }
+  if (typeof col.containsValue == 'function') {
+    return col.containsValue(val);
+  }
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    return goog.array.contains(/** @type {Array} */ (col), val);
+  }
+  return goog.object.containsValue(col, val);
+};
+
+
+/**
+ * Whether the collection is empty.
+ * @param {Object} col The collection-like object.
+ * @return {boolean} True if empty.
+ */
+goog.structs.isEmpty = function(col) {
+  if (typeof col.isEmpty == 'function') {
+    return col.isEmpty();
+  }
+
+  // We do not use goog.string.isEmpty because here we treat the string as
+  // collection and as such even whitespace matters
+
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    return goog.array.isEmpty(/** @type {Array} */ (col));
+  }
+  return goog.object.isEmpty(col);
+};
+
+
+/**
+ * Removes all the elements from the collection.
+ * @param {Object} col The collection-like object.
+ */
+goog.structs.clear = function(col) {
+  // NOTE(arv): This should not contain strings because strings are immutable
+  if (typeof col.clear == 'function') {
+    col.clear();
+  } else if (goog.isArrayLike(col)) {
+    goog.array.clear(/** @type {goog.array.ArrayLike} */ (col));
+  } else {
+    goog.object.clear(col);
+  }
+};
+
+
+/**
+ * Calls a function for each value in a collection. The function takes
+ * three arguments; the value, the key and the collection.
+ *
+ * @param {S} col The collection-like object.
+ * @param {function(this:T,?,?,S):?} f The function to call for every value.
+ *     This function takes
+ *     3 arguments (the value, the key or undefined if the collection has no
+ *     notion of keys, and the collection) and the return value is irrelevant.
+ * @param {T=} opt_obj The object to be used as the value of 'this'
+ *     within {@code f}.
+ * @template T,S
+ */
+goog.structs.forEach = function(col, f, opt_obj) {
+  if (typeof col.forEach == 'function') {
+    col.forEach(f, opt_obj);
+  } else if (goog.isArrayLike(col) || goog.isString(col)) {
+    goog.array.forEach(/** @type {Array} */ (col), f, opt_obj);
+  } else {
+    var keys = goog.structs.getKeys(col);
+    var values = goog.structs.getValues(col);
+    var l = values.length;
+    for (var i = 0; i < l; i++) {
+      f.call(opt_obj, values[i], keys && keys[i], col);
+    }
+  }
+};
+
+
+/**
+ * Calls a function for every value in the collection. When a call returns true,
+ * adds the value to a new collection (Array is returned by default).
+ *
+ * @param {S} col The collection-like object.
+ * @param {function(this:T,?,?,S):boolean} f The function to call for every
+ *     value. This function takes
+ *     3 arguments (the value, the key or undefined if the collection has no
+ *     notion of keys, and the collection) and should return a Boolean. If the
+ *     return value is true the value is added to the result collection. If it
+ *     is false the value is not included.
+ * @param {T=} opt_obj The object to be used as the value of 'this'
+ *     within {@code f}.
+ * @return {!Object|!Array} A new collection where the passed values are
+ *     present. If col is a key-less collection an array is returned.  If col
+ *     has keys and values a plain old JS object is returned.
+ * @template T,S
+ */
+goog.structs.filter = function(col, f, opt_obj) {
+  if (typeof col.filter == 'function') {
+    return col.filter(f, opt_obj);
+  }
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    return goog.array.filter(/** @type {!Array} */ (col), f, opt_obj);
+  }
+
+  var rv;
+  var keys = goog.structs.getKeys(col);
+  var values = goog.structs.getValues(col);
+  var l = values.length;
+  if (keys) {
+    rv = {};
+    for (var i = 0; i < l; i++) {
+      if (f.call(opt_obj, values[i], keys[i], col)) {
+        rv[keys[i]] = values[i];
+      }
+    }
+  } else {
+    // We should not use goog.array.filter here since we want to make sure that
+    // the index is undefined as well as make sure that col is passed to the
+    // function.
+    rv = [];
+    for (var i = 0; i < l; i++) {
+      if (f.call(opt_obj, values[i], undefined, col)) {
+        rv.push(values[i]);
+      }
+    }
+  }
+  return rv;
+};
+
+
+/**
+ * Calls a function for every value in the collection and adds the result into a
+ * new collection (defaults to creating a new Array).
+ *
+ * @param {S} col The collection-like object.
+ * @param {function(this:T,?,?,S):V} f The function to call for every value.
+ *     This function takes 3 arguments (the value, the key or undefined if the
+ *     collection has no notion of keys, and the collection) and should return
+ *     something. The result will be used as the value in the new collection.
+ * @param {T=} opt_obj  The object to be used as the value of 'this'
+ *     within {@code f}.
+ * @return {!Object.<V>|!Array.<V>} A new collection with the new values.  If
+ *     col is a key-less collection an array is returned.  If col has keys and
+ *     values a plain old JS object is returned.
+ * @template T,S,V
+ */
+goog.structs.map = function(col, f, opt_obj) {
+  if (typeof col.map == 'function') {
+    return col.map(f, opt_obj);
+  }
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    return goog.array.map(/** @type {!Array} */ (col), f, opt_obj);
+  }
+
+  var rv;
+  var keys = goog.structs.getKeys(col);
+  var values = goog.structs.getValues(col);
+  var l = values.length;
+  if (keys) {
+    rv = {};
+    for (var i = 0; i < l; i++) {
+      rv[keys[i]] = f.call(opt_obj, values[i], keys[i], col);
+    }
+  } else {
+    // We should not use goog.array.map here since we want to make sure that
+    // the index is undefined as well as make sure that col is passed to the
+    // function.
+    rv = [];
+    for (var i = 0; i < l; i++) {
+      rv[i] = f.call(opt_obj, values[i], undefined, col);
+    }
+  }
+  return rv;
+};
+
+
+/**
+ * Calls f for each value in a collection. If any call returns true this returns
+ * true (without checking the rest). If all returns false this returns false.
+ *
+ * @param {S} col The collection-like object.
+ * @param {function(this:T,?,?,S):boolean} f The function to call for every
+ *     value. This function takes 3 arguments (the value, the key or undefined
+ *     if the collection has no notion of keys, and the collection) and should
+ *     return a boolean.
+ * @param {T=} opt_obj  The object to be used as the value of 'this'
+ *     within {@code f}.
+ * @return {boolean} True if any value passes the test.
+ * @template T,S
+ */
+goog.structs.some = function(col, f, opt_obj) {
+  if (typeof col.some == 'function') {
+    return col.some(f, opt_obj);
+  }
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    return goog.array.some(/** @type {!Array} */ (col), f, opt_obj);
+  }
+  var keys = goog.structs.getKeys(col);
+  var values = goog.structs.getValues(col);
+  var l = values.length;
+  for (var i = 0; i < l; i++) {
+    if (f.call(opt_obj, values[i], keys && keys[i], col)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+
+/**
+ * Calls f for each value in a collection. If all calls return true this return
+ * true this returns true. If any returns false this returns false at this point
+ *  and does not continue to check the remaining values.
+ *
+ * @param {S} col The collection-like object.
+ * @param {function(this:T,?,?,S):boolean} f The function to call for every
+ *     value. This function takes 3 arguments (the value, the key or
+ *     undefined if the collection has no notion of keys, and the collection)
+ *     and should return a boolean.
+ * @param {T=} opt_obj  The object to be used as the value of 'this'
+ *     within {@code f}.
+ * @return {boolean} True if all key-value pairs pass the test.
+ * @template T,S
+ */
+goog.structs.every = function(col, f, opt_obj) {
+  if (typeof col.every == 'function') {
+    return col.every(f, opt_obj);
+  }
+  if (goog.isArrayLike(col) || goog.isString(col)) {
+    return goog.array.every(/** @type {!Array} */ (col), f, opt_obj);
+  }
+  var keys = goog.structs.getKeys(col);
+  var values = goog.structs.getValues(col);
+  var l = values.length;
+  for (var i = 0; i < l; i++) {
+    if (!f.call(opt_obj, values[i], keys && keys[i], col)) {
+      return false;
+    }
+  }
+  return true;
 };
 // Copyright 2011 The Closure Library Authors. All Rights Reserved.
 //
@@ -36923,6 +41473,7 @@ goog.structs.Set.getKey_ = function(val) {
 
 /**
  * @return {number} The number of elements in the set.
+ * @override
  */
 goog.structs.Set.prototype.getCount = function() {
   return this.map_.getCount();
@@ -36932,6 +41483,7 @@ goog.structs.Set.prototype.getCount = function() {
 /**
  * Add a primitive or an object to the set.
  * @param {*} element The primitive or object to add.
+ * @override
  */
 goog.structs.Set.prototype.add = function(element) {
   this.map_.set(goog.structs.Set.getKey_(element), element);
@@ -36968,6 +41520,7 @@ goog.structs.Set.prototype.removeAll = function(col) {
  * Removes the given element from this set.
  * @param {*} element The primitive or object to remove.
  * @return {boolean} Whether the element was found and removed.
+ * @override
  */
 goog.structs.Set.prototype.remove = function(element) {
   return this.map_.remove(goog.structs.Set.getKey_(element));
@@ -36995,6 +41548,7 @@ goog.structs.Set.prototype.isEmpty = function() {
  * Tests whether this set contains the given element.
  * @param {*} element The primitive or object to test for.
  * @return {boolean} True if this set contains the given element.
+ * @override
  */
 goog.structs.Set.prototype.contains = function(element) {
   return this.map_.containsKey(goog.structs.Set.getKey_(element));
@@ -37144,6 +41698,10 @@ goog.require('goog.structs.Set');
 goog.require('goog.userAgent');
 
 
+/** @define {boolean} Whether logging should be enabled. */
+goog.define('goog.debug.LOGGING_ENABLED', goog.DEBUG);
+
+
 /**
  * Catches onerror events fired by windows and similar objects.
  * @param {function(Object)} logFunc The function to call with the error
@@ -37162,7 +41720,8 @@ goog.debug.catchErrors = function(logFunc, opt_cancel, opt_target) {
   // workaround still needs to be skipped in Safari after the webkit change
   // gets pushed out in Safari.
   // See https://bugs.webkit.org/show_bug.cgi?id=67119
-  if (goog.userAgent.WEBKIT && !goog.userAgent.isVersion('535.3')) {
+  if (goog.userAgent.WEBKIT &&
+      !goog.userAgent.isVersionOrHigher('535.3')) {
     retVal = !retVal;
   }
   target.onerror = function(message, url, line) {
@@ -37350,7 +41909,10 @@ goog.debug.normalizeErrorObject = function(err) {
   }
 
   try {
-    fileName = err.fileName || err.filename || err.sourceURL || href;
+    fileName = err.fileName || err.filename || err.sourceURL ||
+        // $googDebugFname may be set before a call to eval to set the filename
+        // that the eval is supposed to present.
+        goog.global['$googDebugFname'] || href;
   } catch (e) {
     // Firefox 2 may also throw an error when accessing 'filename'.
     fileName = 'Not available';
@@ -37711,7 +42273,7 @@ goog.debug.LogRecord.prototype.exceptionText_ = null;
 /**
  * @define {boolean} Whether to enable log sequence numbers.
  */
-goog.debug.LogRecord.ENABLE_SEQUENCE_NUMBERS = true;
+goog.define('goog.debug.LogRecord.ENABLE_SEQUENCE_NUMBERS', true);
 
 
 /**
@@ -37941,7 +42503,7 @@ goog.debug.LogBuffer.getInstance = function() {
  * @define {number} The number of log records to buffer. 0 means disable
  * buffering.
  */
-goog.debug.LogBuffer.CAPACITY = 0;
+goog.define('goog.debug.LogBuffer.CAPACITY', 0);
 
 
 /**
@@ -38125,7 +42687,7 @@ goog.debug.Logger.prototype.handlers_ = null;
  *     log handlers attached to them and whether they can have their log level
  *     set. Logging is a bit faster when this is set to false.
  */
-goog.debug.Logger.ENABLE_HIERARCHY = true;
+goog.define('goog.debug.Logger.ENABLE_HIERARCHY', true);
 
 
 if (!goog.debug.Logger.ENABLE_HIERARCHY) {
@@ -38189,6 +42751,7 @@ goog.debug.Logger.Level = function(name, value) {
 
 /**
  * @return {string} String representation of the logger level.
+ * @override
  */
 goog.debug.Logger.Level.prototype.toString = function() {
   return this.name;
@@ -38197,7 +42760,7 @@ goog.debug.Logger.Level.prototype.toString = function() {
 
 /**
  * OFF is a special level that can be used to turn off logging.
- * This level is initialized to <CODE>Number.MAX_VALUE</CODE>.
+ * This level is initialized to <CODE>Infinity</CODE>.
  * @type {!goog.debug.Logger.Level}
  */
 goog.debug.Logger.Level.OFF =
@@ -38270,7 +42833,7 @@ goog.debug.Logger.Level.FINEST = new goog.debug.Logger.Level('FINEST', 300);
 
 /**
  * ALL indicates that all messages should be logged.
- * This level is initialized to <CODE>Number.MIN_VALUE</CODE>.
+ * This level is initialized to <CODE>0</CODE>.
  * @type {!goog.debug.Logger.Level}
  */
 goog.debug.Logger.Level.ALL = new goog.debug.Logger.Level('ALL', 0);
@@ -38356,7 +42919,7 @@ goog.debug.Logger.Level.getPredefinedLevelByValue = function(value) {
 
 
 /**
- * Find or create a logger for a named subsystem. If a logger has already been
+ * Finds or creates a logger for a named subsystem. If a logger has already been
  * created with the given name it is returned. Otherwise a new logger is
  * created. If a new logger is created its log level will be configured based
  * on the LogManager configuration and it will configured to also send logging
@@ -38414,16 +42977,18 @@ goog.debug.Logger.prototype.getName = function() {
  * @param {Function} handler Handler function to add.
  */
 goog.debug.Logger.prototype.addHandler = function(handler) {
-  if (goog.debug.Logger.ENABLE_HIERARCHY) {
-    if (!this.handlers_) {
-      this.handlers_ = [];
+  if (goog.debug.LOGGING_ENABLED) {
+    if (goog.debug.Logger.ENABLE_HIERARCHY) {
+      if (!this.handlers_) {
+        this.handlers_ = [];
+      }
+      this.handlers_.push(handler);
+    } else {
+      goog.asserts.assert(!this.name_,
+          'Cannot call addHandler on a non-root logger when ' +
+          'goog.debug.Logger.ENABLE_HIERARCHY is false.');
+      goog.debug.Logger.rootHandlers_.push(handler);
     }
-    this.handlers_.push(handler);
-  } else {
-    goog.asserts.assert(!this.name_,
-        'Cannot call addHandler on a non-root logger when ' +
-        'goog.debug.Logger.ENABLE_HIERARCHY is false.');
-    goog.debug.Logger.rootHandlers_.push(handler);
   }
 };
 
@@ -38435,9 +43000,13 @@ goog.debug.Logger.prototype.addHandler = function(handler) {
  * @return {boolean} Whether the handler was removed.
  */
 goog.debug.Logger.prototype.removeHandler = function(handler) {
-  var handlers = goog.debug.Logger.ENABLE_HIERARCHY ? this.handlers_ :
-      goog.debug.Logger.rootHandlers_;
-  return !!handlers && goog.array.remove(handlers, handler);
+  if (goog.debug.LOGGING_ENABLED) {
+    var handlers = goog.debug.Logger.ENABLE_HIERARCHY ? this.handlers_ :
+        goog.debug.Logger.rootHandlers_;
+    return !!handlers && goog.array.remove(handlers, handler);
+  } else {
+    return false;
+  }
 };
 
 
@@ -38473,13 +43042,15 @@ goog.debug.Logger.prototype.getChildren = function() {
  * @param {goog.debug.Logger.Level} level The new level.
  */
 goog.debug.Logger.prototype.setLevel = function(level) {
-  if (goog.debug.Logger.ENABLE_HIERARCHY) {
-    this.level_ = level;
-  } else {
-    goog.asserts.assert(!this.name_,
-        'Cannot call setLevel() on a non-root logger when ' +
-        'goog.debug.Logger.ENABLE_HIERARCHY is false.');
-    goog.debug.Logger.rootLevel_ = level;
+  if (goog.debug.LOGGING_ENABLED) {
+    if (goog.debug.Logger.ENABLE_HIERARCHY) {
+      this.level_ = level;
+    } else {
+      goog.asserts.assert(!this.name_,
+          'Cannot call setLevel() on a non-root logger when ' +
+          'goog.debug.Logger.ENABLE_HIERARCHY is false.');
+      goog.debug.Logger.rootLevel_ = level;
+    }
   }
 };
 
@@ -38494,7 +43065,8 @@ goog.debug.Logger.prototype.setLevel = function(level) {
  * @return {goog.debug.Logger.Level} The level.
  */
 goog.debug.Logger.prototype.getLevel = function() {
-  return this.level_;
+  return goog.debug.LOGGING_ENABLED ?
+      this.level_ : goog.debug.Logger.Level.OFF;
 };
 
 
@@ -38503,6 +43075,10 @@ goog.debug.Logger.prototype.getLevel = function() {
  * @return {goog.debug.Logger.Level} The level.
  */
 goog.debug.Logger.prototype.getEffectiveLevel = function() {
+  if (!goog.debug.LOGGING_ENABLED) {
+    return goog.debug.Logger.Level.OFF;
+  }
+
   if (!goog.debug.Logger.ENABLE_HIERARCHY) {
     return goog.debug.Logger.rootLevel_;
   }
@@ -38518,19 +43094,20 @@ goog.debug.Logger.prototype.getEffectiveLevel = function() {
 
 
 /**
- * Check if a message of the given level would actually be logged by this
+ * Checks if a message of the given level would actually be logged by this
  * logger. This check is based on the Loggers effective level, which may be
  * inherited from its parent.
  * @param {goog.debug.Logger.Level} level The level to check.
  * @return {boolean} Whether the message would be logged.
  */
 goog.debug.Logger.prototype.isLoggable = function(level) {
-  return level.value >= this.getEffectiveLevel().value;
+  return goog.debug.LOGGING_ENABLED &&
+      level.value >= this.getEffectiveLevel().value;
 };
 
 
 /**
- * Log a message. If the logger is currently enabled for the
+ * Logs a message. If the logger is currently enabled for the
  * given message level then the given message is forwarded to all the
  * registered output Handler objects.
  * @param {goog.debug.Logger.Level} level One of the level identifiers.
@@ -38540,7 +43117,7 @@ goog.debug.Logger.prototype.isLoggable = function(level) {
  */
 goog.debug.Logger.prototype.log = function(level, msg, opt_exception) {
   // java caches the effective level, not sure it's necessary here
-  if (this.isLoggable(level)) {
+  if (goog.debug.LOGGING_ENABLED && this.isLoggable(level)) {
     this.doLogRecord_(this.getLogRecord(level, msg, opt_exception));
   }
 };
@@ -38571,116 +43148,132 @@ goog.debug.Logger.prototype.getLogRecord = function(level, msg, opt_exception) {
 
 
 /**
- * Log a message at the Logger.Level.SHOUT level.
+ * Logs a message at the Logger.Level.SHOUT level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.shout = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.SHOUT, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.SHOUT, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a message at the Logger.Level.SEVERE level.
+ * Logs a message at the Logger.Level.SEVERE level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.severe = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.SEVERE, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.SEVERE, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a message at the Logger.Level.WARNING level.
+ * Logs a message at the Logger.Level.WARNING level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.warning = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.WARNING, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.WARNING, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a message at the Logger.Level.INFO level.
+ * Logs a message at the Logger.Level.INFO level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.info = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.INFO, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.INFO, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a message at the Logger.Level.CONFIG level.
+ * Logs a message at the Logger.Level.CONFIG level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.config = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.CONFIG, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.CONFIG, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a message at the Logger.Level.FINE level.
+ * Logs a message at the Logger.Level.FINE level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.fine = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.FINE, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.FINE, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a message at the Logger.Level.FINER level.
+ * Logs a message at the Logger.Level.FINER level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.finer = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.FINER, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.FINER, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a message at the Logger.Level.FINEST level.
+ * Logs a message at the Logger.Level.FINEST level.
  * If the logger is currently enabled for the given message level then the
  * given message is forwarded to all the registered output Handler objects.
  * @param {string} msg The string message.
  * @param {Error=} opt_exception An exception associated with the message.
  */
 goog.debug.Logger.prototype.finest = function(msg, opt_exception) {
-  this.log(goog.debug.Logger.Level.FINEST, msg, opt_exception);
+  if (goog.debug.LOGGING_ENABLED) {
+    this.log(goog.debug.Logger.Level.FINEST, msg, opt_exception);
+  }
 };
 
 
 /**
- * Log a LogRecord. If the logger is currently enabled for the
+ * Logs a LogRecord. If the logger is currently enabled for the
  * given message level then the given message is forwarded to all the
  * registered output Handler objects.
  * @param {goog.debug.LogRecord} logRecord A log record to log.
  */
 goog.debug.Logger.prototype.logRecord = function(logRecord) {
-  if (this.isLoggable(logRecord.getLevel())) {
+  if (goog.debug.LOGGING_ENABLED && this.isLoggable(logRecord.getLevel())) {
     this.doLogRecord_(logRecord);
   }
 };
 
 
 /**
- * Log a LogRecord.
+ * Logs a LogRecord.
  * @param {goog.debug.LogRecord} logRecord A log record to log.
  * @private
  */
@@ -38744,7 +43337,7 @@ goog.debug.LogManager = {};
 
 
 /**
- * Map of logger names to logger objects
+ * Map of logger names to logger objects.
  *
  * @type {!Object}
  * @private
@@ -38761,7 +43354,7 @@ goog.debug.LogManager.rootLogger_ = null;
 
 
 /**
- * Initialize the LogManager if not already initialized
+ * Initializes the LogManager if not already initialized.
  */
 goog.debug.LogManager.initialize = function() {
   if (!goog.debug.LogManager.rootLogger_) {
@@ -38773,7 +43366,7 @@ goog.debug.LogManager.initialize = function() {
 
 
 /**
- * Returns all the loggers
+ * Returns all the loggers.
  * @return {!Object} Map of logger names to logger objects.
  */
 goog.debug.LogManager.getLoggers = function() {
@@ -38783,7 +43376,7 @@ goog.debug.LogManager.getLoggers = function() {
 
 /**
  * Returns the root of the logger tree namespace, the logger with the empty
- * string as its name
+ * string as its name.
  *
  * @return {!goog.debug.Logger} The root logger.
  */
@@ -38794,7 +43387,7 @@ goog.debug.LogManager.getRoot = function() {
 
 
 /**
- * Method to find a named logger.
+ * Finds a named logger.
  *
  * @param {string} name A name for the logger. This should be a dot-separated
  * name and should normally be based on the package name or class name of the
@@ -38892,9 +43485,9 @@ goog.provide('goog.net.XhrIo');
 goog.provide('goog.net.XhrIo.ResponseType');
 
 goog.require('goog.Timer');
+goog.require('goog.array');
 goog.require('goog.debug.Logger');
 goog.require('goog.debug.entryPointRegistry');
-goog.require('goog.debug.errorHandlerWeakDep');
 goog.require('goog.events.EventTarget');
 goog.require('goog.json');
 goog.require('goog.net.ErrorCode');
@@ -38902,9 +43495,11 @@ goog.require('goog.net.EventType');
 goog.require('goog.net.HttpStatus');
 goog.require('goog.net.XmlHttp');
 goog.require('goog.object');
+goog.require('goog.string');
 goog.require('goog.structs');
 goog.require('goog.structs.Map');
 goog.require('goog.uri.utils');
+goog.require('goog.userAgent');
 
 
 
@@ -38916,21 +43511,132 @@ goog.require('goog.uri.utils');
  * @extends {goog.events.EventTarget}
  */
 goog.net.XhrIo = function(opt_xmlHttpFactory) {
-  goog.events.EventTarget.call(this);
+  goog.base(this);
 
   /**
    * Map of default headers to add to every request, use:
    * XhrIo.headers.set(name, value)
-   * @type {goog.structs.Map}
+   * @type {!goog.structs.Map}
    */
   this.headers = new goog.structs.Map();
 
   /**
    * Optional XmlHttpFactory
-   * @type {goog.net.XmlHttpFactory}
-   * @private
+   * @private {goog.net.XmlHttpFactory}
    */
   this.xmlHttpFactory_ = opt_xmlHttpFactory || null;
+
+  /**
+   * Whether XMLHttpRequest is active.  A request is active from the time send()
+   * is called until onReadyStateChange() is complete, or error() or abort()
+   * is called.
+   * @private {boolean}
+   */
+  this.active_ = false;
+
+  /**
+   * The XMLHttpRequest object that is being used for the transfer.
+   * @private {XMLHttpRequest|GearsHttpRequest}
+   */
+  this.xhr_ = null;
+
+  /**
+   * The options to use with the current XMLHttpRequest object.
+   * @private {Object}
+   */
+  this.xhrOptions_ = null;
+
+  /**
+   * Last URL that was requested.
+   * @private {string|goog.Uri}
+   */
+  this.lastUri_ = '';
+
+  /**
+   * Method for the last request.
+   * @private {string}
+   */
+  this.lastMethod_ = '';
+
+  /**
+   * Last error code.
+   * @private {!goog.net.ErrorCode}
+   */
+  this.lastErrorCode_ = goog.net.ErrorCode.NO_ERROR;
+
+  /**
+   * Last error message.
+   * @private {Error|string}
+   */
+  this.lastError_ = '';
+
+  /**
+   * Used to ensure that we don't dispatch an multiple ERROR events. This can
+   * happen in IE when it does a synchronous load and one error is handled in
+   * the ready statte change and one is handled due to send() throwing an
+   * exception.
+   * @private {boolean}
+   */
+  this.errorDispatched_ = false;
+
+  /**
+   * Used to make sure we don't fire the complete event from inside a send call.
+   * @private {boolean}
+   */
+  this.inSend_ = false;
+
+  /**
+   * Used in determining if a call to {@link #onReadyStateChange_} is from
+   * within a call to this.xhr_.open.
+   * @private {boolean}
+   */
+  this.inOpen_ = false;
+
+  /**
+   * Used in determining if a call to {@link #onReadyStateChange_} is from
+   * within a call to this.xhr_.abort.
+   * @private {boolean}
+   */
+  this.inAbort_ = false;
+
+  /**
+   * Number of milliseconds after which an incomplete request will be aborted
+   * and a {@link goog.net.EventType.TIMEOUT} event raised; 0 means no timeout
+   * is set.
+   * @private {number}
+   */
+  this.timeoutInterval_ = 0;
+
+  /**
+   * Timer to track request timeout.
+   * @private {?number}
+   */
+  this.timeoutId_ = null;
+
+  /**
+   * The requested type for the response. The empty string means use the default
+   * XHR behavior.
+   * @private {goog.net.XhrIo.ResponseType}
+   */
+  this.responseType_ = goog.net.XhrIo.ResponseType.DEFAULT;
+
+  /**
+   * Whether a "credentialed" request is to be sent (one that is aware of
+   * cookies and authentication). This is applicable only for cross-domain
+   * requests and more recent browsers that support this part of the HTTP Access
+   * Control standard.
+   *
+   * @see http://www.w3.org/TR/XMLHttpRequest/#the-withcredentials-attribute
+   *
+   * @private {boolean}
+   */
+  this.withCredentials_ = false;
+
+  /**
+   * True if we can use XMLHttpRequest's timeout directly.
+   * @private {boolean}
+   */
+  this.useXhr2Timeout_ = false;
 };
 goog.inherits(goog.net.XhrIo, goog.events.EventTarget);
 
@@ -38952,8 +43658,8 @@ goog.net.XhrIo.ResponseType = {
 
 /**
  * A reference to the XhrIo logger
- * @type {goog.debug.Logger}
- * @private
+ * @private {goog.debug.Logger}
+ * @const
  */
 goog.net.XhrIo.prototype.logger_ =
     goog.debug.Logger.getLogger('goog.net.XhrIo');
@@ -38974,6 +43680,13 @@ goog.net.XhrIo.HTTP_SCHEME_PATTERN = /^https?$/i;
 
 
 /**
+ * The methods that typically come along with form data.  We set different
+ * headers depending on whether the HTTP action is one of these.
+ */
+goog.net.XhrIo.METHODS_WITH_FORM_DATA = ['POST', 'PUT'];
+
+
+/**
  * The Content-Type HTTP header value for a url-encoded form
  * @type {string}
  */
@@ -38982,11 +43695,32 @@ goog.net.XhrIo.FORM_CONTENT_TYPE =
 
 
 /**
+ * The XMLHttpRequest Level two timeout delay ms property name.
+ *
+ * @see http://www.w3.org/TR/XMLHttpRequest/#the-timeout-attribute
+ *
+ * @private {string}
+ * @const
+ */
+goog.net.XhrIo.XHR2_TIMEOUT_ = 'timeout';
+
+
+/**
+ * The XMLHttpRequest Level two ontimeout handler property name.
+ *
+ * @see http://www.w3.org/TR/XMLHttpRequest/#the-timeout-attribute
+ *
+ * @private {string}
+ * @const
+ */
+goog.net.XhrIo.XHR2_ON_TIMEOUT_ = 'ontimeout';
+
+
+/**
  * All non-disposed instances of goog.net.XhrIo created
  * by {@link goog.net.XhrIo.send} are in this Array.
  * @see goog.net.XhrIo.cleanup
- * @type {Array.<goog.net.XhrIo>}
- * @private
+ * @private {!Array.<!goog.net.XhrIo>}
  */
 goog.net.XhrIo.sendInstances_ = [];
 
@@ -38999,25 +43733,29 @@ goog.net.XhrIo.sendInstances_ = [];
  * @param {Function=} opt_callback Callback function for when request is
  *     complete.
  * @param {string=} opt_method Send method, default: GET.
- * @param {string|GearsBlob=} opt_content Post data. This can be a Gears blob
- *     if the underlying HTTP request object is a Gears HTTP request.
+ * @param {ArrayBuffer|Blob|Document|FormData|GearsBlob|string=} opt_content
+ *     Body data.
  * @param {Object|goog.structs.Map=} opt_headers Map of headers to add to the
  *     request.
  * @param {number=} opt_timeoutInterval Number of milliseconds after which an
  *     incomplete request will be aborted; 0 means no timeout is set.
+ * @param {boolean=} opt_withCredentials Whether to send credentials with the
+ *     request. Default to false. See {@link goog.net.XhrIo#setWithCredentials}.
  */
 goog.net.XhrIo.send = function(url, opt_callback, opt_method, opt_content,
-                               opt_headers, opt_timeoutInterval) {
+                               opt_headers, opt_timeoutInterval,
+                               opt_withCredentials) {
   var x = new goog.net.XhrIo();
   goog.net.XhrIo.sendInstances_.push(x);
   if (opt_callback) {
-    goog.events.listen(x, goog.net.EventType.COMPLETE, opt_callback);
+    x.listen(goog.net.EventType.COMPLETE, opt_callback);
   }
-  goog.events.listen(x,
-                     goog.net.EventType.READY,
-                     goog.partial(goog.net.XhrIo.cleanupSend_, x));
+  x.listenOnce(goog.net.EventType.READY, x.cleanupSend_);
   if (opt_timeoutInterval) {
     x.setTimeoutInterval(opt_timeoutInterval);
+  }
+  if (opt_withCredentials) {
+    x.setWithCredentials(opt_withCredentials);
   }
   x.send(url, opt_method, opt_content, opt_headers);
 };
@@ -39068,150 +43806,12 @@ goog.net.XhrIo.protectEntryPoints = function(errorHandler) {
  * Disposes of the specified goog.net.XhrIo created by
  * {@link goog.net.XhrIo.send} and removes it from
  * {@link goog.net.XhrIo.pendingStaticSendInstances_}.
- * @param {goog.net.XhrIo} XhrIo An XhrIo created by
- *     {@link goog.net.XhrIo.send}.
  * @private
  */
-goog.net.XhrIo.cleanupSend_ = function(XhrIo) {
-  XhrIo.dispose();
-  goog.array.remove(goog.net.XhrIo.sendInstances_, XhrIo);
+goog.net.XhrIo.prototype.cleanupSend_ = function() {
+  this.dispose();
+  goog.array.remove(goog.net.XhrIo.sendInstances_, this);
 };
-
-
-/**
- * Whether XMLHttpRequest is active.  A request is active from the time send()
- * is called until onReadyStateChange() is complete, or error() or abort()
- * is called.
- * @type {boolean}
- * @private
- */
-goog.net.XhrIo.prototype.active_ = false;
-
-
-/**
- * Reference to an XMLHttpRequest object that is being used for the transfer.
- * @type {XMLHttpRequest|GearsHttpRequest}
- * @private
- */
-goog.net.XhrIo.prototype.xhr_ = null;
-
-
-/**
- * The options to use with the current XMLHttpRequest object.
- * @type {Object}
- * @private
- */
-goog.net.XhrIo.prototype.xhrOptions_ = null;
-
-
-/**
- * Last URL that was requested.
- * @type {string|goog.Uri}
- * @private
- */
-goog.net.XhrIo.prototype.lastUri_ = '';
-
-
-/**
- * Method for the last request.
- * @type {string}
- * @private
- */
-goog.net.XhrIo.prototype.lastMethod_ = '';
-
-
-/**
- * Last error code.
- * @type {goog.net.ErrorCode}
- * @private
- */
-goog.net.XhrIo.prototype.lastErrorCode_ = goog.net.ErrorCode.NO_ERROR;
-
-
-/**
- * Last error message.
- * @type {Error|string}
- * @private
- */
-goog.net.XhrIo.prototype.lastError_ = '';
-
-
-/**
- * This is used to ensure that we don't dispatch an multiple ERROR events. This
- * can happen in IE when it does a synchronous load and one error is handled in
- * the ready statte change and one is handled due to send() throwing an
- * exception.
- * @type {boolean}
- * @private
- */
-goog.net.XhrIo.prototype.errorDispatched_ = false;
-
-
-/**
- * Used to make sure we don't fire the complete event from inside a send call.
- * @type {boolean}
- * @private
- */
-goog.net.XhrIo.prototype.inSend_ = false;
-
-
-/**
- * Used in determining if a call to {@link #onReadyStateChange_} is from within
- * a call to this.xhr_.open.
- * @type {boolean}
- * @private
- */
-goog.net.XhrIo.prototype.inOpen_ = false;
-
-
-/**
- * Used in determining if a call to {@link #onReadyStateChange_} is from within
- * a call to this.xhr_.abort.
- * @type {boolean}
- * @private
- */
-goog.net.XhrIo.prototype.inAbort_ = false;
-
-
-/**
- * Number of milliseconds after which an incomplete request will be aborted and
- * a {@link goog.net.EventType.TIMEOUT} event raised; 0 means no timeout is set.
- * @type {number}
- * @private
- */
-goog.net.XhrIo.prototype.timeoutInterval_ = 0;
-
-
-/**
- * Window timeout ID used to cancel the timeout event handler if the request
- * completes successfully.
- * @type {Object}
- * @private
- */
-goog.net.XhrIo.prototype.timeoutId_ = null;
-
-
-/**
- * The requested type for the response. The empty string means use the default
- * XHR behavior.
- * @type {goog.net.XhrIo.ResponseType}
- * @private
- */
-goog.net.XhrIo.prototype.responseType_ = goog.net.XhrIo.ResponseType.DEFAULT;
-
-
-/**
- * Whether a "credentialed" request is to be sent (one that is aware of cookies
- * and authentication) . This is applicable only for cross-domain requests and
- * more recent browsers that support this part of the HTTP Access Control
- * standard.
- *
- * @see http://www.w3.org/TR/XMLHttpRequest/#the-withcredentials-attribute
- *
- * @type {boolean}
- * @private
- */
-goog.net.XhrIo.prototype.withCredentials_ = false;
 
 
 /**
@@ -39284,15 +43884,16 @@ goog.net.XhrIo.prototype.getWithCredentials = function() {
  * Instance send that actually uses XMLHttpRequest to make a server call.
  * @param {string|goog.Uri} url Uri to make request to.
  * @param {string=} opt_method Send method, default: GET.
- * @param {string|GearsBlob=} opt_content Post data. This can be a Gears blob
- *     if the underlying HTTP request object is a Gears HTTP request.
+ * @param {ArrayBuffer|Blob|Document|FormData|GearsBlob|string=} opt_content
+ *     Body data.
  * @param {Object|goog.structs.Map=} opt_headers Map of headers to add to the
  *     request.
  */
 goog.net.XhrIo.prototype.send = function(url, opt_method, opt_content,
                                          opt_headers) {
   if (this.xhr_) {
-    throw Error('[goog.net.XhrIo] Object is active with another request');
+    throw Error('[goog.net.XhrIo] Object is active with another request=' +
+        this.lastUri_ + '; newUri=' + url);
   }
 
   var method = opt_method ? opt_method.toUpperCase() : 'GET';
@@ -39328,8 +43929,9 @@ goog.net.XhrIo.prototype.send = function(url, opt_method, opt_content,
     return;
   }
 
-  // We can't use null since this won't allow POSTs to have a content length
-  // specified which will cause some proxies to return a 411 error.
+  // We can't use null since this won't allow requests with form data to have a
+  // content length specified which will cause some proxies to return a 411
+  // error.
   var content = opt_content || '';
 
   var headers = this.headers.clone();
@@ -39341,9 +43943,20 @@ goog.net.XhrIo.prototype.send = function(url, opt_method, opt_content,
     });
   }
 
-  if (method == 'POST' &&
-      !headers.containsKey(goog.net.XhrIo.CONTENT_TYPE_HEADER)) {
-    // For POST requests, default to the url-encoded form content type.
+  // Find whether a content type header is set, ignoring case.
+  // HTTP header names are case-insensitive.  See:
+  // http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
+  var contentTypeKey = goog.array.find(headers.getKeys(),
+      goog.net.XhrIo.isContentTypeHeader_);
+
+  var contentIsFormData = (goog.global['FormData'] &&
+      (content instanceof goog.global['FormData']));
+  if (goog.array.contains(goog.net.XhrIo.METHODS_WITH_FORM_DATA, method) &&
+      !contentTypeKey && !contentIsFormData) {
+    // For requests typically with form data, default to the url-encoded form
+    // content type unless this is a FormData request.  For FormData,
+    // the browser will automatically add a multipart/form-data content type
+    // with an appropriate multipart boundary.
     headers.set(goog.net.XhrIo.CONTENT_TYPE_HEADER,
                 goog.net.XhrIo.FORM_CONTENT_TYPE);
   }
@@ -39366,17 +43979,20 @@ goog.net.XhrIo.prototype.send = function(url, opt_method, opt_content,
    * @preserveTry
    */
   try {
-    if (this.timeoutId_) {
-      // This should never happen, since the if (this.active_) above shouldn't
-      // let execution reach this point if there is a request in progress...
-      goog.Timer.defaultTimerObject.clearTimeout(this.timeoutId_);
-      this.timeoutId_ = null;
-    }
+    this.cleanUpTimeoutTimer_(); // Paranoid, should never be running.
     if (this.timeoutInterval_ > 0) {
+      this.useXhr2Timeout_ = goog.net.XhrIo.shouldUseXhr2Timeout_(this.xhr_);
       this.logger_.fine(this.formatMsg_('Will abort after ' +
-          this.timeoutInterval_ + 'ms if incomplete'));
-      this.timeoutId_ = goog.Timer.defaultTimerObject.setTimeout(
-          goog.bind(this.timeout_, this), this.timeoutInterval_);
+          this.timeoutInterval_ + 'ms if incomplete, xhr2 ' +
+          this.useXhr2Timeout_));
+      if (this.useXhr2Timeout_) {
+        this.xhr_[goog.net.XhrIo.XHR2_TIMEOUT_] = this.timeoutInterval_;
+        this.xhr_[goog.net.XhrIo.XHR2_ON_TIMEOUT_] =
+            goog.bind(this.timeout_, this);
+      } else {
+        this.timeoutId_ = goog.Timer.callOnce(this.timeout_,
+            this.timeoutInterval_, this);
+      }
     }
     this.logger_.fine(this.formatMsg_('Sending request'));
     this.inSend_ = true;
@@ -39387,6 +44003,41 @@ goog.net.XhrIo.prototype.send = function(url, opt_method, opt_content,
     this.logger_.fine(this.formatMsg_('Send error: ' + err.message));
     this.error_(goog.net.ErrorCode.EXCEPTION, err);
   }
+};
+
+
+/**
+ * Determines if the argument is an XMLHttpRequest that supports the level 2
+ * timeout value and event.
+ *
+ * Currently, FF 21.0 OS X has the fields but won't actually call the timeout
+ * handler.  Perhaps the confusion in the bug referenced below hasn't
+ * entirely been resolved.
+ *
+ * @see http://www.w3.org/TR/XMLHttpRequest/#the-timeout-attribute
+ * @see https://bugzilla.mozilla.org/show_bug.cgi?id=525816
+ *
+ * @param {!XMLHttpRequest|!GearsHttpRequest} xhr The request.
+ * @return {boolean} True if the request supports level 2 timeout.
+ * @private
+ */
+goog.net.XhrIo.shouldUseXhr2Timeout_ = function(xhr) {
+  return goog.userAgent.IE &&
+      goog.userAgent.isVersionOrHigher(9) &&
+      goog.isNumber(xhr[goog.net.XhrIo.XHR2_TIMEOUT_]) &&
+      goog.isDef(xhr[goog.net.XhrIo.XHR2_ON_TIMEOUT_]);
+};
+
+
+/**
+ * @param {string} header An HTTP header key.
+ * @return {boolean} Whether the key is a content type header (ignoring
+ *     case.
+ * @private
+ */
+goog.net.XhrIo.isContentTypeHeader_ = function(header) {
+  return goog.string.caseInsensitiveEquals(
+      goog.net.XhrIo.CONTENT_TYPE_HEADER, header);
 };
 
 
@@ -39497,7 +44148,7 @@ goog.net.XhrIo.prototype.disposeInternal = function() {
     this.cleanUpXhr_(true);
   }
 
-  goog.net.XhrIo.superClass_.disposeInternal.call(this);
+  goog.base(this, 'disposeInternal');
 };
 
 
@@ -39509,6 +44160,10 @@ goog.net.XhrIo.prototype.disposeInternal = function() {
  * @private
  */
 goog.net.XhrIo.prototype.onReadyStateChange_ = function() {
+  if (this.isDisposed()) {
+    // This method is the target of an untracked goog.Timer.callOnce().
+    return;
+  }
   if (!this.inOpen_ && !this.inSend_ && !this.inAbort_) {
     // Were not being called from within a call to this.xhr_.send
     // this.xhr_.abort, or this.xhr_.open, so this is an entry point
@@ -39566,8 +44221,7 @@ goog.net.XhrIo.prototype.onReadyStateChangeHelper_ = function() {
     // using a timer.
     if (this.inSend_ &&
         this.getReadyState() == goog.net.XmlHttp.ReadyState.COMPLETE) {
-      goog.Timer.defaultTimerObject.setTimeout(
-          goog.bind(this.onReadyStateChange_, this), 0);
+      goog.Timer.callOnce(this.onReadyStateChange_, 0, this);
       return;
     }
 
@@ -39579,18 +44233,21 @@ goog.net.XhrIo.prototype.onReadyStateChangeHelper_ = function() {
 
       this.active_ = false;
 
-      // Call the specific callbacks for success or failure. Only call the
-      // success if the status is 200 (HTTP_OK) or 304 (HTTP_CACHED)
-      if (this.isSuccess()) {
-        this.dispatchEvent(goog.net.EventType.COMPLETE);
-        this.dispatchEvent(goog.net.EventType.SUCCESS);
-      } else {
-        this.lastErrorCode_ = goog.net.ErrorCode.HTTP_ERROR;
-        this.lastError_ = this.getStatusText() + ' [' + this.getStatus() + ']';
-        this.dispatchErrors_();
+      try {
+        // Call the specific callbacks for success or failure. Only call the
+        // success if the status is 200 (HTTP_OK) or 304 (HTTP_CACHED)
+        if (this.isSuccess()) {
+          this.dispatchEvent(goog.net.EventType.COMPLETE);
+          this.dispatchEvent(goog.net.EventType.SUCCESS);
+        } else {
+          this.lastErrorCode_ = goog.net.ErrorCode.HTTP_ERROR;
+          this.lastError_ =
+              this.getStatusText() + ' [' + this.getStatus() + ']';
+          this.dispatchErrors_();
+        }
+      } finally {
+        this.cleanUpXhr_();
       }
-
-      this.cleanUpXhr_();
     }
   }
 };
@@ -39605,6 +44262,9 @@ goog.net.XhrIo.prototype.onReadyStateChangeHelper_ = function() {
  */
 goog.net.XhrIo.prototype.cleanUpXhr_ = function(opt_fromDispose) {
   if (this.xhr_) {
+    // Cancel any pending timeout event handler.
+    this.cleanUpTimeoutTimer_();
+
     // Save reference so we can mark it as closed after the READY event.  The
     // READY event may trigger another request, thus we must nullify this.xhr_
     var xhr = this.xhr_;
@@ -39613,12 +44273,6 @@ goog.net.XhrIo.prototype.cleanUpXhr_ = function(opt_fromDispose) {
             goog.nullFunction : null;
     this.xhr_ = null;
     this.xhrOptions_ = null;
-
-    if (this.timeoutId_) {
-      // Cancel any pending timeout event handler.
-      goog.Timer.defaultTimerObject.clearTimeout(this.timeoutId_);
-      this.timeoutId_ = null;
-    }
 
     if (!opt_fromDispose) {
       this.dispatchEvent(goog.net.EventType.READY);
@@ -39637,6 +44291,21 @@ goog.net.XhrIo.prototype.cleanUpXhr_ = function(opt_fromDispose) {
       this.logger_.severe('Problem encountered resetting onreadystatechange: ' +
                           e.message);
     }
+  }
+};
+
+
+/**
+ * Make sure the timeout timer isn't running.
+ * @private
+ */
+goog.net.XhrIo.prototype.cleanUpTimeoutTimer_ = function() {
+  if (this.xhr_ && this.useXhr2Timeout_) {
+    this.xhr_[goog.net.XhrIo.XHR2_ON_TIMEOUT_] = null;
+  }
+  if (goog.isNumber(this.timeoutId_)) {
+    goog.Timer.clear(this.timeoutId_);
+    this.timeoutId_ = null;
   }
 };
 
@@ -39757,11 +44426,42 @@ goog.net.XhrIo.prototype.getResponseText = function() {
     // http://www.w3.org/TR/XMLHttpRequest/#the-responsetext-attribute
     // states that responseText should return '' (and responseXML null)
     // when the state is not LOADING or DONE. Instead, IE and Gears can
-    // throw unexpected exceptions, eg, when a request is aborted or no
-    // data is available yet.
+    // throw unexpected exceptions, for example when a request is aborted
+    // or no data is available yet.
     this.logger_.fine('Can not get responseText: ' + e.message);
     return '';
   }
+};
+
+
+/**
+ * Get the response body from the Xhr object. This property is only available
+ * in IE since version 7 according to MSDN:
+ * http://msdn.microsoft.com/en-us/library/ie/ms534368(v=vs.85).aspx
+ * Will only return correct result when called from the context of a callback.
+ *
+ * One option is to construct a VBArray from the returned object and convert
+ * it to a JavaScript array using the toArray method:
+ * {@code (new window['VBArray'](xhrIo.getResponseBody())).toArray()}
+ * This will result in an array of numbers in the range of [0..255]
+ *
+ * Another option is to use the VBScript CStr method to convert it into a
+ * string as outlined in http://stackoverflow.com/questions/1919972
+ *
+ * @return {Object} Binary result from the server or null if not available.
+ */
+goog.net.XhrIo.prototype.getResponseBody = function() {
+  /** @preserveTry */
+  try {
+    if (this.xhr_ && 'responseBody' in this.xhr_) {
+      return this.xhr_['responseBody'];
+    }
+  } catch (e) {
+    // IE can throw unexpected exceptions, for example when a request is aborted
+    // or no data is yet available.
+    this.logger_.fine('Can not get responseBody: ' + e.message);
+  }
+  return null;
 };
 
 
@@ -40331,7 +45031,8 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
       'calendarId': calendarId,
       'eventId': event.id,
       'summary': event.summary,
-      'location': goog.string.truncate(event.location, 500) || 'unknown',
+      'location': event.location ? goog.string.truncate(event.location, 500) :
+          'unknown',
       'recurrence': event.recurrence || [],
       'startTime': event.start.dateTime,
       'link': event.htmlLink

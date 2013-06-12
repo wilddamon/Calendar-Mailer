@@ -114,15 +114,22 @@ calendarmailer.RRuleFormatter.prototype.prettyPrint = function(rruleStr) {
     buf.append(frequency);
   }
   if (frequency == calendarmailer.RRuleFormatter.FREQUENCY_STR_.WEEKLY) {
-    var days = dayStr.split(',');
-    // Must be at least one day.
-    buf.append(' on ').append(calendarmailer.RRuleFormatter.DAY_STR_[days[0]]);
-    for (var i = 1; i < dayStr.length - 1; ++i) {
-      buf.append(', ').append(calendarmailer.RRuleFormatter.DAY_STR_[days[i]]);
-    }
-    if (days.length > 1) {
-      buf.append(' and ').
-          append(calendarmailer.RRuleFormatter.DAY_STR_[days[days.length - 1]]);
+    if (dayStr) {
+      var days = dayStr.split(',');
+      buf.append(' on ').append(
+          calendarmailer.RRuleFormatter.DAY_STR_[days[0]]);
+      for (var i = 1; i < dayStr.length - 1; ++i) {
+        buf.append(', ').append(
+            calendarmailer.RRuleFormatter.DAY_STR_[days[i]]);
+      }
+      if (days.length > 1) {
+        buf.append(' and ').append(
+            calendarmailer.RRuleFormatter.DAY_STR_[days[days.length - 1]]);
+      }
+    } else {
+      if (interval) {
+        buf.append('Every ' + interval + ' weeks');
+      }
     }
   } else if (frequency ==
       calendarmailer.RRuleFormatter.FREQUENCY_STR_.MONTHLY) {
