@@ -126,10 +126,6 @@ calendarmailer.RRuleFormatter.prototype.prettyPrint = function(rruleStr) {
         buf.append(' and ').append(
             calendarmailer.RRuleFormatter.DAY_STR_[days[days.length - 1]]);
       }
-    } else {
-      if (interval) {
-        buf.append('Every ' + interval + ' weeks');
-      }
     }
   } else if (frequency ==
       calendarmailer.RRuleFormatter.FREQUENCY_STR_.MONTHLY) {
