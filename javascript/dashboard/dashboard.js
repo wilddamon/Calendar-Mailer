@@ -149,8 +149,9 @@ calendarmailer.dashboard.App.prototype.currentCycle_ = null;
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
-  if (e.target.id != this.currentCycle_) {
-    this.currentCycle_ = e.target.id;
+  var target = e.target.parentElement.id;
+  if (target != this.currentCycle_) {
+    this.currentCycle_ = target;
     this.userToEventArray_ = {};
     // Start sending a request to the server to get the cycle contents.
     goog.net.XhrIo.send(
