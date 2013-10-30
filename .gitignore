@@ -3,3 +3,10 @@
 
 #python generated files
 *.pyc
+
+#vim swp files
+*.swp
+
+#generated files
+genfiles/*
+
