@@ -1,4 +1,4 @@
-// Copyright 2012 Edwina Mead. All rights reserved.
+
 
 /**
  * @fileoverview The calendar api management for the mailer app.

@@ -1,4 +1,4 @@
-// Copyright 2012 Edwina Mead. All rights reserved.
+
 
 /**
  * @fileoverview A renderer for a list of calendars.

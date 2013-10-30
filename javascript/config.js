@@ -1,4 +1,4 @@
-// Copyright 2012 Edwina Mead. All rights reserved.
+
 
 goog.provide('calendarmailer.Config');
 
