@@ -1,15 +1,23 @@
 #!/bin/sh
 
-rm genfiles/closure-gen/*
-rm genfiles/soy-gen/*
-
 js_files="javascript/*.js"
 js_more_files="javascript/*/*.js"
 js_even_more_files="javascript/*/*/*.js"
 soy_files="soy/*.soy"
 css_files="css/*.css"
 
-out_folder="genfiles/"
+out_dir="genfiles"
+closure_out_dir="$out_dir/closure-gen"
+soy_out_dir="$out_dir/soy_gen"
+
+# Check whether directories exist.
+if [ -d $out_dir ]; then
+  rm -r $out_dir
+fi
+
+mkdir $out_dir
+mkdir $closure_out_dir
+mkdir $soy_out_dir
 
 echo "***Running gjslint***"
 gjslint --closurized_namespaces=calendarmailer,goog,soy \
@@ -49,4 +57,4 @@ java -jar ../css-compiler/closure-stylesheets-20111230.jar \
     ${css_files[@]} \
     --output-file genfiles/closure-gen/app.css \
     --pretty-print
-    
+
