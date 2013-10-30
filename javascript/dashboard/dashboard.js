@@ -253,7 +253,7 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
         goog.bind(this.handleGetCycleResult_, this), 'POST');
   } else {
     this.showSpinner_(false);
-    this.renderCycles_();
+    this.renderIndividualCycle_();
   }
 };
 
@@ -262,7 +262,9 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
  * Renders the events currently stored in userToEventArray.
  * @private
  */
-calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
+calendarmailer.dashboard.App.prototype.renderIndividualCycle_ = function() {
+  // Clear out the stored calendar ids.
+  this.calendarIds_ = {};
   var tableEl = document.getElementById('userlist-table').firstChild;
   goog.object.forEach(this.userToEventArray_, function(eventArray, email) {
     // Render the table rows.
