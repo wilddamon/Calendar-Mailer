@@ -163,8 +163,7 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
     goog.soy.renderElement(content, calendarmailer.soy.userlist.all,
         {'users': []});
 
-    var spinner = document.getElementById('spinner');
-    goog.style.setStyle(spinner, 'display', '');
+    this.showSpinner_(true);
   }
 
   goog.style.setStyle(this.allCyclesEl_, 'display', 'none');
@@ -201,6 +200,16 @@ calendarmailer.dashboard.App.prototype.handleNewCycleClick_ = function() {
 
 
 /**
+ * @param {boolean} show
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.showSpinner_ = function(show) {
+  var spinner = document.getElementById('spinner');
+  goog.style.setStyle(spinner, 'display', show ? '' : 'none');
+};
+
+
+/**
  * Handles receiving a cycle from ther server.
  * @param {!goog.events.Event} e The result.
  * @private
@@ -209,7 +218,11 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
     function(e) {
   var dateTimeFormatter = new goog.i18n.DateTimeFormat(
       goog.i18n.DateTimeFormat.Format.LONG_TIME);
-  var json = goog.json.parse(e.target.getResponse());
+  var response = e.target.getResponse();
+  var json = [];
+  if (response) {
+    json = goog.json.parse(response);
+  }
   var userMap = json['events'];
 
   goog.object.forEach(userMap, function(eventArray, email) {
@@ -238,6 +251,7 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
             '&page=' + json['next_page'],
         goog.bind(this.handleGetCycleResult_, this), 'POST');
   } else {
+    this.showSpinner_(false);
     this.renderCycles_();
   }
 };
@@ -248,9 +262,6 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
  * @private
  */
 calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
-  var spinner = document.getElementById('spinner');
-  goog.style.setStyle(spinner, 'display', 'none');
-
   var tableEl = document.getElementById('userlist-table').firstChild;
   goog.object.forEach(this.userToEventArray_, function(eventArray, email) {
     // Render the table rows.
@@ -295,7 +306,7 @@ calendarmailer.dashboard.App.prototype.renderCycles_ = function() {
  */
 calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
     result) {
-  if (!result.status) {
+  if (!result.error) {
     var listEl = document.getElementById('userlist-calendarlist');
     listEl.appendChild(goog.soy.renderAsFragment(
         calendarmailer.soy.userlist.wrappedCalendarListRow, {
