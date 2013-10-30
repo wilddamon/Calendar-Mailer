@@ -2,7 +2,7 @@
 <head>
   <title>Calendar Mailer Dashboard</title>
   <script type="text/javascript" src="/scripts/dashboard.js"></script>
-	<link type="text/css" rel="stylesheet" href="/scripts/app.css">
+  <link type="text/css" rel="stylesheet" href="/scripts/app.css">
 </head>
 <body>
 
@@ -19,12 +19,21 @@
   <br>
   <div id="cycles">
     {% for cycle in cycles %}
-    <div id="{{cycle.cycle_id}}" class="cycle">
-      Cycle created at: {{cycle.start_date}}
-    </div>
+      <div id="{{cycle.cycle_id}}" class="cycle">
+        <span class="cycle-name">
+          {% if cycle.name %}
+            {{cycle.name}}
+          {% else %}
+            Untitled cycle
+          {% endif %}
+        </span>
+        <span class="cycle-creation-time">
+          ({{cycle.start_date}})
+        </span>
+      </div>
     {% endfor %}
   </div>
-  
+
   <br>
   <button id="new-cycle-button" class="primary-button">
     Begin New Calendar Cleanup Cycle

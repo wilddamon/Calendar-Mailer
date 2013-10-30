@@ -8,10 +8,14 @@
   top: 3px;
 }
 
-.cycle {
+.cycle-name {
   color: blue;
   cursor: pointer;
   text-decoration: underline;
+}
+
+.cycle-creation-time {
+  font-size: smaller;
 }
 
 .goog-button {
