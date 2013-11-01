@@ -26,9 +26,9 @@ class CycleHandler(webapp.RequestHandler):
       page_token = 0
     user_event_map_result = util.getEmailToEventObject(cycle, int(page_token))
     user_event_map = user_event_map_result["events"]
-    
+
     response = {
-        "events": user_event_map, 
+        "events": user_event_map,
         "more_to_come": user_event_map_result["more_to_come"],
         "next_page": user_event_map_result["next_page"]
       }
