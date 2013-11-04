@@ -7,11 +7,11 @@ goog.require('calendarmailer.CalendarApi');
 goog.require('calendarmailer.Config');
 goog.require('calendarmailer.RRuleFormatter');
 goog.require('calendarmailer.RfcDateFormatter');
+goog.require('calendarmailer.dashboard.CyclePicker');
 goog.require('calendarmailer.soy.userlist');
 goog.require('goog.array');
 goog.require('goog.dom');
 goog.require('goog.events.EventHandler');
-goog.require('goog.events.EventType');
 goog.require('goog.fs');
 goog.require('goog.fs.DirectoryEntry');
 goog.require('goog.fs.FileSaver');
@@ -31,27 +31,16 @@ goog.require('goog.ui.Component');
  * @constructor
  */
 calendarmailer.dashboard.App = function() {
-  /**
-   * The event handler.
-   * @type {!goog.events.EventHandler}
-   * @private
-   */
+  /** @private {!goog.events.EventHandler} */
   this.eventHandler_ = new goog.events.EventHandler(this);
 
-  /**
-   * The calendar api wrapper.
-   * @type {!calandermailer.CalendarApi}
-   * @private
-   */
+  /** @private {!calandermailer.CalendarApi} */
   this.calendar_ = new calendarmailer.CalendarApi(new calendarmailer.Config());
   this.calendar_.startLoad();
 
-  /**
-   * The div in which the list of all the cycles are displayed.
-   * @type {!Element}
-   * @private
-   */
-  this.allCyclesEl_ = document.getElementById('all-cycles');
+  /** @private {!calendarmailer.dashboard.CyclePicker} */
+  this.cyclePicker_ = new calendarmailer.dashboard.CyclePicker();
+  this.cyclePicker_.decorate(document.getElementById('all-cycles'));
 
   /**
    * The div in which information about an individual cycle is displayed.
@@ -60,37 +49,17 @@ calendarmailer.dashboard.App = function() {
    */
   this.oneCycleEl_ = document.getElementById('individual-cycle');
 
-  /**
-   * The create new cycle button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
-  this.createCycleButton_ = new goog.ui.Button(null /* content */);
-  this.createCycleButton_.decorate(document.getElementById('new-cycle-button'));
-
-  /**
-   * The back button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
+  /** @private {!goog.ui.Button} */
   this.backButton_ = new goog.ui.Button(null /* content */);
   this.backButton_.decorate(document.getElementById(
       'individual-back-button'));
 
-  /**
-   * The add more events button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
+  /** @private {!goog.ui.Button} */
   this.addEventsButton_ = new goog.ui.Button(null /* content */);
   this.addEventsButton_.decorate(document.getElementById(
       'individual-add-button'));
 
-  /**
-   * The export button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
+  /** @type {!goog.ui.Button} */
   this.exportButton_ = new goog.ui.Button(null /* content */);
   this.exportButton_.decorate(document.getElementById(
       'export-csv'));
@@ -111,26 +80,15 @@ calendarmailer.dashboard.App = function() {
   this.userToEventArray_ = {};
 
   this.eventHandler_.
+      listen(this.cyclePicker_,
+          calendarmailer.dashboard.CyclePicker.EventType.CYCLE,
+          this.handleCycleClick_).
       listen(this.backButton_, goog.ui.Component.EventType.ACTION,
           this.handleBackClick_).
       listen(this.addEventsButton_, goog.ui.Component.EventType.ACTION,
           this.handleAddClick_).
-      listen(this.createCycleButton_,
-          goog.ui.Component.EventType.ACTION, this.handleNewCycleClick_).
       listen(this.exportButton_, goog.ui.Component.EventType.ACTION,
           this.handleExport_);
-
-  var cyclenodes = document.getElementsByClassName('cycle');
-  for (var i = 0; i < cyclenodes.length; ++i) {
-    var cyclenode = cyclenodes[i];
-    var id = cyclenode.id;
-    if (id) {
-      this.eventHandler_.listen(cyclenode, goog.events.EventType.CLICK,
-          this.handleCycleClick_);
-    } else {
-      goog.style.addClass(cyclenode, 'cycle-noid');
-    }
-  }
 };
 
 
@@ -148,7 +106,7 @@ calendarmailer.dashboard.App.prototype.currentCycle_ = null;
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
-  var target = e.target.parentElement.id;
+  var target = e.id;
   if (target != this.currentCycle_) {
     this.currentCycle_ = target;
     this.userToEventArray_ = {};
@@ -166,7 +124,7 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
     this.showSpinner_(true);
   }
 
-  goog.style.setStyle(this.allCyclesEl_, 'display', 'none');
+  this.cyclePicker_.setVisible(false);
   goog.style.setStyle(this.oneCycleEl_, 'display', '');
 };
 
@@ -176,7 +134,7 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleBackClick_ = function() {
-  goog.style.setStyle(this.allCyclesEl_, 'display', '');
+  this.cyclePicker_.setVisible(true);
   goog.style.setStyle(this.oneCycleEl_, 'display', 'none');
 };
 
@@ -187,15 +145,6 @@ calendarmailer.dashboard.App.prototype.handleBackClick_ = function() {
  */
 calendarmailer.dashboard.App.prototype.handleAddClick_ = function() {
   window.location = window.location.origin + '/picker?id=' + this.currentCycle_;
-};
-
-
-/**
- * Handles a click on the new cycle button.
- * @private
- */
-calendarmailer.dashboard.App.prototype.handleNewCycleClick_ = function() {
-  window.location = window.location.origin + '/picker';
 };
 
 

@@ -1,3 +1,15 @@
+.individual-title {
+  border: 1px solid #aaa;
+  display: inline-block;
+  font-size: 32px;
+  margin: 10px;
+  padding: 10px;
+}
+
+.individual-title:hover {
+  background-color: #f1f1f1;
+}
+
 .spinner {
   height: 200px;
   width: 200px;
