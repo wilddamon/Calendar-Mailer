@@ -34,35 +34,13 @@
     {% endfor %}
   </div>
 
-  <br>
   <button id="new-cycle-button" class="primary-button">
     Begin New Calendar Cleanup Cycle
   </button>
 </div>
 
-<div id="individual-cycle" style="display:none;">
-  <div class="individual-title-container">
-    <input type="text" class="individual-title" style="display:none"></input>
-    <div class="individual-title">Foo bar</div>
-  </div>
-  <div>
-    Hello {{name}},
-    <br>
-    <br>
-    Here are the states of the people you selected for emailing. Underneath that 
-    is a list of calendars these events were pulled from.
-  </div>
-  <br>
-  <button id="individual-add-button" class="action-button">
-    Add more events to this cycle
-  </button>
-  <button id="export-csv" class="action-button">Export to csv</button>
-  <br>
-  <br>
-  <p id="spinner" class="spinner">Please wait.</p>
-  <div id="individual-cycle-content"></div>
-  <br>
-  <button id="individual-back-button" class="action-button">Back</button>
-</div>
+<div id="individual-cycle-container"></div>
+<p id="spinner" class="spinner" style="display:none;">Please wait.</p>
+<button id="individual-back-button" class="action-button">Back</button>
 
 </body>

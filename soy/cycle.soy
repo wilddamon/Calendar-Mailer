@@ -1,14 +1,38 @@
-// Filter widget template.
+// The view for a single cycle.
 
-{namespace calendarmailer.soy.userlist}
+{namespace calendarmailer.soy.cycle}
+
+/**
+ * The view for a single cycle.
+ * @param? title The title for the cycle.
+ */
+{template .all}
+<div class="individual-cycle">
+  <div class="individual-title-container">
+    <input type="text" class="individual-title" style="display:none"></input>
+    <div class="individual-title">
+      {if $title}
+        {$title}
+      {else}
+        Untitled cycle
+      {/if}
+    </div>
+  </div>
+  <button class="add action-button">
+    Add more events to this cycle
+  </button>
+  <button class="export-csv action-button">Export to csv</button>
+  <div class="individual-cycle-content"></div>
+</div>
+{/template}
 
 
 /**
  * The user list template.
  * @param users An array of user objects.
  */
-{template .all}
-<table id="userlist-table" class="userlist">
+{template .userlist}
+<table class="userlist-table">
   <tbody>
     <tr>
       <th>email</th>
@@ -91,8 +115,8 @@
  * The list of calendars that goes under the user list.
  */
 {template .calendarList}
-<table class="userlist">
-  <tbody id="userlist-calendarlist">
+<table class="userlist-table">
+  <tbody class="userlist-calendarlist">
     <th>
       Calendar name
     </th>
