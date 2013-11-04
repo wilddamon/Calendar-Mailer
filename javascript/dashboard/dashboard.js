@@ -73,6 +73,7 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
   }
 
   this.cyclePicker_.setVisible(false);
+  this.backButton_.setVisible(true);
 };
 
 
@@ -83,15 +84,18 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
 calendarmailer.dashboard.App.prototype.handleBackClick_ = function() {
   this.cyclePicker_.setVisible(true);
   this.cycleDisplays_[this.currentCycle_].setVisible(false);
+  this.backButton_.setVisible(false);
 };
 
 
 /**
  * Handles a click on the add events button.
+ * @param {!goog.events.Event} e
  * @private
  */
-calendarmailer.dashboard.App.prototype.handleAddClick_ = function() {
-  window.location = window.location.origin + '/picker?id=' + this.currentCycle_;
+calendarmailer.dashboard.App.prototype.handleAddClick_ = function(e) {
+  var targetId = e.target.getId();
+  window.location = window.location.origin + '/picker?id=' + targetId;
 };
 
 
@@ -121,7 +125,10 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
 
   if (!this.cycleDisplays_[this.currentCycle_]) {
     this.cycleDisplays_[this.currentCycle_] =
-        new calendarmailer.dashboard.Cycle();
+        new calendarmailer.dashboard.Cycle(this.currentCycle_);
+    this.eventHandler_.listen(this.cycleDisplays_[this.currentCycle_],
+        calendarmailer.dashboard.Cycle.EventType.ADD_MORE,
+        this.handleAddClick_);
   }
   this.cycleDisplays_[this.currentCycle_].addEventData(userMap);
 

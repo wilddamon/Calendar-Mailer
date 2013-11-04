@@ -16,22 +16,23 @@
     Please make sure you are not using multi-login to ensure the best
     experience.
   </div>
-  <br>
-  <div id="cycles">
-    {% for cycle in cycles %}
-      <div id="{{cycle.cycle_id}}" class="cycle">
-        <span class="cycle-name">
-          {% if cycle.name %}
-            {{cycle.name}}
-          {% else %}
-            Untitled cycle
-          {% endif %}
-        </span>
-        <span class="cycle-creation-time">
-          ({{cycle.start_date}})
-        </span>
-      </div>
-    {% endfor %}
+  <div>
+    <div class="cycles">
+      {% for cycle in cycles %}
+        <div id="{{cycle.cycle_id}}" class="cycle">
+          <span class="cycle-name">
+            {% if cycle.name %}
+              {{cycle.name}}
+            {% else %}
+              Untitled cycle
+            {% endif %}
+          </span>
+          <span class="cycle-creation-time">
+            ({{cycle.start_date}})
+          </span>
+        </div>
+      {% endfor %}
+    </div>
   </div>
 
   <button id="new-cycle-button" class="primary-button">
@@ -41,6 +42,8 @@
 
 <div id="individual-cycle-container"></div>
 <p id="spinner" class="spinner" style="display:none;">Please wait.</p>
-<button id="individual-back-button" class="action-button">Back</button>
+<button id="individual-back-button" class="action-button" style="display:none">
+  Back
+</button>
 
 </body>

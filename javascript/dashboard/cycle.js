@@ -8,6 +8,7 @@ goog.require('calendarmailer.RfcDateFormatter');
 goog.require('calendarmailer.soy.cycle');
 goog.require('goog.array');
 goog.require('goog.dom');
+goog.require('goog.events');
 goog.require('goog.fs');
 goog.require('goog.fs.DirectoryEntry');
 goog.require('goog.i18n.DateTimeFormat');
@@ -56,6 +57,12 @@ calendarmailer.dashboard.Cycle = function(id, opt_domHelper) {
 
 };
 goog.inherits(calendarmailer.dashboard.Cycle, goog.ui.Component);
+
+
+/** @enum {string} */
+calendarmailer.dashboard.Cycle.EventType = {
+  ADD_MORE: goog.events.getUniqueId('a')
+};
 
 
 /** @override */
@@ -154,6 +161,12 @@ calendarmailer.dashboard.Cycle.prototype.addCalendarData = function(data) {
  */
 calendarmailer.dashboard.Cycle.prototype.getCalendarIds = function() {
   return goog.object.getKeys(this.calendarIds_);
+};
+
+
+/** @private */
+calendarmailer.dashboard.Cycle.prototype.handleAddClick_ = function() {
+  this.dispatchEvent(calendarmailer.dashboard.Cycle.EventType.ADD_MORE);
 };
 
 

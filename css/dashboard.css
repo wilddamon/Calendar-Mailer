@@ -1,3 +1,10 @@
+.cycles {
+  border: 1px solid #aaa;
+  display: inline-block;
+  margin: 15px;
+  padding: 10px;
+}
+
 .individual-title {
   border: 1px solid #aaa;
   display: inline-block;
