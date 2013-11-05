@@ -21,7 +21,7 @@ class SubmitEventsHandler(webapp.RequestHandler):
     names = jsonObj["names"]
     events = jsonObj["events"]
     cycle_id = jsonObj["cycleId"]
-    
+
     cycle = None
     user_event_map = {}
     # Get the cycle and any existing users in the cycle.
@@ -35,9 +35,9 @@ class SubmitEventsHandler(webapp.RequestHandler):
       # Create the cycle db entry
       if (not cycle_id):
         os_rand = os.urandom(30)
-        cycle_id = id = hashlib.sha1(user.nickname() + '-' + 
+        cycle_id = id = hashlib.sha1(user.nickname() + '-' +
                    os_rand).hexdigest()
-      
+
       cycle = Cycle(key_name = cycle_id, initiator = user)
       cycle.put()
       logging.info("Cycle with id \"" + cycle_id + "\" created by " +

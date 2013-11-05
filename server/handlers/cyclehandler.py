@@ -28,6 +28,7 @@ class CycleHandler(webapp.RequestHandler):
     user_event_map = user_event_map_result["events"]
 
     response = {
+        "title": cycle.title,
         "events": user_event_map,
         "more_to_come": user_event_map_result["more_to_come"],
         "next_page": user_event_map_result["next_page"]

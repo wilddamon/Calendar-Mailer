@@ -23,14 +23,18 @@ goog.require('goog.ui.Component');
 /**
  * Tht UI to display the contents of a single cycle.
  * @param {string} id The ID of the cycle.
+ * @param {string=} opt_title The title of the cycle.
  * @param {goog.dom.DomHelper=} opt_domHelper
  * @extends {goog.ui.Component}
  * @constructor
  */
-calendarmailer.dashboard.Cycle = function(id, opt_domHelper) {
+calendarmailer.dashboard.Cycle = function(id, opt_title, opt_domHelper) {
   goog.base(this, opt_domHelper);
 
   this.setId(id);
+
+  /** @private {string} */
+  this.title_ = opt_title || '';
 
   /** @private {!goog.ui.Button} */
   this.addEventsButton_ = new goog.ui.Button(null /* content */);
@@ -68,7 +72,9 @@ calendarmailer.dashboard.Cycle.EventType = {
 /** @override */
 calendarmailer.dashboard.Cycle.prototype.createDom = function() {
   this.setElementInternal(
-      goog.soy.renderAsElement(calendarmailer.soy.cycle.all, {}));
+      goog.soy.renderAsElement(calendarmailer.soy.cycle.all, {
+        title: this.title_
+      }));
 
   goog.soy.renderElement(this.getElementByClass('individual-cycle-content'),
       calendarmailer.soy.cycle.userlist, {users: []});
@@ -211,6 +217,13 @@ calendarmailer.dashboard.Cycle.prototype.handleExport_ = function() {
       window.console.log(er);
     });
   }, this);
+};
+
+
+/** @param {string} title */
+calendarmailer.dashboard.Cycle.prototype.setTitle = function(title) {
+  this.title_ = title;
+  // TODO: Display the title.
 };
 
 
