@@ -1,10 +1,18 @@
 
+.userlist-table {
+  border: 1px solid #aaa;
+  border-collapse: collapse;
+  border-spacing: 0;
+  margin: 15px;
+  margin-left: 0;
+  padding: 10px;
+}
+
 .userlist-table td,
 .userlist-table th {
-  border-color: gray;
-  border-width: 0 1px 1px 0;
-  border-style: solid;
+  border: 1px solid #aaa;
   max-width: 400px;
+  padding: 5px 10px;
   word-wrap: break-word;
 }
 
