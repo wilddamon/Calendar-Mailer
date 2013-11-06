@@ -78,18 +78,21 @@ calendarmailer.dashboard.Cycle.EventType = {
 };
 
 
+/** @private {number} */
+calendarmailer.dashboard.Cycle.prototype.totalNumEvents_ = 0;
+
+
 /** @override */
 calendarmailer.dashboard.Cycle.prototype.createDom = function() {
   this.setElementInternal(
-      goog.soy.renderAsElement(calendarmailer.soy.cycle.all, {
-        title: this.title_
-      }));
+      goog.soy.renderAsElement(calendarmailer.soy.cycle.all, {}));
 
   goog.soy.renderElement(this.getElementByClass('individual-cycle-content'),
       calendarmailer.soy.cycle.userlist, {users: []});
 
   var tableEl = this.getElementByClass('userlist-table');
   goog.object.forEach(this.userToEventArray_, function(eventArray, email) {
+    this.totalNumEvents_ += eventArray.length;
     // Render the table rows.
     var rows = goog.soy.renderAsFragment(
         calendarmailer.soy.cycle.wrappedRow, {
@@ -109,6 +112,13 @@ calendarmailer.dashboard.Cycle.prototype.createDom = function() {
       this.calendarIds_[calendarId]++;
     }
   }, this);
+
+  var listEl = this.getElementByClass('userlist-calendarlist');
+  listEl.appendChild(goog.soy.renderAsFragment(
+      calendarmailer.soy.cycle.wrappedCalendarListRow, {
+        'calendar': {'summary': 'Total'},
+        'numEvents': this.totalNumEvents_
+      }).firstChild.firstChild);
 };
 
 

@@ -10,7 +10,6 @@ goog.require('calendarmailer.dashboard.CyclePicker');
 goog.require('goog.events.EventHandler');
 goog.require('goog.json');
 goog.require('goog.net.XhrIo');
-goog.require('goog.object');
 goog.require('goog.style');
 goog.require('goog.ui.Button');
 goog.require('goog.ui.Component');
