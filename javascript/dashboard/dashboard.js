@@ -181,7 +181,7 @@ calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
   if (!result.error) {
     this.cycleDisplays_[this.currentCycle_].addCalendarData(result);
   }
-  var keys = goog.object.getKeys(this.calendarIds_);
+  var keys = this.cycleDisplays_[this.currentCycle_].getCalendarIds();
   if (++index < keys.length) {
     this.calendar_.getCalendarSummary(keys[index],
         goog.bind(this.handleCalendarResult_, this));
