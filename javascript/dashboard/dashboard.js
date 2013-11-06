@@ -157,6 +157,7 @@ calendarmailer.dashboard.App.prototype.renderIndividualCycle_ = function() {
       document.getElementById('individual-cycle-container'));
 
   var keys = this.cycleDisplays_[this.currentCycle_].getCalendarIds();
+  // TODO: Don't use a global variable here.
   index = 0;
   if (this.calendar_.isInitialized()) {
     this.calendar_.getCalendarSummary(keys[0],
