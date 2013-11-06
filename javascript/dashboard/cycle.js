@@ -9,14 +9,17 @@ goog.require('calendarmailer.soy.cycle');
 goog.require('goog.array');
 goog.require('goog.dom');
 goog.require('goog.events');
+goog.require('goog.events.EventType');
 goog.require('goog.fs');
 goog.require('goog.fs.DirectoryEntry');
+goog.require('goog.fs.FileSaver');
 goog.require('goog.i18n.DateTimeFormat');
 goog.require('goog.object');
 goog.require('goog.soy');
 goog.require('goog.style');
 goog.require('goog.ui.Button');
 goog.require('goog.ui.Component');
+goog.require('goog.ui.LabelInput');
 
 
 
@@ -35,6 +38,11 @@ calendarmailer.dashboard.Cycle = function(id, opt_title, opt_domHelper) {
 
   /** @private {string} */
   this.title_ = opt_title || '';
+
+  /** @private {!goog.ui.LabelInput} */
+  this.titleInput_ = new goog.ui.LabelInput(this.title_);
+  this.addChild(this.titleInput_);
+  this.titleInput_.setLabel('Untitled cycle');
 
   /** @private {!goog.ui.Button} */
   this.addEventsButton_ = new goog.ui.Button(null /* content */);
@@ -65,7 +73,8 @@ goog.inherits(calendarmailer.dashboard.Cycle, goog.ui.Component);
 
 /** @enum {string} */
 calendarmailer.dashboard.Cycle.EventType = {
-  ADD_MORE: goog.events.getUniqueId('a')
+  ADD_MORE: goog.events.getUniqueId('a'),
+  TITLE_CHANGE: goog.events.getUniqueId('tc')
 };
 
 
@@ -107,10 +116,15 @@ calendarmailer.dashboard.Cycle.prototype.createDom = function() {
 calendarmailer.dashboard.Cycle.prototype.enterDocument = function() {
   goog.base(this, 'enterDocument');
 
+  this.titleInput_.decorate(this.getElementByClass('individual-title'));
+  this.titleInput_.setValue(this.title_);
+
   this.addEventsButton_.decorate(this.getElementByClass('add'));
   this.exportButton_.decorate(this.getElementByClass('export-csv'));
 
   this.getHandler().
+      listen(this.titleInput_.getElement(), goog.events.EventType.CHANGE,
+          this.handleTitleChange_).
       listen(this.addEventsButton_, goog.ui.Component.EventType.ACTION,
           this.handleAddClick_).
       listen(this.exportButton_, goog.ui.Component.EventType.ACTION,
@@ -171,6 +185,13 @@ calendarmailer.dashboard.Cycle.prototype.getCalendarIds = function() {
 
 
 /** @private */
+calendarmailer.dashboard.Cycle.prototype.handleTitleChange_ = function() {
+  this.title_ = this.titleInput_.getValue();
+  this.dispatchEvent(calendarmailer.dashboard.Cycle.EventType.TITLE_CHANGE);
+};
+
+
+/** @private */
 calendarmailer.dashboard.Cycle.prototype.handleAddClick_ = function() {
   this.dispatchEvent(calendarmailer.dashboard.Cycle.EventType.ADD_MORE);
 };
@@ -220,10 +241,38 @@ calendarmailer.dashboard.Cycle.prototype.handleExport_ = function() {
 };
 
 
+/**
+ * Handles the file writer becoming ready.
+ * @param {string} result The contents to write to the file.
+ * @param {!goog.fs.FileEntry} file The file entry for the file.
+ * @param {!goog.fs.FileWriter} writer The file writer.
+ * @private
+ */
+calendarmailer.dashboard.Cycle.prototype.handleWriterReady_ = function(result,
+    file, writer) {
+  var bb = window.BlobBuilder ? new BlobBuilder() : new WebKitBlobBuilder();
+  bb.append(result);
+  writer.truncate(1);
+  this.eventHandler_.listenOnce(writer, goog.fs.FileSaver.EventType.WRITE_END,
+      function() {
+        writer.write(bb.getBlob('text/plain'));
+        window.location.href = file.toUrl();
+      }, this);
+};
+
+
+/** @return {string} */
+calendarmailer.dashboard.Cycle.prototype.getTitle = function() {
+  return this.title_;
+};
+
+
 /** @param {string} title */
 calendarmailer.dashboard.Cycle.prototype.setTitle = function(title) {
   this.title_ = title;
-  // TODO: Display the title.
+  if (this.isInDocument()) {
+    this.titleInput_.setValue(title);
+  }
 };
 
 

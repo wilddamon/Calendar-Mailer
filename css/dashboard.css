@@ -19,21 +19,20 @@
   margin: 15px;
 }
 
-.individual-title-container {
-  margin-bottom: 15px;
-}
-
 .individual-title {
   border: 1px solid #aaa;
   display: inline-block;
   font-size: 32px;
-  margin: 10px;
-  margin-left: 0;
+  margin: 10px 10px 25px 0;
   padding: 10px;
 }
 
 .individual-title:hover {
   background-color: #f1f1f1;
+}
+
+.individual-title::-webkit-input-placeholder {
+  font-style: italic;
 }
 
 #individual-back-button {

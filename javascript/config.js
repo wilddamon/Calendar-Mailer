@@ -3,6 +3,7 @@
 goog.provide('calendarmailer.Config');
 
 goog.require('calendarmailer.RfcDateFormatter');
+goog.require('goog.Uri');
 goog.require('goog.date.DateTime');
 
 
@@ -12,99 +13,68 @@ goog.require('goog.date.DateTime');
  * @constructor
  */
 calendarmailer.Config = function() {
-  /**
-   * The api key.
-   * @type {string}
-   * @private
-   */
+  /** @private {string} */
   this.apiKey_ = 'AIzaSyCApKI3skdxt1QaVS-KKedN1E2n1MZUyyk';
 
-  /**
-   * The client id.
-   * @type {string}
-   * @private
-   */
+  /** @private {string} */
   this.clientId_ = '673691169320';
 
-  /**
-   * The scope.
-   * @type {string}
-   * @private
-   */
+  /** @private {string */
   this.scope_ = 'https://www.googleapis.com/auth/calendar.readonly';
 
-  /**
-   * The api url.
-   * @type {string}
-   * @private
-   */
+  /** @private {string} */
   this.apiUrl_ = 'https://apis.google.com/js/client.js';
 
-  /**
-   * The cycle id.
-   * @type {string}
-   * @private
-   */
-  this.cycleId_ = '';
+  var uri = new goog.Uri(window.location.href);
+
+  /** @private {string} */
+  this.cycleId_ = uri.getParameterValue('id') || '';
+
+  /** @private {string} */
+  this.cycleTitle_ = uri.getParameterValue('title') || '';
 
   /**
    * Today's date.
-   * @type {string}
-   * @private
+   * @private {string}
    */
   this.minDate_ = calendarmailer.RfcDateFormatter.getInstance().format(
       new goog.date.DateTime());
-
-  var query = window.location.href.split('?');
-  if (query.length > 1) {
-    var queries = query[1].split('&');
-    for (var i = 0; i < queries.length; ++i) {
-      var parts = queries[i].split('=');
-      if (parts.length == 2 && parts[0] == 'id') {
-        this.cycleId_ = parts[1];
-      }
-    }
-  }
 };
 
 
-/**
- * @return {string} The api key.
- */
+/** @return {string} */
 calendarmailer.Config.prototype.getApiKey = function() {
   return this.apiKey_;
 };
 
 
-/**
- * @return {string} The client id.
- */
+/** @return {string} */
 calendarmailer.Config.prototype.getClientId = function() {
   return this.clientId_;
 };
 
 
-/**
- * @return {string} The scope.
- */
+/** @return {string} */
 calendarmailer.Config.prototype.getScope = function() {
   return this.scope_;
 };
 
 
-/**
- * @return {string} The api url.
- */
+/** @return {string} */
 calendarmailer.Config.prototype.getApiUrl = function() {
   return this.apiUrl_;
 };
 
 
-/**
- * @return {string} The cycle id.
- */
+/** @return {string} */
 calendarmailer.Config.prototype.getCycleId = function() {
   return this.cycleId_;
+};
+
+
+/** @return {string} */
+calendarmailer.Config.prototype.getCycleTitle = function() {
+  return this.cycleTitle_;
 };
 
 

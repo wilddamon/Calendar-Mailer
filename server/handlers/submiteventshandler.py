@@ -21,6 +21,7 @@ class SubmitEventsHandler(webapp.RequestHandler):
     names = jsonObj["names"]
     events = jsonObj["events"]
     cycle_id = jsonObj["cycleId"]
+    cycle_title = jsonObj["title"]
 
     cycle = None
     user_event_map = {}
@@ -38,7 +39,7 @@ class SubmitEventsHandler(webapp.RequestHandler):
         cycle_id = id = hashlib.sha1(user.nickname() + '-' +
                    os_rand).hexdigest()
 
-      cycle = Cycle(key_name = cycle_id, initiator = user)
+      cycle = Cycle(key_name = cycle_id, initiator = user, title = cycle_title)
       cycle.put()
       logging.info("Cycle with id \"" + cycle_id + "\" created by " +
           user.nickname())

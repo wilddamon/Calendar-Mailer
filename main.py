@@ -19,6 +19,7 @@ from server.handlers.dashboardhandler import DashboardHandler
 from server.handlers.pickerhandler import PickerHandler
 from server.handlers.submiteventshandler import SubmitEventsHandler
 from server.handlers.userhandler import UserHandler
+from server.handlers.updatecyclehandler import UpdateCycleHandler
 
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import util
@@ -28,7 +29,8 @@ def main():
       ('/', DashboardHandler),
       ('/submitevents', SubmitEventsHandler),
       ('/picker', PickerHandler),
-      ('/cycle', CycleHandler)
+      ('/cycle', CycleHandler),
+      ('/updatecycle', UpdateCycleHandler)
     ], debug=True)
   util.run_wsgi_app(application)
 

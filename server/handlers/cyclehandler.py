@@ -13,6 +13,7 @@ from google.appengine.ext.webapp import template
 class CycleHandler(webapp.RequestHandler):
   def post(self):
     user = users.GetCurrentUser()
+    # TODO: Validate cycle owned by or shared with current user.
 
     cycle_id = self.request.get("id")
 

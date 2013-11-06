@@ -4,19 +4,11 @@
 
 /**
  * The view for a single cycle.
- * @param? title The title for the cycle.
  */
 {template .all}
 <div class="individual-cycle">
   <div class="individual-title-container">
-    <input type="text" class="individual-title" style="display:none"></input>
-    <div class="individual-title">
-      {if $title}
-        {$title}
-      {else}
-        Untitled cycle
-      {/if}
-    </div>
+    <input type="text" class="individual-title"></input>
   </div>
   <button class="add action-button">
     Add more events to this cycle

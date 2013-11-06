@@ -22,6 +22,7 @@ goog.require('goog.object');
 goog.require('goog.soy');
 goog.require('goog.string');
 goog.require('goog.style');
+goog.require('goog.ui.LabelInput');
 
 
 
@@ -37,64 +38,46 @@ calendarmailer.picker.App = function() {
    */
   this.selectedEvents_ = [];
 
-  /**
-   * The config object.
-   * @type {!calendarmailer.Config}
-   * @private
-   */
+  /** @private {!calendarmailer.Config} */
   this.config_ = new calendarmailer.Config();
 
-  /**
-   * The event handler.
-   * @type {!goog.events.EventHandler}
-   * @private
-   */
+  /** @private {!goog.events.EventHandler} */
   this.eventHandler_ = new goog.events.EventHandler(this);
 
-  /**
-   * The calendar api wrapper.
-   * @type {!calandermailer.CalendarApi}
-   * @private
-   */
+  /** @private {!calandermailer.CalendarApi} */
   this.calendar_ = new calendarmailer.CalendarApi(this.config_);
   this.calendar_.startLoad();
 
-  /**
-   * The filter widget.
-   * @type {!calendarmailer.picker.ui.FilteringWidget}
-   * @private
-   */
+  /** @private {!goog.ui.LabelInput} */
+  this.titleInput_ = new goog.ui.LabelInput('Untitled cycle');
+  this.titleInput_.decorate(document.getElementById('title'));
+  this.titleInput_.setValue(this.config_.getCycleTitle());
+
+  /** @private {!calendarmailer.picker.ui.FilteringWidget} */
   this.filter_ = new calendarmailer.picker.ui.FilteringWidget();
   this.filter_.render(document.getElementById('filter'));
   this.filter_.setSectionVisible(
       calendarmailer.picker.ui.FilteringWidget.SectionName.CALENDARS);
 
-  /**
-   * The calendar list ui.
-   * @type {!calendarmailer.picker.ui.CalendarList}
-   * @private
-   */
+  /** @private {!calendarmailer.picker.ui.CalendarList} */
   this.calendarListUi_ =
       new calendarmailer.picker.ui.CalendarList(this.calendar_);
 
   /**
    * The map of calendar event uis (containers of calendar events).
-   * @type {!Object.<string, !calendarmailer.picker.ui.Calendar>}
-   * @private
+   * @private {!Object.<string, !calendarmailer.picker.ui.Calendar>}
    */
   this.calendarEventUis_ = {};
 
   /**
    * A name list.
-   * @type {!calendarmailer.picker.ui.NameList}
-   * @private
+   * @private {!calendarmailer.picker.ui.NameList}
    */
   this.nameList_ = new calendarmailer.picker.ui.NameList();
 
   /**
    * The xhrio for sending stuff to the server when we're done.
-   * @type {!goog.net.XhrIo}
-   * @private
+   * @private {!goog.net.XhrIo}
    */
   this.io_ = new goog.net.XhrIo();
 
@@ -357,7 +340,8 @@ calendarmailer.picker.App.prototype.handleNamelistSubmit_ = function() {
   var obj = {
     'names': names,
     'events': this.selectedEvents_,
-    'cycleId': this.config_.getCycleId()
+    'cycleId': this.config_.getCycleId(),
+    'title': this.titleInput_.getValue()
   };
   this.nameList_.setEnabled(false);
   this.io_.send('/submitevents',

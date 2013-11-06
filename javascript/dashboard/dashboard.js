@@ -8,7 +8,6 @@ goog.require('calendarmailer.Config');
 goog.require('calendarmailer.dashboard.Cycle');
 goog.require('calendarmailer.dashboard.CyclePicker');
 goog.require('goog.events.EventHandler');
-goog.require('goog.fs.FileSaver');
 goog.require('goog.json');
 goog.require('goog.net.XhrIo');
 goog.require('goog.object');
@@ -94,8 +93,8 @@ calendarmailer.dashboard.App.prototype.handleBackClick_ = function() {
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleAddClick_ = function(e) {
-  var targetId = e.target.getId();
-  window.location = window.location.origin + '/picker?id=' + targetId;
+  window.location = window.location.origin + '/picker?id=' + e.target.getId() +
+      '&title=' + e.target.getTitle();
 };
 
 
@@ -122,13 +121,18 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
     json = goog.json.parse(response);
   }
   var userMap = json['events'];
+  var title = json['title'];
 
   if (!this.cycleDisplays_[this.currentCycle_]) {
     this.cycleDisplays_[this.currentCycle_] =
-        new calendarmailer.dashboard.Cycle(this.currentCycle_);
-    this.eventHandler_.listen(this.cycleDisplays_[this.currentCycle_],
-        calendarmailer.dashboard.Cycle.EventType.ADD_MORE,
-        this.handleAddClick_);
+        new calendarmailer.dashboard.Cycle(this.currentCycle_, title);
+    this.eventHandler_.
+        listen(this.cycleDisplays_[this.currentCycle_],
+            calendarmailer.dashboard.Cycle.EventType.ADD_MORE,
+            this.handleAddClick_).
+        listen(this.cycleDisplays_[this.currentCycle_],
+            calendarmailer.dashboard.Cycle.EventType.TITLE_CHANGE,
+            this.handleTitleChange_);
   }
   this.cycleDisplays_[this.currentCycle_].addEventData(userMap);
 
@@ -186,22 +190,15 @@ calendarmailer.dashboard.App.prototype.handleCalendarResult_ = function(
 
 
 /**
- * Handles the file writer becoming ready.
- * @param {string} result The contents to write to the file.
- * @param {!goog.fs.FileEntry} file The file entry for the file.
- * @param {!goog.fs.FileWriter} writer The file writer.
+ * Handles the title of a cycle being changed by the user.
  * @private
  */
-calendarmailer.dashboard.App.prototype.
-    handleWriterReady_ = function(result, file, writer) {
-  var bb = window.BlobBuilder ? new BlobBuilder() : new WebKitBlobBuilder();
-  bb.append(result);
-  writer.truncate(1);
-  this.eventHandler_.listenOnce(writer, goog.fs.FileSaver.EventType.WRITE_END,
-      function() {
-        writer.write(bb.getBlob('text/plain'));
-        window.location.href = file.toUrl();
-      }, this);
+calendarmailer.dashboard.App.prototype.handleTitleChange_ = function() {
+  var title = this.cycleDisplays_[this.currentCycle_].getTitle();
+  goog.net.XhrIo.send(
+      window.location.origin + '/updatecycle?id=' + this.currentCycle_ +
+      '&title=' + title, goog.nullFunction,
+      'POST');
 };
 
 
