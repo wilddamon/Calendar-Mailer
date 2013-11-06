@@ -377,7 +377,7 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
       'owner': owner,
       'calendarId': calendarId,
       'eventId': event.id,
-      'summary': event.summary,
+      'summary': event.summary.replace(/\n/, ' '),
       'location': event.location ? goog.string.truncate(event.location, 500) :
           'unknown',
       'recurrence': event.recurrence || [],
