@@ -111,6 +111,10 @@ calendarmailer.picker.App = function() {
 };
 
 
+/** @private {number} */
+calendarmailer.picker.App.prototype.numSubmitted_ = 0;
+
+
 /**
  * Handles the calendar api becoming ready.
  * @private
@@ -293,16 +297,20 @@ calendarmailer.picker.App.prototype.addNames_ = function(events) {
       continue;
     }
     var displayName, id;
-    if (event.organizer) {
+    if (event.organizer && event.organizer.email) {
       id = event.organizer.email;
       displayName = event.organizer.displayName ?
           event.organizer.displayName + ' (' + event.organizer.email + ')' :
           event.organizer.email;
-    } else {
+    } else if (event.creator && event.creator.email) {
       id = event.creator.email;
       displayName = event.creator.displayName ?
           event.creator.displayName + ' (' + event.creator.email + ')' :
           event.creator.email;
+    } else {
+      // This happens for events created using G+.
+      // TODO: Do something sensible here.
+      continue;
     }
     this.nameList_.addItem({
       id: id,
@@ -330,23 +338,7 @@ calendarmailer.picker.App.prototype.showNameList_ = function() {
  * @private
  */
 calendarmailer.picker.App.prototype.handleNamelistSubmit_ = function() {
-  window.console.log('submitting events...');
-  // Compiles the list of people to be emailed and their events.
-  var names = [];
-  goog.array.forEach(this.nameList_.getSelectedItems(), function(item) {
-    names.push(item.id);
-  }, this);
-  window.console.log(names);
-  var obj = {
-    'names': names,
-    'events': this.selectedEvents_,
-    'cycleId': this.config_.getCycleId(),
-    'title': this.titleInput_.getValue()
-  };
-  this.nameList_.setEnabled(false);
-  this.io_.send('/submitevents',
-      'POST', goog.json.serialize(obj),
-      {'content-type': 'application/json'});
+  this.sendEvents_();
 };
 
 
@@ -373,11 +365,14 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
     // Sometimes events don't appear to have a creator. If this is the case,
     // log an error and continue. TODO: Log somewhere persistent and/or show a
     // prompt for the admins to investigate.
-    if (!event.creator && !event.organizer) {
+    if ((!event.creator || !event.creator.email) &&
+        (!event.organizer || !event.organizer.email)) {
       window.console.log('event without creator or organizer! ID: ' + event.id);
       return;
     }
-    var owner = event.organizer ? event.organizer.email : event.creator.email;
+
+    var owner = event.organizer && event.organizer.email ?
+        event.organizer.email : event.creator.email;
     result.push({
       'owner': owner,
       'calendarId': calendarId,
@@ -394,12 +389,47 @@ calendarmailer.picker.App.prototype.translateEvents_ = function(calendarId,
 };
 
 
+/** @private */
+calendarmailer.picker.App.prototype.sendEvents_ = function() {
+  window.console.log('submitting events...');
+  // Compiles the list of people to be emailed and their events.
+  var names = [];
+  goog.array.forEach(this.nameList_.getSelectedItems(), function(item) {
+    names.push(item.id);
+  }, this);
+  window.console.log(names);
+
+  // Construct the object to send, but don't allow it to be too big.
+  var maxIndex = Math.max(
+      this.numSubmitted_ + this.config_.getMaxSubmitEvents(),
+      this.selectedEvents_.length);
+  var events = this.selectedEvents_.slice(this.numSubmitted_, maxIndex);
+  this.numSubmitted_ = maxIndex;
+
+  var obj = {
+    'names': names,
+    'events': events,
+    'cycleId': this.config_.getCycleId(),
+    'title': this.titleInput_.getValue()
+  };
+  this.nameList_.setEnabled(false);
+  this.io_.send('/submitevents',
+      'POST', goog.json.serialize(obj),
+      {'content-type': 'application/json'});
+};
+
+
 /**
- * Goes back to the dashboard once submission is finished.
+ * Handles the IO finishing successfully. Redirects back to the dashboard once
+ * submission is finished.
  * @private
  */
 calendarmailer.picker.App.prototype.handleIoSuccess_ = function() {
-  window.location = window.location.origin;
+  if (this.numSubmitted_ < this.selectedEvents_.length - 1) {
+    this.sendEvents_();
+  } else {
+    window.location = window.location.origin;
+  }
 };
 
 

@@ -39,6 +39,12 @@ calendarmailer.Config = function() {
    */
   this.minDate_ = calendarmailer.RfcDateFormatter.getInstance().format(
       new goog.date.DateTime());
+
+  /**
+   * The maximum number of events to submit using a picker.
+   * @private {number}
+   * */
+  this.maxSubmitEvents_ = 50;
 };
 
 
@@ -84,3 +90,10 @@ calendarmailer.Config.prototype.getCycleTitle = function() {
 calendarmailer.Config.prototype.getMinDate = function() {
   return this.minDate_;
 };
+
+
+/** @return {number} */
+calendarmailer.Config.prototype.getMaxSubmitEvents = function() {
+  return this.maxSubmitEvents_;
+};
+
