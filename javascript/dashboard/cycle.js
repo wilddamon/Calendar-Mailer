@@ -250,8 +250,6 @@ calendarmailer.dashboard.Cycle.prototype.handleExport_ = function() {
  */
 calendarmailer.dashboard.Cycle.prototype.handleWriterReady_ = function(result,
     file, writer) {
-  //var bb = window.BlobBuilder ? new BlobBuilder() : new WebKitBlobBuilder();
-  // bb.append(result);
   var blob = new Blob([result], {type: 'text/plain'});
   writer.truncate(1);
   this.getHandler().listenOnce(writer, goog.fs.FileSaver.EventType.WRITE_END,
