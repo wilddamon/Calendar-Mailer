@@ -18,6 +18,11 @@
   </div>
   <div>
     <div class="cycles">
+      {% if not cycles %}
+        <div class="cycle empty-cycle">
+          You have no cycles yet. Create one?
+        </div>
+      {% endif %}
       {% for cycle in cycles %}
         <div id="{{cycle.cycle_id}}" class="cycle">
           <span class="cycle-name">

@@ -1,9 +1,18 @@
+#all-cycles {
+  padding: 10px;
+}
+
 .cycles {
   border: 1px solid #aaa;
   display: inline-block;
   margin: 15px;
   margin-left: 0;
+  min-width: 278px;
   padding: 10px;
+}
+
+.empty-cycle {
+  font-style: italic;
 }
 
 #individual-cycle-container {
