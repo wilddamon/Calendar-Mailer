@@ -33,12 +33,22 @@ calendarmailer.Config = function() {
   /** @private {string} */
   this.cycleTitle_ = uri.getParameterValue('title') || '';
 
+  var now = new goog.date.DateTime();
+  var nextYear = new goog.date.DateTime();
+  nextYear.setFullYear(now.getFullYear() + 1);
+
   /**
-   * Today's date.
+   * The minimum date to use when searching for events.
    * @private {string}
    */
-  this.minDate_ = calendarmailer.RfcDateFormatter.getInstance().format(
-      new goog.date.DateTime());
+  this.minDate_ = calendarmailer.RfcDateFormatter.getInstance().format(now);
+
+  /**
+   * The maximum date to use when searching for events.
+   * @private {string}
+   */
+  this.maxDate_ = calendarmailer.RfcDateFormatter.getInstance().format(
+      nextYear);
 
   /**
    * The maximum number of events to submit using a picker.
@@ -84,11 +94,15 @@ calendarmailer.Config.prototype.getCycleTitle = function() {
 };
 
 
-/**
- * @return {string} Today's date represented in an iso string.
- */
+/** @return {string} */
 calendarmailer.Config.prototype.getMinDate = function() {
   return this.minDate_;
+};
+
+
+/** @return {string} */
+calendarmailer.Config.prototype.getMaxDate = function() {
+  return this.maxDate_;
 };
 
 

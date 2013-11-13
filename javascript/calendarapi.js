@@ -245,10 +245,11 @@ calendarmailer.CalendarApi.prototype.getCalendarSummary = function(calendarId,
 calendarmailer.CalendarApi.prototype.getCalendarEvents = function(id, title,
     opt_pageToken) {
   this.getEvents_({
-    calendarId: id,
-    maxResults: calendarmailer.CalendarApi.MAX_RESULTS_,
-    timeMin: this.config_.getMinDate(),
-    pageToken: opt_pageToken
+    'calendarId': id,
+    'maxResults': calendarmailer.CalendarApi.MAX_RESULTS_,
+    'timeMin': this.config_.getMinDate(),
+    'timeMax': this.config_.getMaxDate(),
+    'pageToken': opt_pageToken
   }).execute(goog.bind(this.handleGetEventsResult_, this, id, title));
 };
 
