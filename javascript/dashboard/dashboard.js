@@ -45,8 +45,11 @@ calendarmailer.dashboard.App = function() {
 
   this.eventHandler_.
       listen(this.cyclePicker_,
-          calendarmailer.dashboard.CyclePicker.EventType.CYCLE,
+          calendarmailer.dashboard.CyclePicker.EventType.PICK,
           this.handleCycleClick_).
+      listen(this.cyclePicker_,
+          calendarmailer.dashboard.CyclePicker.EventType.DELETE,
+          this.handleCycleDelete_).
       listen(this.backButton_, goog.ui.Component.EventType.ACTION,
           this.handleBackClick_);
 };
@@ -72,6 +75,19 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
 
   this.cyclePicker_.setVisible(false);
   this.backButton_.setVisible(true);
+};
+
+
+/**
+ * @param {!goog.events.Event} e
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.handleCycleDelete_ = function(e) {
+  goog.net.XhrIo.send(
+      window.location.origin + '/deletecycle?id=' + e.id,
+      goog.bind(this.handleDeleteCycleResult_, this), 'POST');
+
+  this.showSpinner_(true);
 };
 
 
@@ -104,6 +120,12 @@ calendarmailer.dashboard.App.prototype.handleAddClick_ = function(e) {
 calendarmailer.dashboard.App.prototype.showSpinner_ = function(show) {
   var spinner = document.getElementById('spinner');
   goog.style.setStyle(spinner, 'display', show ? '' : 'none');
+};
+
+
+/** @private */
+calendarmailer.dashboard.App.prototype.handleDeleteCycleResult_ = function() {
+  window.location.reload();
 };
 
 

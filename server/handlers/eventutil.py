@@ -31,6 +31,7 @@ class util:
         limit=50, offset=50*page_offset)
 
     user_event_map = {}
+    events_processed = 0
     if (fetched_events):
       for event in fetched_events:
         email = event.owner
@@ -47,9 +48,11 @@ class util:
           "link": event.link
         }
         user_event_map[email].append(eventJson)
+        events_processed += 1
+
     logging.info("user_event_map: " + str(user_event_map))
     return {
         "events": user_event_map, 
-        "more_to_come": len(fetched_events) >= 50,
+        "more_to_come": not events_processed < 50,
         "next_page": page_offset + 1
       }

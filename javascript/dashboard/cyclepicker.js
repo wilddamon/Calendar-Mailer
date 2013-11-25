@@ -3,6 +3,7 @@
  */
 goog.provide('calendarmailer.dashboard.CyclePicker');
 
+goog.require('goog.dom.classes');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventType');
 goog.require('goog.style');
@@ -20,27 +21,25 @@ goog.require('goog.ui.Component');
 calendarmailer.dashboard.CyclePicker = function(opt_domHelper) {
   goog.base(this, opt_domHelper);
 
-  /**
-   * The create new cycle button.
-   * @type {!goog.ui.Button}
-   * @private
-   */
+  /** @private {!goog.ui.Button} */
   this.createCycleButton_ = new goog.ui.Button(null /* content */);
-  this.createCycleButton_.decorate(document.getElementById('new-cycle-button'));
-
+  this.addChild(this.createCycleButton_);
 };
 goog.inherits(calendarmailer.dashboard.CyclePicker, goog.ui.Component);
 
 
 /** @enum {string} */
 calendarmailer.dashboard.CyclePicker.EventType = {
-  CYCLE: 'cycle'
+  DELETE: 'delete-cycle',
+  PICK: 'pick-cycle'
 };
 
 
 /** @override */
 calendarmailer.dashboard.CyclePicker.prototype.enterDocument = function() {
   goog.base(this, 'enterDocument');
+
+  this.createCycleButton_.decorate(document.getElementById('new-cycle-button'));
 
   this.getHandler().
       listen(this.getElement(), goog.events.EventType.CLICK,
@@ -56,11 +55,13 @@ calendarmailer.dashboard.CyclePicker.prototype.enterDocument = function() {
  * @private
  */
 calendarmailer.dashboard.CyclePicker.prototype.handleCycleClick_ = function(e) {
-  var target = e.target.parentElement.id;
-  if (target) {
-    this.dispatchEvent(
-        new calendarmailer.dashboard.CyclePicker.PickEvent(target));
-  }
+  var id = e.target.parentElement.id;
+  var isDelete = goog.dom.classes.has(e.target, 'cycle-delete');
+  var eventType = isDelete ?
+      calendarmailer.dashboard.CyclePicker.EventType.DELETE :
+      calendarmailer.dashboard.CyclePicker.EventType.PICK;
+  this.dispatchEvent(
+      new calendarmailer.dashboard.CyclePicker.Event(eventType, id));
 };
 
 
@@ -84,16 +85,15 @@ calendarmailer.dashboard.CyclePicker.prototype.setVisible = function(visible) {
 
 
 /**
- * A pick event.
- * @param {string} id The ID of the cycle that was picked.
+ * @param {string} type
+ * @param {string} id
  * @extends {goog.events.Event}
  * @constructor
  */
-calendarmailer.dashboard.CyclePicker.PickEvent = function(id) {
-  goog.base(this, calendarmailer.dashboard.CyclePicker.EventType.CYCLE);
+calendarmailer.dashboard.CyclePicker.Event = function(type, id) {
+  goog.base(this, type);
 
   /** @type {string} */
   this.id = id;
 };
-goog.inherits(calendarmailer.dashboard.CyclePicker.PickEvent,
-    goog.events.Event);
+goog.inherits(calendarmailer.dashboard.CyclePicker.Event, goog.events.Event);

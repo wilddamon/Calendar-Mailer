@@ -1,6 +1,7 @@
 
 import logging
 
+from server.storage.calendarevent import CalendarEvent
 from server.storage.cycle import Cycle
 
 from google.appengine.api import users
@@ -21,4 +22,5 @@ class DeleteCycleHandler(webapp.RequestHandler):
     events_query = CalendarEvent.all(keys_only=True)
     events_query.ancestor(cycle)
     db.delete(events_query.run())
-
+    db.delete(cycle)
+    logging.info('Deleted cycle with id ' + cycle_id)
