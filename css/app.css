@@ -1,21 +1,7 @@
 
-#calendars, #eventpickers, #namelist, #email-preview {
-  clear: both;
-}
-
 .checkbox-label {
   position: relative;
   top: 3px;
-}
-
-.cycle-name {
-  color: blue;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.cycle-creation-time {
-  font-size: smaller;
 }
 
 .goog-button {

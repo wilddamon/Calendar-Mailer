@@ -2,17 +2,53 @@
   padding: 10px;
 }
 
+#calendars, #eventpickers, #namelist, #email-preview {
+  clear: both;
+}
+
 .cycles {
-  border: 1px solid #aaa;
+  border-bottom: 1px solid #aaa;
   display: inline-block;
   margin: 15px;
   margin-left: 0;
   min-width: 278px;
-  padding: 10px;
 }
 
 .empty-cycle {
   font-style: italic;
+}
+
+.cycle {
+  border: 1px solid #aaa;
+  border-bottom: 0;
+  padding: 10px;
+  position: relative;
+}
+
+.cycle-name {
+  color: blue;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.cycle-creation-time {
+  font-size: smaller;
+}
+
+.cycle-delete {
+  background-image: url(../img/remove.png);
+  background-size: 14px;
+  height: 14px;
+  opacity: 0.3;
+  position: absolute;
+  right: 10px;
+  top: 14px;
+  width: 14px;
+}
+
+.cycle-delete:hover,
+.cycle-delete:focus {
+  opacity: 0.7;
 }
 
 #individual-cycle-container {
