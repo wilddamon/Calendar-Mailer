@@ -16,6 +16,7 @@
 #
 from server.handlers.cyclehandler import CycleHandler
 from server.handlers.dashboardhandler import DashboardHandler
+from server.handlers.deletecyclehandler import DeleteCycleHandler
 from server.handlers.pickerhandler import PickerHandler
 from server.handlers.submiteventshandler import SubmitEventsHandler
 from server.handlers.userhandler import UserHandler
@@ -30,7 +31,8 @@ def main():
       ('/submitevents', SubmitEventsHandler),
       ('/picker', PickerHandler),
       ('/cycle', CycleHandler),
-      ('/updatecycle', UpdateCycleHandler)
+      ('/updatecycle', UpdateCycleHandler),
+      ('/deletecycle', DeleteCycleHandler)
     ], debug=True)
   util.run_wsgi_app(application)
 

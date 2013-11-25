@@ -9,8 +9,7 @@ class util:
     # Gets a map of email address : event object for the given cycle ID.
     user_event_map = {}
     if (cycle):
-      # TODO(wilddamon): Figure out how to get all the events!
-      fetched_events = db.query_descendants(cycle).fetch(limit=1000)
+      fetched_events = db.query_descendants(cycle).run(batch_size=1000)
       logging.info("got events: " + str(fetched_events))
       if (fetched_events):
         for event in fetched_events:
@@ -28,7 +27,7 @@ class util:
     else:
       page_offset = 0
 
-    fetched_events = db.query_descendants(cycle).fetch(
+    fetched_events = db.query_descendants(cycle).run(
         limit=50, offset=50*page_offset)
 
     user_event_map = {}
