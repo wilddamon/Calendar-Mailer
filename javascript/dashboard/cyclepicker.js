@@ -3,6 +3,8 @@
  */
 goog.provide('calendarmailer.dashboard.CyclePicker');
 
+goog.require('goog.dom');
+goog.require('goog.dom.TagName');
 goog.require('goog.dom.classes');
 goog.require('goog.events.Event');
 goog.require('goog.events.EventType');
@@ -80,6 +82,33 @@ calendarmailer.dashboard.CyclePicker.prototype.handleNewCycleClick_ =
  */
 calendarmailer.dashboard.CyclePicker.prototype.setVisible = function(visible) {
   goog.style.setStyle(this.getElement(), 'display', visible ? '' : 'none');
+};
+
+
+/**
+ * @param {string} id
+ * @param {string} title
+ */
+calendarmailer.dashboard.CyclePicker.prototype.setCycleTitle = function(id,
+    title) {
+  var cycleEl = document.getElementById(id);
+  if (cycleEl) {
+    var titleEl = goog.dom.getElementByClass('cycle-name', cycleEl);
+    goog.dom.setTextContent(titleEl, title);
+  }
+};
+
+
+/**
+ * @param {string} id
+ */
+calendarmailer.dashboard.CyclePicker.prototype.removeCycle = function(id) {
+  goog.dom.removeNode(document.getElementById(id));
+  if (!goog.dom.getChildren(this.getElement()).length) {
+    goog.dom.appendChild(this.getElement(),
+        goog.dom.createDom(goog.dom.TagName.DIV, 'cycle empty-cycle',
+        'You have no cycles. Create one?'));
+  }
 };
 
 

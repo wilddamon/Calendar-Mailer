@@ -7,6 +7,7 @@ goog.require('calendarmailer.CalendarApi');
 goog.require('calendarmailer.Config');
 goog.require('calendarmailer.dashboard.Cycle');
 goog.require('calendarmailer.dashboard.CyclePicker');
+goog.require('goog.dom');
 goog.require('goog.events.EventHandler');
 goog.require('goog.json');
 goog.require('goog.net.XhrIo');
@@ -30,7 +31,7 @@ calendarmailer.dashboard.App = function() {
 
   /** @private {!calendarmailer.dashboard.CyclePicker} */
   this.cyclePicker_ = new calendarmailer.dashboard.CyclePicker();
-  this.cyclePicker_.decorate(document.getElementById('all-cycles'));
+  this.cyclePicker_.decorate(goog.dom.getElementByClass('cycles'));
 
   /**
    * A map of cycle ID to cycle displays.
@@ -63,7 +64,7 @@ calendarmailer.dashboard.App = function() {
 calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
   this.currentCycle_ = e.id;
   if (this.cycleDisplays_[this.currentCycle_]) {
-    this.cycleDisplays_[this.currentCycle_].setVisible(true);
+    this.showCycleDisplay_(this.currentCycle_);
   } else {
     // Start sending a request to the server to get the cycle contents.
     goog.net.XhrIo.send(
@@ -85,7 +86,7 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
 calendarmailer.dashboard.App.prototype.handleCycleDelete_ = function(e) {
   goog.net.XhrIo.send(
       window.location.origin + '/deletecycle?id=' + e.id,
-      goog.bind(this.handleDeleteCycleResult_, this), 'POST');
+      goog.bind(this.handleDeleteCycleResult_, this, e.id), 'POST');
 
   this.showSpinner_(true);
 };
@@ -96,9 +97,7 @@ calendarmailer.dashboard.App.prototype.handleCycleDelete_ = function(e) {
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleBackClick_ = function() {
-  this.cyclePicker_.setVisible(true);
-  this.cycleDisplays_[this.currentCycle_].setVisible(false);
-  this.backButton_.setVisible(false);
+  this.showCycleDisplay_(null);
 };
 
 
@@ -123,9 +122,31 @@ calendarmailer.dashboard.App.prototype.showSpinner_ = function(show) {
 };
 
 
-/** @private */
-calendarmailer.dashboard.App.prototype.handleDeleteCycleResult_ = function() {
-  window.location.reload();
+/**
+ * @param {?string} id
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.showCycleDisplay_ = function(id) {
+  if (id && this.cycleDisplays_[id]) {
+    this.cycleDisplays_[id].setVisible(true);
+  } else {
+    if (this.currentCycle_ && this.cycleDisplays_[this.currentCycle_]) {
+      this.cycleDisplays_[this.currentCycle_].setVisible(false);
+    }
+  }
+  this.cyclePicker_.setVisible(!id);
+  this.backButton_.setVisible(!!id);
+  goog.style.showElement(document.getElementById('all-cycles'), !id);
+};
+
+
+/**
+ * @param {string} id
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.handleDeleteCycleResult_ = function(id) {
+  this.cyclePicker_.removeCycle(id);
+  this.showSpinner_(false);
 };
 
 
@@ -176,6 +197,7 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
 calendarmailer.dashboard.App.prototype.renderIndividualCycle_ = function() {
   this.cycleDisplays_[this.currentCycle_].render(
       document.getElementById('individual-cycle-container'));
+  this.showCycleDisplay_(this.currentCycle_);
 
   var keys = this.cycleDisplays_[this.currentCycle_].getCalendarIds();
   // TODO: Don't use a global variable here.
@@ -221,6 +243,7 @@ calendarmailer.dashboard.App.prototype.handleTitleChange_ = function() {
       window.location.origin + '/updatecycle?id=' + this.currentCycle_ +
       '&title=' + title, goog.nullFunction,
       'POST');
+  this.cyclePicker_.setCycleTitle(this.currentCycle_, title);
 };
 
 
