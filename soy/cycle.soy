@@ -35,6 +35,7 @@
       <th>StartTime</th>
       <th>EventRecurrence</th>
       <th>UserAction</th>
+      <th></th>
     </tr>
     {foreach $user in $users}
       {call .row}
@@ -84,6 +85,9 @@
     </td>
     <td>
       {$event.state}
+    </td>
+    <td>
+      <div class="link">Delete</div>
     </td>
   </tr>
 {/foreach}
