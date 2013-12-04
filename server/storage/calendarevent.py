@@ -4,7 +4,7 @@ from google.appengine.ext import db
 class CalendarEvent(db.Model):
   owner = db.EmailProperty(required = True)
   calendar_id = db.StringProperty(required = True, indexed = False)
-  event_id = db.StringProperty(required = True, indexed = False)
+  event_id = db.StringProperty(required = True)
   summary = db.StringProperty(required = True, indexed = False)
   event_location = db.StringProperty(required = True, indexed = False)
   recurrence = db.StringListProperty(indexed = False)

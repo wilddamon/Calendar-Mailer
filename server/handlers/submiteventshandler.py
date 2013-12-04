@@ -58,7 +58,8 @@ class SubmitEventsHandler(webapp.RequestHandler):
         # Create a new event and put it in the map.
         user_event_map[creator].append(event)
         # Save the event for later.
-        db_event = CalendarEvent(parent = cycle,
+        db_event = CalendarEvent(
+            parent = cycle,
             owner = creator,
             calendar_id = event["calendarId"],
             event_id = event["eventId"],

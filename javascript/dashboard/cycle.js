@@ -3,6 +3,7 @@
  */
 goog.provide('calendarmailer.dashboard.Cycle');
 
+goog.require('calendarmailer.Event');
 goog.require('calendarmailer.RRuleFormatter');
 goog.require('calendarmailer.RfcDateFormatter');
 goog.require('calendarmailer.soy.cycle');
@@ -55,15 +56,13 @@ calendarmailer.dashboard.Cycle = function(id, opt_title, opt_domHelper) {
   /**
    * A map of the ids of the calendars events were pulled from, along with the
    * number of events for that calendar.
-   * @type {!Object.<number>}
-   * @private
+   * @private {!Object.<number>}
    */
   this.calendarIds_ = {};
 
   /**
    * A map of username to array of events.
-   * @type {!Object.<!Array.<!Object>>}
-   * @private
+   * @private {!Object.<!Array.<!Object>>}
    */
   this.userToEventArray_ = {};
 
@@ -74,6 +73,7 @@ goog.inherits(calendarmailer.dashboard.Cycle, goog.ui.Component);
 /** @enum {string} */
 calendarmailer.dashboard.Cycle.EventType = {
   ADD_MORE: goog.events.getUniqueId('a'),
+  DELETE_EVENT: goog.events.getUniqueId('d'),
   TITLE_CHANGE: goog.events.getUniqueId('tc')
 };
 
@@ -138,7 +138,9 @@ calendarmailer.dashboard.Cycle.prototype.enterDocument = function() {
       listen(this.addEventsButton_, goog.ui.Component.EventType.ACTION,
           this.handleAddClick_).
       listen(this.exportButton_, goog.ui.Component.EventType.ACTION,
-          this.handleExport_);
+          this.handleExport_).
+      listen(this.getElementByClass('userlist-table'),
+          goog.events.EventType.CLICK, this.handleTableClick_);
 };
 
 
@@ -149,6 +151,7 @@ calendarmailer.dashboard.Cycle.prototype.enterDocument = function() {
 calendarmailer.dashboard.Cycle.prototype.addEventData = function(userMap) {
   var dateTimeFormatter = new goog.i18n.DateTimeFormat(
       goog.i18n.DateTimeFormat.Format.LONG_TIME);
+  var rruleFormatter = calendarmailer.RRuleFormatter.getInstance();
 
   goog.object.forEach(userMap, function(eventArray, email) {
     if (!this.userToEventArray_[email]) {
@@ -161,7 +164,6 @@ calendarmailer.dashboard.Cycle.prototype.addEventData = function(userMap) {
       if (eventArray[i].startTime) {
         eventArray[i].startTime = dateTimeFormatter.format(startTime);
       }
-      var rruleFormatter = calendarmailer.RRuleFormatter.getInstance();
       for (var j = 0; j < eventArray[i].recurrence.length; ++j) {
         var original = eventArray[i].recurrence[j];
         eventArray[i].recurrence[j] = rruleFormatter.prettyPrint(original);
@@ -208,6 +210,21 @@ calendarmailer.dashboard.Cycle.prototype.handleAddClick_ = function() {
 
 
 /**
+ * @param {!goog.events.BrowserEvent} e
+ * @private
+ */
+calendarmailer.dashboard.Cycle.prototype.handleTableClick_ = function(e) {
+  if (e.target.id) {
+    var id = e.target.id.replace('delete-', '');
+    this.dispatchEvent(new calendarmailer.Event(
+        calendarmailer.dashboard.Cycle.EventType.DELETE_EVENT, id));
+    var rowEl = e.target.parentNode.parentNode;
+    goog.dom.removeNode(rowEl);
+  }
+};
+
+
+/**
  * Handles a click on the export button.
  * @private
  */
@@ -245,6 +262,7 @@ calendarmailer.dashboard.Cycle.prototype.handleExport_ = function() {
     }, this);
     fileEntry.addErrback(function(er) {
       // TODO: Display this to the user.
+      // TODO: Log this to the server.
       window.console.log(er);
     });
   }, this);

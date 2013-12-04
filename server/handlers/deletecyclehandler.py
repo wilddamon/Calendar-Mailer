@@ -12,6 +12,7 @@ from google.appengine.ext import webapp
 class DeleteCycleHandler(webapp.RequestHandler):
   def post(self):
     user = users.GetCurrentUser()
+    # TODO: Validate user is owner of current cycle.
 
     cycle_id = self.request.get('id')
     cycle = db.get(db.Key.from_path(Cycle.kind(), cycle_id))
@@ -24,3 +25,4 @@ class DeleteCycleHandler(webapp.RequestHandler):
     db.delete(events_query.run())
     db.delete(cycle)
     logging.info('Deleted cycle with id ' + cycle_id)
+

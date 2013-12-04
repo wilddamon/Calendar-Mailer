@@ -80,7 +80,7 @@ calendarmailer.dashboard.App.prototype.handleCycleClick_ = function(e) {
 
 
 /**
- * @param {!goog.events.Event} e
+ * @param {!calendarmailer.Event} e
  * @private
  */
 calendarmailer.dashboard.App.prototype.handleCycleDelete_ = function(e) {
@@ -89,6 +89,18 @@ calendarmailer.dashboard.App.prototype.handleCycleDelete_ = function(e) {
       goog.bind(this.handleDeleteCycleResult_, this, e.id), 'POST');
 
   this.showSpinner_(true);
+};
+
+
+/**
+ * @param {!calendarmailer.Event} e
+ * @private
+ */
+calendarmailer.dashboard.App.prototype.handleEventDelete_ = function(e) {
+  goog.net.XhrIo.send(
+      window.location.origin + '/deleteevent?event_id=' + e.id +
+      '&cycle_id=' + this.currentCycle_,
+      goog.nullFunction, 'POST');
 };
 
 
@@ -174,7 +186,10 @@ calendarmailer.dashboard.App.prototype.handleGetCycleResult_ =
             this.handleAddClick_).
         listen(this.cycleDisplays_[this.currentCycle_],
             calendarmailer.dashboard.Cycle.EventType.TITLE_CHANGE,
-            this.handleTitleChange_);
+            this.handleTitleChange_).
+        listen(this.cycleDisplays_[this.currentCycle_],
+            calendarmailer.dashboard.Cycle.EventType.DELETE_EVENT,
+            this.handleEventDelete_);
   }
   this.cycleDisplays_[this.currentCycle_].addEventData(userMap);
 

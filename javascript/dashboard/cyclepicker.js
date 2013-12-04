@@ -3,10 +3,11 @@
  */
 goog.provide('calendarmailer.dashboard.CyclePicker');
 
+goog.require('calendarmailer.Event');
 goog.require('goog.dom');
 goog.require('goog.dom.TagName');
 goog.require('goog.dom.classes');
-goog.require('goog.events.Event');
+goog.require('goog.events');
 goog.require('goog.events.EventType');
 goog.require('goog.style');
 goog.require('goog.ui.Button');
@@ -32,8 +33,8 @@ goog.inherits(calendarmailer.dashboard.CyclePicker, goog.ui.Component);
 
 /** @enum {string} */
 calendarmailer.dashboard.CyclePicker.EventType = {
-  DELETE: 'delete-cycle',
-  PICK: 'pick-cycle'
+  DELETE: goog.events.getUniqueId('delete-cycle'),
+  PICK: goog.events.getUniqueId('pick-cycle')
 };
 
 
@@ -62,8 +63,7 @@ calendarmailer.dashboard.CyclePicker.prototype.handleCycleClick_ = function(e) {
   var eventType = isDelete ?
       calendarmailer.dashboard.CyclePicker.EventType.DELETE :
       calendarmailer.dashboard.CyclePicker.EventType.PICK;
-  this.dispatchEvent(
-      new calendarmailer.dashboard.CyclePicker.Event(eventType, id));
+  this.dispatchEvent(new calendarmailer.Event(eventType, id));
 };
 
 
@@ -111,18 +111,3 @@ calendarmailer.dashboard.CyclePicker.prototype.removeCycle = function(id) {
   }
 };
 
-
-
-/**
- * @param {string} type
- * @param {string} id
- * @extends {goog.events.Event}
- * @constructor
- */
-calendarmailer.dashboard.CyclePicker.Event = function(type, id) {
-  goog.base(this, type);
-
-  /** @type {string} */
-  this.id = id;
-};
-goog.inherits(calendarmailer.dashboard.CyclePicker.Event, goog.events.Event);
